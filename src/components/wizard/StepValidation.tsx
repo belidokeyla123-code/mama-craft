@@ -120,14 +120,6 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         <Progress value={score * 10} className="h-3" />
       </Card>
 
-      {/* Upload Inline */}
-      {data.caseId && missing_docs && missing_docs.length > 0 && (
-        <DocumentUploadInline 
-          caseId={data.caseId}
-          onUploadComplete={handleValidate}
-        />
-      )}
-
       {checklist && checklist.length > 0 && (
         <Card className="p-6">
           <h3 className="text-lg font-semibold mb-4">Checklist Documental</h3>
@@ -155,9 +147,19 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           <div className="space-y-4">
             {missing_docs.map((doc: any, idx: number) => (
               <div key={idx} className="border-l-4 border-destructive pl-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-semibold">{doc.doc_type}</span>
-                  <Badge variant="destructive">{doc.importance}</Badge>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{doc.doc_type}</span>
+                    <Badge variant="destructive">{doc.importance}</Badge>
+                  </div>
+                  
+                  {doc.importance === 'critical' && data.caseId && (
+                    <DocumentUploadInline 
+                      caseId={data.caseId}
+                      suggestedDocType={doc.doc_type}
+                      onUploadComplete={handleValidate}
+                    />
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">{doc.reason}</p>
                 {doc.impact && (

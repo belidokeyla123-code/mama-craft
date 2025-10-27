@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
 import JSZip from "jszip";
@@ -45,6 +45,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [downloadProgress, setDownloadProgress] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [isReprocessing, setIsReprocessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -393,6 +394,66 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     }
   };
 
+  const handleReprocess = async () => {
+    setIsReprocessing(true);
+    try {
+      const { error } = await supabase
+        .from('processing_queue')
+        .upsert({
+          case_id: caseId,
+          status: 'queued',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'case_id' });
+
+      if (error) throw error;
+
+      toast({
+        title: "📥 Documentos na fila",
+        description: "Processamento será iniciado em breve. Você pode navegar livremente.",
+      });
+
+      // Polling para verificar conclusão
+      const pollInterval = setInterval(async () => {
+        const { data: queue } = await supabase
+          .from('processing_queue')
+          .select('status, completed_at')
+          .eq('case_id', caseId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+          
+        if (queue?.status === 'completed') {
+          clearInterval(pollInterval);
+          await loadDocuments();
+          if (onDocumentsChange) onDocumentsChange();
+          toast({
+            title: "✅ Atualização concluída!",
+            description: "Documentos reprocessados com sucesso.",
+          });
+        } else if (queue?.status === 'failed') {
+          clearInterval(pollInterval);
+          toast({
+            title: "❌ Erro no processamento",
+            description: "Tente novamente.",
+            variant: "destructive"
+          });
+        }
+      }, 5000);
+      
+      setTimeout(() => clearInterval(pollInterval), 180000);
+
+    } catch (error: any) {
+      console.error("Erro ao reprocessar:", error);
+      toast({
+        title: "Erro ao reprocessar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsReprocessing(false);
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -515,6 +576,24 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
               <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
             </div>
             <div className="flex gap-2">
+              <Button
+                onClick={handleReprocess}
+                disabled={isReprocessing}
+                variant="outline"
+                className="gap-2"
+              >
+                {isReprocessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Atualizando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Atualizar
+                  </>
+                )}
+              </Button>
               <Button
                 onClick={handleUploadClick}
                 disabled={isUploading}

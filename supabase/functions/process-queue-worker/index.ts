@@ -21,11 +21,11 @@ serve(async (req) => {
   try {
     console.log('[WORKER] Verificando fila de processamento...');
     
-    // 1. Buscar próximos casos na fila (status = 'queued')
-    const { data: queuedCases, error: fetchError } = await supabase
+    // Buscar casos com análises pendentes (validação, análise legal, jurisprudência)
+    const { data: pendingCases, error: fetchError } = await supabase
       .from('processing_queue')
-      .select('*, cases!inner(*)')
-      .eq('status', 'queued')
+      .select('*')
+      .or('validation_status.eq.queued,analysis_status.eq.queued,jurisprudence_status.eq.queued,status.eq.queued')
       .order('created_at', { ascending: true })
       .limit(MAX_CONCURRENT);
 
@@ -34,10 +34,10 @@ serve(async (req) => {
       throw fetchError;
     }
 
-    if (!queuedCases || queuedCases.length === 0) {
-      console.log('[WORKER] Nenhum caso na fila');
+    if (!pendingCases || pendingCases.length === 0) {
+      console.log('[WORKER] Nenhuma tarefa pendente na fila');
       return new Response(
-        JSON.stringify({ message: 'Nenhum caso na fila' }), 
+        JSON.stringify({ message: 'Nenhuma tarefa pendente na fila' }), 
         { 
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -45,108 +45,176 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[WORKER] Processando ${queuedCases.length} caso(s) da fila...`);
+    console.log(`[WORKER] Processando ${pendingCases.length} tarefa(s)...`);
 
-    // 2. Processar cada caso em paralelo
+    // Processar cada caso
     const results = await Promise.all(
-      queuedCases.map(async (queueEntry) => {
+      pendingCases.map(async (queueEntry) => {
+        const caseId = queueEntry.case_id;
+        const tasks = [];
+
         try {
-          console.log(`[WORKER] Iniciando processamento do caso ${queueEntry.case_id}`);
-          
-          // Marcar como 'processing'
-          const { error: updateError } = await supabase
-            .from('processing_queue')
-            .update({ 
-              status: 'processing', 
-              started_at: new Date().toISOString() 
-            })
-            .eq('id', queueEntry.id);
+          // 1. Processar documentos se status geral = 'queued'
+          if (queueEntry.status === 'queued') {
+            console.log(`[WORKER] Processando documentos do caso ${caseId}`);
+            
+            await supabase
+              .from('processing_queue')
+              .update({ 
+                status: 'processing', 
+                started_at: new Date().toISOString() 
+              })
+              .eq('id', queueEntry.id);
 
-          if (updateError) {
-            console.error(`[WORKER] Erro ao atualizar status para processing:`, updateError);
-            throw updateError;
-          }
+            const { data: documents } = await supabase
+              .from('documents')
+              .select('*')
+              .eq('case_id', caseId);
 
-          // Buscar documentos do caso
-          const { data: documents, error: docsError } = await supabase
-            .from('documents')
-            .select('*')
-            .eq('case_id', queueEntry.case_id);
-
-          if (docsError) {
-            console.error(`[WORKER] Erro ao buscar documentos:`, docsError);
-            throw docsError;
-          }
-
-          if (!documents || documents.length === 0) {
-            console.warn(`[WORKER] Nenhum documento encontrado para o caso ${queueEntry.case_id}`);
-            throw new Error('Nenhum documento encontrado para processar');
-          }
-
-          console.log(`[WORKER] Encontrados ${documents.length} documentos para processar`);
-
-          // Chamar função de processamento
-          const { data: processResult, error: invokeError } = await supabase.functions.invoke('process-documents-with-ai', {
-            body: {
-              caseId: queueEntry.case_id,
-              documentIds: documents.map(d => d.id)
+            if (documents && documents.length > 0) {
+              await supabase.functions.invoke('process-documents-with-ai', {
+                body: {
+                  caseId: caseId,
+                  documentIds: documents.map(d => d.id)
+                }
+              });
+              
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              
+              await supabase
+                .from('processing_queue')
+                .update({ 
+                  status: 'completed', 
+                  completed_at: new Date().toISOString() 
+                })
+                .eq('id', queueEntry.id);
+              
+              tasks.push({ task: 'documents', success: true });
             }
-          });
-
-          if (invokeError) {
-            console.error(`[WORKER] Erro ao invocar process-documents-with-ai:`, invokeError);
-            throw invokeError;
           }
 
-          console.log(`[WORKER] Processamento iniciado para caso ${queueEntry.case_id}:`, processResult);
+          // 2. Processar validação se pendente
+          if (queueEntry.validation_status === 'queued') {
+            console.log(`[WORKER] Validando caso ${caseId}`);
+            
+            await supabase
+              .from('processing_queue')
+              .update({ validation_status: 'processing' })
+              .eq('id', queueEntry.id);
 
-          // Aguardar alguns segundos para o processamento em background completar
-          // (o process-documents-with-ai retorna imediatamente mas processa em background)
-          console.log(`[WORKER] Aguardando processamento em background...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
-
-          // Marcar como 'completed'
-          const { error: completeError } = await supabase
-            .from('processing_queue')
-            .update({ 
-              status: 'completed', 
-              completed_at: new Date().toISOString() 
-            })
-            .eq('id', queueEntry.id);
-
-          if (completeError) {
-            console.error(`[WORKER] Erro ao atualizar status para completed:`, completeError);
+            try {
+              await supabase.functions.invoke('validate-case-documents', {
+                body: { caseId }
+              });
+              
+              await supabase
+                .from('processing_queue')
+                .update({ 
+                  validation_status: 'completed',
+                  validation_completed_at: new Date().toISOString()
+                })
+                .eq('id', queueEntry.id);
+              
+              tasks.push({ task: 'validation', success: true });
+            } catch (err) {
+              await supabase
+                .from('processing_queue')
+                .update({ 
+                  validation_status: 'failed',
+                  error_message: err instanceof Error ? err.message : 'Erro na validação'
+                })
+                .eq('id', queueEntry.id);
+              
+              tasks.push({ task: 'validation', success: false });
+            }
           }
 
-          console.log(`[WORKER] ✅ Caso ${queueEntry.case_id} processado com sucesso`);
+          // 3. Processar análise legal se pendente
+          if (queueEntry.analysis_status === 'queued') {
+            console.log(`[WORKER] Analisando caso ${caseId}`);
+            
+            await supabase
+              .from('processing_queue')
+              .update({ analysis_status: 'processing' })
+              .eq('id', queueEntry.id);
+
+            try {
+              await supabase.functions.invoke('analyze-case-legal', {
+                body: { caseId }
+              });
+              
+              await supabase
+                .from('processing_queue')
+                .update({ 
+                  analysis_status: 'completed',
+                  analysis_completed_at: new Date().toISOString()
+                })
+                .eq('id', queueEntry.id);
+              
+              tasks.push({ task: 'analysis', success: true });
+            } catch (err) {
+              await supabase
+                .from('processing_queue')
+                .update({ 
+                  analysis_status: 'failed',
+                  error_message: err instanceof Error ? err.message : 'Erro na análise'
+                })
+                .eq('id', queueEntry.id);
+              
+              tasks.push({ task: 'analysis', success: false });
+            }
+          }
+
+          // 4. Processar busca de jurisprudência se pendente
+          if (queueEntry.jurisprudence_status === 'queued') {
+            console.log(`[WORKER] Buscando jurisprudências para caso ${caseId}`);
+            
+            await supabase
+              .from('processing_queue')
+              .update({ jurisprudence_status: 'processing' })
+              .eq('id', queueEntry.id);
+
+            try {
+              await supabase.functions.invoke('search-jurisprudence', {
+                body: { caseId }
+              });
+              
+              await supabase
+                .from('processing_queue')
+                .update({ 
+                  jurisprudence_status: 'completed',
+                  jurisprudence_completed_at: new Date().toISOString()
+                })
+                .eq('id', queueEntry.id);
+              
+              tasks.push({ task: 'jurisprudence', success: true });
+            } catch (err) {
+              await supabase
+                .from('processing_queue')
+                .update({ 
+                  jurisprudence_status: 'failed',
+                  error_message: err instanceof Error ? err.message : 'Erro na busca'
+                })
+                .eq('id', queueEntry.id);
+              
+              tasks.push({ task: 'jurisprudence', success: false });
+            }
+          }
+
+          console.log(`[WORKER] ✅ Caso ${caseId} processado:`, tasks);
           
           return { 
             success: true, 
-            caseId: queueEntry.case_id,
-            queueId: queueEntry.id
+            caseId,
+            tasks
           };
           
         } catch (error) {
-          console.error(`[WORKER] ❌ Erro ao processar caso ${queueEntry.case_id}:`, error);
+          console.error(`[WORKER] ❌ Erro ao processar caso ${caseId}:`, error);
           
-          // Marcar como 'failed'
-          const { error: failError } = await supabase
-            .from('processing_queue')
-            .update({ 
-              status: 'failed', 
-              error_message: error instanceof Error ? error.message : 'Erro desconhecido',
-              retry_count: (queueEntry.retry_count || 0) + 1,
-              completed_at: new Date().toISOString()
-            })
-            .eq('id', queueEntry.id);
-
-          if (failError) {
-            console.error(`[WORKER] Erro ao atualizar status para failed:`, failError);
-          }
-
           return { 
             success: false, 
-            caseId: queueEntry.case_id, 
+            caseId, 
             error: error instanceof Error ? error.message : 'Erro desconhecido' 
           };
         }

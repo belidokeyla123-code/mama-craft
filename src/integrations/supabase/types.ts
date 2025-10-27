@@ -833,37 +833,55 @@ export type Database = {
       }
       processing_queue: {
         Row: {
+          analysis_completed_at: string | null
+          analysis_status: string | null
           case_id: string
           completed_at: string | null
           created_at: string | null
           error_message: string | null
           id: string
+          jurisprudence_completed_at: string | null
+          jurisprudence_status: string | null
           retry_count: number | null
           started_at: string | null
           status: string
           updated_at: string | null
+          validation_completed_at: string | null
+          validation_status: string | null
         }
         Insert: {
+          analysis_completed_at?: string | null
+          analysis_status?: string | null
           case_id: string
           completed_at?: string | null
           created_at?: string | null
           error_message?: string | null
           id?: string
+          jurisprudence_completed_at?: string | null
+          jurisprudence_status?: string | null
           retry_count?: number | null
           started_at?: string | null
           status?: string
           updated_at?: string | null
+          validation_completed_at?: string | null
+          validation_status?: string | null
         }
         Update: {
+          analysis_completed_at?: string | null
+          analysis_status?: string | null
           case_id?: string
           completed_at?: string | null
           created_at?: string | null
           error_message?: string | null
           id?: string
+          jurisprudence_completed_at?: string | null
+          jurisprudence_status?: string | null
           retry_count?: number | null
           started_at?: string | null
           status?: string
           updated_at?: string | null
+          validation_completed_at?: string | null
+          validation_status?: string | null
         }
         Relationships: [
           {
