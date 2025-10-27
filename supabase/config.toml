@@ -2,3 +2,9 @@ project_id = "nwpgbnzvydweexruckpt"
 
 [functions.process-documents-with-ai]
 verify_jwt = false
+
+[functions.ai-financial-insights]
+verify_jwt = false
+
+[functions.ai-case-analysis]
+verify_jwt = false

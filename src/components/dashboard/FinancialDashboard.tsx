@@ -6,6 +6,8 @@ import { Separator } from "@/components/ui/separator";
 import { Scale, Handshake, CheckCircle2, XCircle, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import StatCard from "./StatCard";
+import AIInsights from "./AIInsights";
+import SuccessPatternAnalysis from "./SuccessPatternAnalysis";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay, subMonths, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -320,6 +322,20 @@ export default function FinancialDashboard() {
               </PieChart>
             </ResponsiveContainer>
           </Card>
+
+          <Separator className="my-8" />
+
+          {/* Insights com IA */}
+          <AIInsights 
+            currentStats={stats}
+            previousStats={previousStats || stats}
+            monthlyData={monthlyData}
+          />
+
+          <Separator className="my-8" />
+
+          {/* Análise de Padrões de Sucesso */}
+          <SuccessPatternAnalysis />
         </TabsContent>
       </Tabs>
     </div>
