@@ -1,11 +1,12 @@
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 import { CaseData } from "@/pages/NewCase";
 import { User, Calendar, MapPin, Check, AlertTriangle } from "lucide-react";
 
@@ -16,12 +17,40 @@ interface StepBasicInfoProps {
 
 export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const autoFilledFields = data.autoFilledFields || [];
+  const missingFields = data.missingFields || [];
+
+  const isAutoFilled = (fieldName: string) => {
+    const fieldMapping: Record<string, string> = {
+      authorName: 'motherName',
+      authorCpf: 'motherCpf',
+      authorRg: 'motherRg',
+      authorBirthDate: 'motherBirthDate',
+      authorAddress: 'motherAddress',
+      authorMaritalStatus: 'maritalStatus',
+      childName: 'childName',
+      childBirthDate: 'childBirthDate',
+      fatherName: 'fatherName',
+      landOwnerName: 'landOwnerName',
+      landOwnerCpf: 'landOwnerCpf',
+      landOwnerRg: 'landOwnerRg',
+      landOwnershipType: 'landOwnershipType',
+      ruralActivitySince: 'ruralActivitySince',
+      familyMembers: 'familyMembers',
+      raProtocol: 'raProtocol',
+      raRequestDate: 'raRequestDate',
+      raDenialDate: 'raDenialDate',
+      raDenialReason: 'raDenialReason',
+    };
+    
+    const mappedField = fieldMapping[fieldName] || fieldName;
+    return autoFilledFields.includes(mappedField) || (data.extractedData && data.extractedData[mappedField]);
+  };
 
   const FieldBadge = ({ fieldName }: { fieldName: string }) => {
-    if (autoFilledFields.includes(fieldName)) {
+    if (isAutoFilled(fieldName)) {
       return (
         <Badge variant="outline" className="ml-2 text-green-600 border-green-600">
-          <Check className="h-3 w-3 mr-1" /> Auto-preenchido
+          <Sparkles className="h-3 w-3 mr-1" /> Auto-preenchido
         </Badge>
       );
     }
@@ -64,7 +93,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               value={data.authorName}
               onChange={(e) => updateData({ authorName: e.target.value })}
               placeholder="Maria da Silva"
-              className={autoFilledFields.includes('motherName') ? 'border-green-500' : ''}
+              className={autoFilledFields.includes('motherName') || isAutoFilled('authorName') ? 'border-green-500' : ''}
             />
           </div>
 

@@ -130,22 +130,81 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       const extractedData = extractionResult.extractedData || {};
       const missingFields = extractionResult.missingFields || [];
 
-      let assistantMessage = "✅ Documentos processados com sucesso!\n\n";
+      console.log("Dados extraídos:", extractedData);
+      console.log("Campos faltantes:", missingFields);
+
+      let assistantMessage = `✅ **Documentos processados com sucesso!**\n\n`;
+      assistantMessage += `📄 **${extractionResult.documentsProcessed || uploadedFiles.length} documento(s) analisado(s)**\n\n`;
       
       if (Object.keys(extractedData).length > 0) {
-        assistantMessage += "**Informações encontradas:**\n";
-        if (extractedData.name) assistantMessage += `• Nome: ${extractedData.name}\n`;
-        if (extractedData.cpf) assistantMessage += `• CPF: ${extractedData.cpf}\n`;
-        if (extractedData.birthDate) assistantMessage += `• Data de Nascimento: ${extractedData.birthDate}\n`;
-        if (extractedData.maritalStatus) assistantMessage += `• Estado Civil: ${extractedData.maritalStatus}\n`;
+        assistantMessage += "**📋 Informações extraídas dos documentos:**\n\n";
+        
+        // Dados da mãe/autora
+        if (extractedData.motherName || extractedData.motherCpf || extractedData.motherBirthDate) {
+          assistantMessage += "**👤 Autora (Mãe):**\n";
+          if (extractedData.motherName) assistantMessage += `• Nome: ${extractedData.motherName}\n`;
+          if (extractedData.motherCpf) assistantMessage += `• CPF: ${extractedData.motherCpf}\n`;
+          if (extractedData.motherRg) assistantMessage += `• RG: ${extractedData.motherRg}\n`;
+          if (extractedData.motherBirthDate) assistantMessage += `• Data de Nascimento: ${extractedData.motherBirthDate}\n`;
+          if (extractedData.motherAddress) assistantMessage += `• Endereço: ${extractedData.motherAddress}\n`;
+          if (extractedData.maritalStatus) assistantMessage += `• Estado Civil: ${extractedData.maritalStatus}\n`;
+          assistantMessage += "\n";
+        }
+        
+        // Dados da criança
+        if (extractedData.childName || extractedData.childBirthDate) {
+          assistantMessage += "**👶 Criança:**\n";
+          if (extractedData.childName) assistantMessage += `• Nome: ${extractedData.childName}\n`;
+          if (extractedData.childBirthDate) assistantMessage += `• Data de Nascimento: ${extractedData.childBirthDate}\n`;
+          if (extractedData.fatherName) assistantMessage += `• Pai: ${extractedData.fatherName}\n`;
+          assistantMessage += "\n";
+        }
+        
+        // Proprietário da terra
+        if (extractedData.landOwnerName || extractedData.landOwnershipType) {
+          assistantMessage += "**🏡 Propriedade Rural:**\n";
+          if (extractedData.landOwnershipType) assistantMessage += `• Tipo: ${extractedData.landOwnershipType === 'propria' ? 'Terra Própria' : 'Terra de Terceiro'}\n`;
+          if (extractedData.landOwnerName) assistantMessage += `• Proprietário: ${extractedData.landOwnerName}\n`;
+          assistantMessage += "\n";
+        }
+        
+        // Atividade rural
+        if (extractedData.ruralActivitySince || extractedData.familyMembers) {
+          assistantMessage += "**🌾 Atividade Rural:**\n";
+          if (extractedData.ruralActivitySince) assistantMessage += `• Trabalha desde: ${extractedData.ruralActivitySince}\n`;
+          if (extractedData.familyMembers && extractedData.familyMembers.length > 0) {
+            assistantMessage += `• Membros da família: ${extractedData.familyMembers.join(", ")}\n`;
+          }
+          assistantMessage += "\n";
+        }
+        
+        // Processo administrativo
+        if (extractedData.raProtocol) {
+          assistantMessage += "**📋 Processo Administrativo:**\n";
+          if (extractedData.raProtocol) assistantMessage += `• Protocolo/NB: ${extractedData.raProtocol}\n`;
+          if (extractedData.raRequestDate) assistantMessage += `• Data Requerimento: ${extractedData.raRequestDate}\n`;
+          if (extractedData.raDenialDate) assistantMessage += `• Data Indeferimento: ${extractedData.raDenialDate}\n`;
+          if (extractedData.raDenialReason) assistantMessage += `• Motivo: ${extractedData.raDenialReason}\n`;
+          assistantMessage += "\n";
+        }
       }
 
       if (missingFields.length > 0) {
-        assistantMessage += `\n⚠️ **Informações faltantes:** ${missingFields.join(", ")}\n\n`;
-        assistantMessage += "Você pode me informar esses dados ou clicar em 'Próximo' para preencher manualmente.";
-      } else {
-        assistantMessage += "\n✨ Todas as informações básicas foram extraídas! Clique em 'Próximo' para continuar.";
+        assistantMessage += `\n⚠️ **Campos faltantes (preencher manualmente):**\n`;
+        const fieldLabels: Record<string, string> = {
+          motherName: "Nome da mãe",
+          motherCpf: "CPF da mãe",
+          childName: "Nome da criança",
+          childBirthDate: "Data de nascimento da criança"
+        };
+        missingFields.forEach(field => {
+          assistantMessage += `• ${fieldLabels[field] || field}\n`;
+        });
+        assistantMessage += "\n";
       }
+      
+      assistantMessage += "\n✨ **Esses dados já foram preenchidos automaticamente no formulário!**\n";
+      assistantMessage += "➡️ Clique em 'Próximo' para revisar e completar as informações.";
 
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -153,15 +212,40 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         extractedData,
       }]);
 
-      // Atualizar dados do formulário
+      // Atualizar dados do formulário com TODOS os campos extraídos
       updateData({
         ...data,
-        authorName: extractedData.name || data.authorName,
-        authorCPF: extractedData.cpf || data.authorCPF,
-        authorBirthDate: extractedData.birthDate || data.authorBirthDate,
+        caseId,
+        // Dados da mãe
+        authorName: extractedData.motherName || data.authorName,
+        authorCPF: extractedData.motherCpf || data.authorCPF,
+        authorRG: extractedData.motherRg || data.authorRG,
+        authorBirthDate: extractedData.motherBirthDate || data.authorBirthDate,
+        authorAddress: extractedData.motherAddress || data.authorAddress,
         authorMaritalStatus: extractedData.maritalStatus || data.authorMaritalStatus,
+        // Dados da criança
+        childName: extractedData.childName || data.childName,
+        childBirthDate: extractedData.childBirthDate || data.childBirthDate,
+        eventDate: extractedData.childBirthDate || data.eventDate,
+        fatherName: extractedData.fatherName || data.fatherName,
+        // Proprietário da terra
+        landOwnerName: extractedData.landOwnerName || data.landOwnerName,
+        landOwnerCPF: extractedData.landOwnerCpf || data.landOwnerCPF,
+        landOwnerRG: extractedData.landOwnerRg || data.landOwnerRG,
+        landOwnershipType: extractedData.landOwnershipType || data.landOwnershipType,
+        // Atividade rural
+        ruralActivitySince: extractedData.ruralActivitySince || data.ruralActivitySince,
+        familyMembers: extractedData.familyMembers || data.familyMembers,
+        // Processo administrativo
+        hasRa: !!extractedData.raProtocol || data.hasRa,
+        raProtocol: extractedData.raProtocol || data.raProtocol,
+        raRequestDate: extractedData.raRequestDate || data.raRequestDate,
+        raDenialDate: extractedData.raDenialDate || data.raDenialDate,
+        raDenialReason: extractedData.raDenialReason || data.raDenialReason,
+        // Metadados
         extractedData,
         missingFields,
+        autoFilledFields: Object.keys(extractedData),
         documents: uploadedFiles.map(f => f.name),
       });
 

@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
 import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
-import { StepDocuments } from "@/components/wizard/StepDocuments";
+import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
@@ -144,7 +144,18 @@ const NewCase = () => {
       case 1:
         return <StepBasicInfo data={caseData} updateData={updateCaseData} />;
       case 2:
-        return <StepDocuments data={caseData} updateData={updateCaseData} />;
+        return caseData.caseId ? (
+          <StepDocumentsManager 
+            caseId={caseData.caseId}
+            onDocumentsChange={() => {
+              console.log("Documentos atualizados");
+            }}
+          />
+        ) : (
+          <div className="text-center p-8 text-muted-foreground">
+            Aguardando criação do caso...
+          </div>
+        );
       case 3:
         return <StepValidation data={caseData} updateData={updateCaseData} />;
       case 4:
