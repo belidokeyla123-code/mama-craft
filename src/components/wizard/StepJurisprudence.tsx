@@ -44,7 +44,22 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
         body: { caseId: data.caseId }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Tratar erros específicos
+        if (error.message?.includes('429') || result?.code === 'RATE_LIMIT') {
+          toast.error("Rate limit atingido. Aguarde 30 segundos e tente novamente.");
+          return;
+        }
+        if (error.message?.includes('402') || result?.code === 'NO_CREDITS') {
+          toast.error("Créditos Lovable AI esgotados. Adicione mais créditos.");
+          return;
+        }
+        if (error.message?.includes('408') || result?.code === 'TIMEOUT') {
+          toast.error("Timeout: Busca de jurisprudência demorou muito. Tente novamente.");
+          return;
+        }
+        throw error;
+      }
 
       if (result?.jurisprudencias) {
         setJurisprudencias(result.jurisprudencias);
@@ -162,10 +177,13 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
         <Card className="p-12">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-lg font-medium">Buscando em STF, STJ, TNU e TRFs...</p>
-            <p className="text-sm text-muted-foreground">
-              Refinando busca para casos similares ao seu
-            </p>
+            <div className="text-center space-y-2">
+              <p className="text-lg font-medium">Buscando em STF, STJ, TNU e TRFs...</p>
+              <p className="text-sm text-muted-foreground">
+                Refinando busca para casos similares ao seu
+              </p>
+              <p className="text-xs text-muted-foreground">Isso pode levar até 45 segundos</p>
+            </div>
           </div>
         </Card>
       ) : jurisprudencias.length > 0 ? (

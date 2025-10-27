@@ -72,7 +72,22 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
         body: { caseId: data.caseId }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Tratar erros específicos
+        if (error.message?.includes('429') || result?.code === 'RATE_LIMIT') {
+          toast.error("Rate limit atingido. Aguarde 30 segundos e tente novamente.");
+          return;
+        }
+        if (error.message?.includes('402') || result?.code === 'NO_CREDITS') {
+          toast.error("Créditos Lovable AI esgotados. Adicione mais créditos.");
+          return;
+        }
+        if (error.message?.includes('408') || result?.code === 'TIMEOUT') {
+          toast.error("Timeout: Análise demorou muito. Tente com menos documentos.");
+          return;
+        }
+        throw error;
+      }
 
       if (result) {
         setAnalysis(result);
@@ -122,10 +137,13 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
         <Card className="p-12">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-lg font-medium">Analisando documentação e CNIS...</p>
-            <p className="text-sm text-muted-foreground text-center max-w-md">
-              Verificando qualidade de segurada, carência, RMI, valor da causa e calculando probabilidade de êxito
-            </p>
+            <div className="text-center space-y-2">
+              <p className="text-lg font-medium">Analisando documentação e CNIS...</p>
+              <p className="text-sm text-muted-foreground">
+                Verificando qualidade de segurada, carência, RMI e valor da causa
+              </p>
+              <p className="text-xs text-muted-foreground">Isso pode levar até 60 segundos</p>
+            </div>
           </div>
         </Card>
       ) : analysis ? (

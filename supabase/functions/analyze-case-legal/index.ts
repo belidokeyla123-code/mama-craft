@@ -96,60 +96,108 @@ Considere:
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-pro',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: "json_object" }
-      }),
-    });
+    // Timeout de 60 segundos (análise mais complexa)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
-      throw new Error(`AI API error: ${aiResponse.status}`);
+    try {
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-pro',
+          messages: [{ role: 'user', content: prompt }],
+          response_format: { type: "json_object" }
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({ 
+          error: 'Rate limit atingido. Aguarde alguns segundos e tente novamente.',
+          code: 'RATE_LIMIT'
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({ 
+          error: 'Créditos Lovable AI esgotados. Adicione mais créditos.',
+          code: 'NO_CREDITS'
+        }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error('AI API error:', aiResponse.status, errorText);
+        throw new Error(`AI API error: ${aiResponse.status}`);
+      }
+
+      const aiData = await aiResponse.json();
+      const analysisResult = JSON.parse(aiData.choices[0].message.content);
+
+      // Atualizar RMI e valor_causa no caso
+      if (analysisResult.rmi?.valor_final) {
+        await supabase
+          .from('cases')
+          .update({
+            rmi_calculated: analysisResult.rmi.valor_final,
+            valor_causa: analysisResult.valor_causa
+          })
+          .eq('id', caseId);
+      }
+
+      // Salvar análise na tabela case_analysis
+      const { error: insertError } = await supabase
+        .from('case_analysis')
+        .upsert({
+          case_id: caseId,
+          qualidade_segurada: analysisResult.qualidade_segurada,
+          carencia: analysisResult.carencia,
+          rmi: analysisResult.rmi,
+          valor_causa: analysisResult.valor_causa,
+          draft_payload: analysisResult,
+          analyzed_at: new Date().toISOString()
+        }, { onConflict: 'case_id' });
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
+
+      return new Response(JSON.stringify(analysisResult), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        return new Response(JSON.stringify({ 
+          error: 'Timeout: Análise demorou muito. Tente com menos documentos.',
+          code: 'TIMEOUT'
+        }), {
+          status: 408,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw fetchError;
     }
-
-    const aiData = await aiResponse.json();
-    const analysisResult = JSON.parse(aiData.choices[0].message.content);
-
-    // Atualizar caso com valores calculados
-    await supabase
-      .from('cases')
-      .update({
-        rmi_calculated: analysisResult.rmi.valor,
-        valor_causa: analysisResult.valor_causa
-      })
-      .eq('id', caseId);
-
-    // Salvar análise completa
-    const { error: insertError } = await supabase
-      .from('case_analysis')
-      .upsert({
-        case_id: caseId,
-        qualidade_segurada: analysisResult.qualidade_segurada.detalhes,
-        vinculo_rural_comprovado: analysisResult.qualidade_segurada.comprovado,
-        carencia: analysisResult.carencia,
-        rmi: analysisResult.rmi,
-        valor_causa: analysisResult.valor_causa,
-        draft_payload: analysisResult,
-        analyzed_at: new Date().toISOString()
-      }, { onConflict: 'case_id' });
-
-    if (insertError) console.error('Insert error:', insertError);
-
-    return new Response(JSON.stringify(analysisResult), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (error) {
     console.error('Error in analyze-case-legal:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      code: 'INTERNAL_ERROR'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

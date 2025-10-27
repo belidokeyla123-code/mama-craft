@@ -82,42 +82,87 @@ Retorne apenas o texto da petição, sem JSON. Use formatação markdown para ne
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-pro',
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    // Timeout de 90 segundos (geração de petição é complexa)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
-      throw new Error(`AI API error: ${aiResponse.status}`);
+    try {
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-pro',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({ 
+          error: 'Rate limit atingido. Aguarde alguns segundos e tente novamente.',
+          code: 'RATE_LIMIT'
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({ 
+          error: 'Créditos Lovable AI esgotados. Adicione mais créditos.',
+          code: 'NO_CREDITS'
+        }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error('AI API error:', aiResponse.status, errorText);
+        throw new Error(`AI API error: ${aiResponse.status}`);
+      }
+
+      const aiData = await aiResponse.json();
+      const petitionText = aiData.choices[0].message.content;
+
+      // Salvar draft no banco
+      await supabase
+        .from('drafts')
+        .insert({
+          case_id: caseId,
+          markdown_content: petitionText,
+          payload: { selectedJurisprudencias }
+        });
+
+      return new Response(JSON.stringify({ petitionText }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        return new Response(JSON.stringify({ 
+          error: 'Timeout: Geração da petição demorou muito. Tente novamente.',
+          code: 'TIMEOUT'
+        }), {
+          status: 408,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw fetchError;
     }
-
-    const aiData = await aiResponse.json();
-    const petitionText = aiData.choices[0].message.content;
-
-    // Salvar draft
-    await supabase.from('drafts').insert({
-      case_id: caseId,
-      markdown_content: petitionText,
-      payload: { caseData, analysis, selectedJurisprudencias },
-      version: 1
-    });
-
-    return new Response(JSON.stringify({ petition: petitionText }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (error) {
     console.error('Error in generate-petition:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      code: 'INTERNAL_ERROR'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

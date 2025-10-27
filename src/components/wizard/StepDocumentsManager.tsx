@@ -56,7 +56,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         .from("documents")
         .select("*")
         .eq("case_id", caseId)
-        .order("uploaded_at", { ascending: false });
+        .order("file_name", { ascending: true });
 
       if (error) throw error;
       setDocuments(data || []);
@@ -331,6 +331,34 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
+  // Agrupar páginas de PDFs
+  const groupedDocuments = documents.reduce((acc, doc) => {
+    // Verificar se é uma página de PDF (nome formato "Página X")
+    const pageMatch = doc.file_name.match(/^Página (\d+)$/i);
+    
+    if (pageMatch) {
+      const pageNum = parseInt(pageMatch[1]);
+      const groupKey = 'pdf_pages';
+      
+      if (!acc[groupKey]) {
+        acc[groupKey] = {
+          isGroup: true,
+          groupName: `PDF convertido (${documents.filter(d => d.file_name.match(/^Página \d+$/i)).length} páginas)`,
+          docs: []
+        };
+      }
+      acc[groupKey].docs.push({ ...doc, pageNum });
+    } else {
+      // Documento individual
+      acc[doc.id] = {
+        isGroup: false,
+        docs: [doc]
+      };
+    }
+    
+    return acc;
+  }, {} as Record<string, { isGroup: boolean; groupName?: string; docs: any[] }>);
+
   if (isLoading) {
     return (
       <Card className="p-6">
@@ -442,46 +470,97 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             </div>
           </div>
 
-          <div className="space-y-2">
-            {documents.map((doc) => (
-              <div
-                key={doc.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{doc.file_name}</p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{formatFileSize(doc.file_size)}</span>
-                      <span>•</span>
-                      <span>{new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}</span>
+          <div className="space-y-3">
+            {Object.entries(groupedDocuments).map(([key, group]) => {
+              if (group.isGroup) {
+                // Grupo de páginas de PDF
+                return (
+                  <div key={key} className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                        <span className="font-medium">{group.groupName}</span>
+                        <Badge variant="outline">Convertido de PDF</Badge>
+                      </div>
+                    </div>
+                    <div className="p-2 space-y-1 max-h-[200px] overflow-y-auto">
+                      {group.docs
+                        .sort((a, b) => a.pageNum - b.pageNum)
+                        .map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between px-3 py-2 hover:bg-muted/30 rounded text-sm"
+                          >
+                            <span className="text-muted-foreground">{doc.file_name}</span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDownload(doc)}
+                                className="h-7 w-7 p-0"
+                                title="Baixar"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeleteId(doc.id)}
+                                className="h-7 w-7 p-0"
+                                title="Excluir"
+                              >
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   </div>
-                  {getDocumentTypeBadge(doc.document_type)}
-                </div>
-
-                <div className="flex items-center gap-2 ml-4">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDownload(doc)}
-                    title="Baixar"
+                );
+              } else {
+                // Documento individual
+                const doc = group.docs[0];
+                return (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
-                    <Download className="h-4 w-4" />
-                  </Button>
+                    <div className="flex items-center gap-3 flex-1">
+                      <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{doc.file_name}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>{formatFileSize(doc.file_size)}</span>
+                          <span>•</span>
+                          <span>{new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}</span>
+                        </div>
+                      </div>
+                      {getDocumentTypeBadge(doc.document_type)}
+                    </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setDeleteId(doc.id)}
-                    title="Excluir"
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+                    <div className="flex items-center gap-2 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDownload(doc)}
+                        title="Baixar"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleteId(doc.id)}
+                        title="Excluir"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+            })}
           </div>
         </div>
       </Card>

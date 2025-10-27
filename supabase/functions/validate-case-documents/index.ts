@@ -88,50 +88,94 @@ Documentos essenciais:
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: "json_object" }
-      }),
-    });
+    // Timeout de 45 segundos
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
-      throw new Error(`AI API error: ${aiResponse.status}`);
+    try {
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [{ role: 'user', content: prompt }],
+          response_format: { type: "json_object" }
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({ 
+          error: 'Rate limit atingido. Aguarde alguns segundos e tente novamente.',
+          code: 'RATE_LIMIT'
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({ 
+          error: 'Créditos Lovable AI esgotados. Adicione mais créditos.',
+          code: 'NO_CREDITS'
+        }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error('AI API error:', aiResponse.status, errorText);
+        throw new Error(`AI API error: ${aiResponse.status}`);
+      }
+
+      const aiData = await aiResponse.json();
+      const validationResult = JSON.parse(aiData.choices[0].message.content);
+
+      // Salvar na tabela document_validation
+      const { error: insertError } = await supabase
+        .from('document_validation')
+        .upsert({
+          case_id: caseId,
+          score: validationResult.score,
+          is_sufficient: validationResult.is_sufficient,
+          checklist: validationResult.checklist,
+          missing_docs: validationResult.missing_docs,
+          validation_details: validationResult,
+          validated_at: new Date().toISOString()
+        }, { onConflict: 'case_id' });
+
+      if (insertError) throw insertError;
+
+      return new Response(JSON.stringify(validationResult), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        return new Response(JSON.stringify({ 
+          error: 'Timeout: Validação demorou muito. Tente novamente.',
+          code: 'TIMEOUT'
+        }), {
+          status: 408,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw fetchError;
     }
-
-    const aiData = await aiResponse.json();
-    const validationResult = JSON.parse(aiData.choices[0].message.content);
-
-    // Salvar na tabela document_validation
-    const { error: insertError } = await supabase
-      .from('document_validation')
-      .upsert({
-        case_id: caseId,
-        score: validationResult.score,
-        is_sufficient: validationResult.is_sufficient,
-        checklist: validationResult.checklist,
-        missing_docs: validationResult.missing_docs,
-        validation_details: validationResult,
-        validated_at: new Date().toISOString()
-      }, { onConflict: 'case_id' });
-
-    if (insertError) throw insertError;
-
-    return new Response(JSON.stringify(validationResult), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (error) {
     console.error('Error in validate-case-documents:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      code: 'INTERNAL_ERROR'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

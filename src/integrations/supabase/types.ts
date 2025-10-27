@@ -151,7 +151,7 @@ export type Database = {
           {
             foreignKeyName: "case_analysis_case_id_fkey"
             columns: ["case_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },
@@ -486,7 +486,7 @@ export type Database = {
           {
             foreignKeyName: "document_validation_case_id_fkey"
             columns: ["case_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },

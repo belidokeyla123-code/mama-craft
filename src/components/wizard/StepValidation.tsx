@@ -34,7 +34,35 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         body: { caseId: data.caseId }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Tratar erros específicos
+        if (error.message?.includes('429') || result?.code === 'RATE_LIMIT') {
+          toast({
+            title: "Rate limit atingido",
+            description: "Muitas requisições. Aguarde 30 segundos e tente novamente.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (error.message?.includes('402') || result?.code === 'NO_CREDITS') {
+          toast({
+            title: "Créditos esgotados",
+            description: "Adicione mais créditos Lovable AI em Settings.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (error.message?.includes('408') || result?.code === 'TIMEOUT') {
+          toast({
+            title: "Timeout",
+            description: "A validação demorou muito. Tente novamente.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
+
       setValidationResult(result);
       
       toast({
@@ -47,7 +75,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       console.error('Erro na validação:', error);
       toast({
         title: "Erro na validação",
-        description: error.message,
+        description: error.message || "Erro desconhecido. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -60,7 +88,13 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       <Card className="p-6">
         <div className="flex flex-col items-center justify-center py-12 space-y-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-lg font-medium">Validando documentação...</p>
+          <div className="text-center space-y-2">
+            <p className="text-lg font-medium">Validando documentação...</p>
+            <p className="text-sm text-muted-foreground">
+              Analisando {data.caseId ? 'seus documentos' : 'caso'} com IA...
+            </p>
+            <p className="text-xs text-muted-foreground">Isso pode levar até 45 segundos</p>
+          </div>
         </div>
       </Card>
     );
