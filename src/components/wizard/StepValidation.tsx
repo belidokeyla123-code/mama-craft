@@ -1,8 +1,13 @@
+import { useState, useEffect } from "react";
 import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface StepValidationProps {
   data: CaseData;
@@ -10,65 +15,122 @@ interface StepValidationProps {
 }
 
 export const StepValidation = ({ data, updateData }: StepValidationProps) => {
-  // Mock - será substituído por lógica real
-  const validationScore = data.validationScore || 0;
-  const threshold = 7;
-  const isSufficient = validationScore >= threshold;
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<any>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (data.caseId && !validationResult) {
+      handleValidate();
+    }
+  }, [data.caseId]);
+
+  const handleValidate = async () => {
+    if (!data.caseId) return;
+    
+    setIsValidating(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('validate-case-documents', {
+        body: { caseId: data.caseId }
+      });
+
+      if (error) throw error;
+      setValidationResult(result);
+      
+      toast({
+        title: result.is_sufficient ? "Validação aprovada" : "Validação pendente",
+        description: result.is_sufficient 
+          ? "Documentação suficiente para prosseguir" 
+          : "Adicione mais documentos",
+      });
+    } catch (error: any) {
+      console.error('Erro na validação:', error);
+      toast({
+        title: "Erro na validação",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  if (isValidating || !validationResult) {
+    return (
+      <Card className="p-6">
+        <div className="flex flex-col items-center justify-center py-12 space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-lg font-medium">Validando documentação...</p>
+        </div>
+      </Card>
+    );
+  }
+
+  const { score, is_sufficient, checklist, missing_docs, recommendations } = validationResult;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Validação Documental</h2>
-        <p className="text-muted-foreground">
-          Verificando suficiência probatória antes da análise jurídica
-        </p>
-      </div>
-
-      {/* Score Card */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Score de Suficiência</h3>
           <div className="flex items-center gap-2">
-            {isSufficient ? (
+            {is_sufficient ? (
               <CheckCircle className="h-6 w-6 text-success" />
             ) : (
               <XCircle className="h-6 w-6 text-destructive" />
             )}
-            <span className="text-2xl font-bold">
-              {validationScore}/{threshold}
-            </span>
+            <span className="text-2xl font-bold">{score}/10</span>
           </div>
         </div>
-        <Progress value={(validationScore / 10) * 100} className="h-3" />
-        <p className="text-sm text-muted-foreground mt-2">
-          {isSufficient
-            ? "Documentação suficiente para prosseguir"
-            : "Documentação insuficiente - adicione mais provas"}
-        </p>
+        <Progress value={score * 10} className="h-3" />
       </Card>
 
-      {/* Status Alert */}
-      {isSufficient ? (
-        <Alert className="border-success">
-          <CheckCircle className="h-4 w-4 text-success" />
-          <AlertDescription>
-            ✅ Documentação aprovada! Você pode prosseguir para a análise jurídica.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Documentação Insuficiente</strong>
-            <p className="mt-2">
-              Adicione mais documentos na etapa anterior antes de continuar.
-            </p>
-          </AlertDescription>
-        </Alert>
+      {checklist && checklist.length > 0 && (
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Checklist Documental</h3>
+          <div className="space-y-2">
+            {checklist.map((item: any, idx: number) => (
+              <div key={idx} className="flex items-center gap-3 p-3 border rounded">
+                {item.status === 'ok' ? (
+                  <CheckCircle className="h-5 w-5 text-success flex-shrink-0" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                )}
+                <span className="flex-1">{item.item}</span>
+                <Badge variant={item.importance === 'critical' ? 'destructive' : 'secondary'}>
+                  {item.importance}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
-      <div className="text-center text-sm text-muted-foreground">
-        Esta é uma versão simplificada. A validação completa será implementada nas próximas fases.
+      {missing_docs && missing_docs.length > 0 && (
+        <Card className="p-6 border-destructive">
+          <h3 className="text-lg font-semibold mb-4 text-destructive">Documentos Faltantes</h3>
+          <div className="space-y-4">
+            {missing_docs.map((doc: any, idx: number) => (
+              <div key={idx} className="border-l-4 border-destructive pl-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-semibold">{doc.doc_type}</span>
+                  <Badge variant="destructive">{doc.importance}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mb-1">{doc.reason}</p>
+                {doc.impact && (
+                  <p className="text-sm text-destructive">{doc.impact}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div className="flex gap-2">
+        <Button onClick={handleValidate} disabled={isValidating} className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          Validar Novamente
+        </Button>
       </div>
     </div>
   );

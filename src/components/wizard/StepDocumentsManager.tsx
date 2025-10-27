@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2, FolderDown } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus } from "lucide-react";
+import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import JSZip from "jszip";
 import {
   AlertDialog,
@@ -40,6 +41,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const loadDocuments = async () => {
@@ -216,6 +219,97 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     }
   };
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      // Converter PDFs em imagens
+      const processedFiles: File[] = [];
+      for (const file of files) {
+        if (isPDF(file)) {
+          const { images } = await convertPDFToImages(file, 10);
+          processedFiles.push(...images);
+        } else {
+          processedFiles.push(file);
+        }
+      }
+
+      // Upload para o storage
+      const uploadPromises = processedFiles.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(7);
+        const fileName = `${caseName || `caso_${caseId.slice(0, 8)}`}/${timestamp}_${randomId}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from("case-documents")
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        // Salvar no banco
+        const { data: doc, error: docError } = await supabase
+          .from("documents")
+          .insert({
+            case_id: caseId,
+            file_name: file.name,
+            file_path: fileName,
+            file_size: file.size,
+            mime_type: file.type,
+            document_type: "OUTROS",
+          })
+          .select()
+          .single();
+
+        if (docError) throw docError;
+        return doc;
+      });
+
+      const uploadedDocs = await Promise.all(uploadPromises);
+
+      // Chamar edge function para processar com IA
+      const { data: processingResult, error: processingError } = await supabase.functions.invoke(
+        "process-documents-with-ai",
+        {
+          body: {
+            caseId,
+            documentIds: uploadedDocs.map(d => d.id),
+          },
+        }
+      );
+
+      if (processingError) {
+        console.error('Erro ao processar com IA:', processingError);
+      }
+
+      toast({
+        title: "Documentos enviados",
+        description: `${uploadedDocs.length} documento(s) enviado(s) e processado(s) com IA`,
+      });
+
+      // Recarregar lista
+      await loadDocuments();
+      if (onDocumentsChange) onDocumentsChange();
+
+    } catch (error: any) {
+      console.error("Erro ao enviar documentos:", error);
+      toast({
+        title: "Erro ao enviar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -260,17 +354,48 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
   if (documents.length === 0) {
     return (
-      <Alert>
-        <FileText className="h-4 w-4" />
-        <AlertDescription>
-          Nenhum documento enviado ainda. Use o Chat Inteligente para fazer upload dos documentos.
-        </AlertDescription>
-      </Alert>
+      <Card className="p-8 text-center">
+        <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <h3 className="text-lg font-semibold mb-2">Nenhum documento enviado</h3>
+        <p className="text-muted-foreground mb-4">
+          Adicione documentos para continuar com o processo
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.webp"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <Button onClick={handleUploadClick} disabled={isUploading} className="gap-2">
+          {isUploading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Enviando...
+            </>
+          ) : (
+            <>
+              <Upload className="h-4 w-4" />
+              Adicionar Documentos
+            </>
+          )}
+        </Button>
+      </Card>
     );
   }
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".pdf,.jpg,.jpeg,.png,.webp"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+      
       <Card className="p-6">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -278,24 +403,43 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
               <h3 className="text-lg font-semibold">Documentos Enviados</h3>
               <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
             </div>
-            <Button
-              onClick={handleDownloadAll}
-              disabled={isDownloadingAll || documents.length === 0}
-              variant="outline"
-              className="gap-2"
-            >
-              {isDownloadingAll ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Preparando ZIP...
-                </>
-              ) : (
-                <>
-                  <FolderDown className="h-4 w-4" />
-                  Baixar Todos em ZIP
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                className="gap-2"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Adicionar Mais
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleDownloadAll}
+                disabled={isDownloadingAll || documents.length === 0}
+                variant="outline"
+                className="gap-2"
+              >
+                {isDownloadingAll ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Preparando ZIP...
+                  </>
+                ) : (
+                  <>
+                    <FolderDown className="h-4 w-4" />
+                    Baixar Todos
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
