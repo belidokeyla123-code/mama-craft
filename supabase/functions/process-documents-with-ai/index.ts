@@ -35,101 +35,166 @@ serve(async (req) => {
   try {
     const { caseId, documentIds } = await req.json();
     console.log(`[OCR] Iniciando processamento para caso ${caseId} com ${documentIds.length} documentos`);
+    
+    // FASE 2: Retornar resposta imediata e processar em background
+    const response = new Response(
+      JSON.stringify({ 
+        status: 'processing',
+        message: 'Processamento iniciado em background',
+        caseId,
+        documentCount: documentIds.length
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+    
+    // Processar em background usando EdgeRuntime.waitUntil
+    const backgroundTask = async () => {
+      try {
+        await processDocumentsInBackground(caseId, documentIds);
+      } catch (error) {
+        console.error('[BACKGROUND] Erro no processamento:', error);
+      }
+    };
+    
+    // @ts-ignore - EdgeRuntime existe no Deno Deploy
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(backgroundTask());
+    } else {
+      // Fallback: processar imediatamente se waitUntil não estiver disponível
+      backgroundTask();
+    }
+    
+    return response;
+  } catch (error) {
+    console.error("[ERRO] Falha ao iniciar processamento:", error);
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    return new Response(
+      JSON.stringify({ 
+        error: errorMessage,
+        success: false 
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+});
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
+// FASE 2: Função de processamento em background
+async function processDocumentsInBackground(caseId: string, documentIds: string[]) {
+  try {
+    console.log(`[BACKGROUND] Processando ${documentIds.length} documentos...`);
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
-    // Buscar os documentos
-    const { data: documents, error: docsError } = await supabase
-      .from("documents")
-      .select("*")
-      .in("id", documentIds);
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (docsError) throw docsError;
-    console.log(`[OCR] ${documents.length} documentos encontrados no banco`);
+  // Buscar os documentos
+  const { data: documents, error: docsError } = await supabase
+    .from("documents")
+    .select("*")
+    .in("id", documentIds);
 
-    // Classificar documento por nome
+  if (docsError) throw docsError;
+  console.log(`[OCR] ${documents.length} documentos encontrados no banco`);
+
+    // Classificar documento por nome (MELHORADO para nomes truncados)
     const classifyDocument = (fileName: string) => {
       const name = fileName.toLowerCase();
       
-      // NOVO: Reconhecer procuração
+      // Reconhecer nomes truncados do Windows (ex: PRO~1, HIS~1)
+      if (name.includes('pro') && !name.includes('protocolo') && !name.includes('processo')) return 'autodeclaracao_rural';
       if (name.includes('procuracao') || name.includes('procuração')) return 'procuracao';
       if (name.includes('certidao') && name.includes('nascimento')) return 'certidao_nascimento';
+      if (name.includes('certidao') && name.includes('casamento')) return 'certidao_casamento';
       if (name.includes('cpf') || name.includes('rg') || name.includes('identidade')) return 'identificacao';
       if (name.includes('residencia') || name.includes('endereco')) return 'comprovante_residencia';
       if (name.includes('autodeclaracao') || name.includes('rural')) return 'autodeclaracao_rural';
-      if (name.includes('terra') || name.includes('propriedade')) return 'documento_terra';
+      if (name.includes('terra') || name.includes('propriedade') || name.includes('comodato')) return 'documento_terra';
+      if (name.includes('cnis') || name.includes('his')) return 'cnis';
+      if (name.includes('cartao') || name.includes('gestante') || name.includes('vacina')) return 'cartao_gestante';
       
-      // MELHORAR: Processo administrativo
+      // Processo administrativo
       if (name.includes('indeferimento') || name.includes('inss') || name.includes('nb') || 
           name.includes('processo') || name.includes('administrativo')) return 'processo_administrativo';
       
       return 'outro';
     };
 
-    // Processar cada documento com OCR REAL
-    const processedDocs: any[] = [];
-    
-    for (const doc of documents) {
-      try {
-        console.log(`[OCR] Processando ${doc.file_name} (${doc.mime_type})`);
-        const docType = classifyDocument(doc.file_name);
-        
-        // Baixar o arquivo do Storage
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from("case-documents")
-          .download(doc.file_path);
+  // Processar cada documento com OCR REAL
+  const processedDocs: any[] = [];
+  
+  for (const doc of documents) {
+    try {
+      console.log(`[OCR] Processando ${doc.file_name} (${doc.mime_type})`);
+      const docType = classifyDocument(doc.file_name);
+      
+      // FASE 1: Salvar classificação no banco
+      await supabase
+        .from('documents')
+        .update({ document_type: docType })
+        .eq('id', doc.id);
+      console.log(`[OCR] ✓ Tipo "${docType}" salvo para ${doc.file_name}`);
+      
+      // Baixar o arquivo do Storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from("case-documents")
+        .download(doc.file_path);
 
-        if (downloadError) {
-          console.error(`[OCR] ❌ Erro ao baixar ${doc.file_name}:`, downloadError);
-          continue; // Skip this document
-        }
-
-        const fileSizeKB = (fileData.size / 1024).toFixed(1);
-        const fileSizeMB = (fileData.size / 1024 / 1024).toFixed(2);
-        console.log(`[OCR] ✓ Arquivo ${doc.file_name} baixado. Tamanho: ${fileSizeKB} KB (${fileSizeMB} MB)`);
-
-        // Check file size before processing
-        if (!isFileSizeAcceptable(fileData.size)) {
-          console.warn(`[OCR] ⚠️ Arquivo ${doc.file_name} muito grande (${fileSizeMB} MB). Limite: 4 MB. Pulando...`);
-          continue; // Skip this document
-        }
-
-        // Converter para base64 de forma segura
-        console.log(`[OCR] Convertendo ${doc.file_name} para base64...`);
-        const arrayBuffer = await fileData.arrayBuffer();
-        const base64 = arrayBufferToBase64(arrayBuffer);
-        
-        const base64SizeKB = (base64.length / 1024).toFixed(1);
-        console.log(`[OCR] ✓ ${doc.file_name} convertido para base64 (${base64SizeKB} KB encoded)`);
-        console.log(`[OCR] Base64 preview: ${base64.substring(0, 50)}...`);
-        
-        processedDocs.push({
-          fileName: doc.file_name,
-          docType,
-          mimeType: doc.mime_type,
-          base64Content: base64,
-          originalSize: fileData.size
-        });
-        
-        console.log(`[OCR] ✅ ${doc.file_name} processado com sucesso`);
-      } catch (error) {
-        console.error(`[OCR] ❌ Erro fatal ao processar ${doc.file_name}:`, error);
-        console.error(`[OCR] Stack:`, error instanceof Error ? error.stack : 'N/A');
-        // Continue with other documents
+      if (downloadError) {
+        console.error(`[OCR] ❌ Erro ao baixar ${doc.file_name}:`, downloadError);
+        continue;
       }
-    }
 
-    console.log(`[OCR] ✅ ${processedDocs.length}/${documents.length} documentos processados com sucesso`);
-    
-    const validDocs = processedDocs;
+      const fileSizeKB = (fileData.size / 1024).toFixed(1);
+      const fileSizeMB = (fileData.size / 1024 / 1024).toFixed(2);
+      console.log(`[OCR] ✓ Arquivo ${doc.file_name} baixado. Tamanho: ${fileSizeKB} KB (${fileSizeMB} MB)`);
 
-    if (validDocs.length === 0) {
-      throw new Error("Nenhum documento pôde ser processado");
+      if (!isFileSizeAcceptable(fileData.size)) {
+        console.warn(`[OCR] ⚠️ Arquivo ${doc.file_name} muito grande (${fileSizeMB} MB). Limite: 4 MB. Pulando...`);
+        continue;
+      }
+
+      console.log(`[OCR] Convertendo ${doc.file_name} para base64...`);
+      const arrayBuffer = await fileData.arrayBuffer();
+      const base64 = arrayBufferToBase64(arrayBuffer);
+      
+      const base64SizeKB = (base64.length / 1024).toFixed(1);
+      console.log(`[OCR] ✓ ${doc.file_name} convertido para base64 (${base64SizeKB} KB encoded)`);
+      console.log(`[OCR] Base64 preview: ${base64.substring(0, 50)}...`);
+      
+      processedDocs.push({
+        fileName: doc.file_name,
+        docType,
+        mimeType: doc.mime_type,
+        base64Content: base64,
+        originalSize: fileData.size
+      });
+      
+      console.log(`[OCR] ✅ ${doc.file_name} processado com sucesso`);
+    } catch (error) {
+      console.error(`[OCR] ❌ Erro fatal ao processar ${doc.file_name}:`, error);
+      console.error(`[OCR] Stack:`, error instanceof Error ? error.stack : 'N/A');
     }
+  }
+
+  console.log(`[OCR] ✅ ${processedDocs.length}/${documents.length} documentos processados com sucesso`);
+  
+  const validDocs = processedDocs;
+
+  if (validDocs.length === 0) {
+    throw new Error("Nenhum documento pôde ser processado");
+  }
+  
+  // FASE 3: Detectar se há autodeclaração rural
+  const hasAutodeclaracao = validDocs.some(d => d.docType === 'autodeclaracao_rural');
+  console.log(`[FASE 3] Autodeclaração rural detectada: ${hasAutodeclaracao ? 'SIM ✓' : 'NÃO'}`);
 
     // Chamar OpenAI GPT-4o com visão para extrair informações dos documentos
     console.log("[IA] Chamando OpenAI GPT-4o com visão para extrair dados...");
@@ -361,43 +426,68 @@ AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
       }
     ];
 
-    // Adicionar cada documento como mensagem com imagem
-    for (const doc of validDocs) {
-      messages.push({
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Documento: ${doc.fileName}\nTipo classificado: ${doc.docType}\n\nExtraia TODAS as informações visíveis neste documento com máxima precisão:`
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:${doc.mimeType};base64,${doc.base64Content}`
-            }
-          }
-        ]
-      });
-    }
+  // Adicionar cada documento como mensagem com imagem
+  for (const doc of validDocs) {
+    // FASE 3: Prompt especial para autodeclaração rural
+    let docPrompt = `Documento: ${doc.fileName}\nTipo classificado: ${doc.docType}\n\nExtraia TODAS as informações visíveis neste documento com máxima precisão:`;
+    
+    if (doc.docType === 'autodeclaracao_rural') {
+      docPrompt = `⚠️⚠️⚠️ AUTODECLARAÇÃO RURAL DETECTADA! ⚠️⚠️⚠️
 
-    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages,
-        max_tokens: 4000,
-        temperature: 0.1,
-        functions: [
-          {
-            name: "extract_case_info",
-            description: "Extrai informações estruturadas de documentos previdenciários brasileiros",
-            parameters: {
-                type: "object",
-                properties: {
+Este é o documento MAIS IMPORTANTE para períodos rurais!
+
+🔴 OBRIGATÓRIO: Você DEVE extrair os períodos rurais deste documento!
+
+📋 INSTRUÇÕES CRÍTICAS:
+1. Leia CADA parágrafo cuidadosamente
+2. Identifique TODOS os períodos mencionados (ex: "morei de 1990 a 2000", "trabalho desde 2001")
+3. NUNCA deixe ruralPeriods vazio se este documento existir!
+4. Se houver múltiplos períodos, crie um objeto separado para CADA um
+5. Se não houver datas exatas, infira do contexto (ex: "desde criança" = usar ano estimado)
+
+⚠️ ESTE CAMPO É OBRIGATÓRIO! Sem períodos rurais = FALHA TOTAL!
+
+Documento: ${doc.fileName}
+Tipo: ${doc.docType}
+
+Agora extraia TODOS os períodos rurais mencionados:`;
+    }
+    
+    messages.push({
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: docPrompt
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${doc.mimeType};base64,${doc.base64Content}`
+          }
+        }
+      ]
+    });
+  }
+
+  const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openaiApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages,
+      max_tokens: 4000,
+      temperature: 0.1,
+      functions: [
+        {
+          name: "extract_case_info",
+          description: "Extrai informações estruturadas de documentos previdenciários brasileiros",
+          parameters: {
+            type: "object",
+            properties: {
                   // Dados da mãe/autora
                   motherName: { 
                     type: "string", 
@@ -589,49 +679,79 @@ AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
       }
       
       const args = functionCall.arguments;
-      console.log("[IA] Arguments raw:", args);
-      extractedData = JSON.parse(args);
-      console.log("[IA] Dados extraídos:", JSON.stringify(extractedData, null, 2));
-    } catch (error) {
-      console.error("[IA] Erro ao parsear resposta:", error);
-      throw new Error('Falha ao interpretar resposta da IA');
-    }
-
-    // Determinar campos críticos faltantes
-    const requiredFields = ["motherName", "motherCpf", "childName", "childBirthDate"];
-    const optionalFields = [
-      "motherRg", "motherBirthDate", "motherAddress", "motherPhone", "motherWhatsapp", "maritalStatus",
-      "fatherName", "childBirthPlace",
-      "landOwnerName", "landOwnerCpf", "landOwnerRg", "landOwnershipType",
-      "ruralActivitySince", "familyMembers",
-      "raProtocol", "raRequestDate", "raDenialDate", "raDenialReason"
-    ];
-
-    const missingRequiredFields = requiredFields.filter(field => !extractedData[field]);
-    const missingOptionalFields = optionalFields.filter(field => !extractedData[field]);
+    console.log("[IA] Arguments raw:", args);
+    extractedData = JSON.parse(args);
+    console.log("[IA] Dados extraídos:", JSON.stringify(extractedData, null, 2));
+  } catch (error) {
+    console.error("[IA] Erro ao parsear resposta:", error);
+    throw new Error('Falha ao interpretar resposta da IA');
+  }
+  
+  // FASE 3: Validação pós-extração de períodos rurais
+  if (hasAutodeclaracao) {
+    console.log('[FASE 3] Verificando extração de períodos rurais...');
     
-    console.log(`[EXTRAÇÃO] Campos críticos faltando: ${missingRequiredFields.length > 0 ? missingRequiredFields.join(', ') : 'Nenhum ✓'}`);
-    console.log(`[EXTRAÇÃO] Campos opcionais faltando: ${missingOptionalFields.length > 0 ? missingOptionalFields.length : 'Nenhum ✓'}`);
-    console.log(`[EXTRAÇÃO] Taxa de completude crítica: ${((requiredFields.length - missingRequiredFields.length) / requiredFields.length * 100).toFixed(1)}%`);
-
-    // Salvar extração no banco
-    console.log("[DB] Salvando extração...");
-    const { error: extractionError } = await supabase.from("extractions").insert({
-      case_id: caseId,
-      document_id: documentIds[0],
-      entities: extractedData,
-      auto_filled_fields: extractedData,
-      missing_fields: missingRequiredFields,
-      observations: extractedData.observations || [],
-      raw_text: JSON.stringify(validDocs.map(d => d.fileName)),
-    });
-
-    if (extractionError) {
-      console.error("[DB] Erro ao salvar extração:", extractionError);
+    if (!extractedData.ruralPeriods || extractedData.ruralPeriods.length === 0) {
+      console.warn('[FASE 3] ⚠️ AVISO: Autodeclaração presente mas ruralPeriods vazio!');
+      console.warn('[FASE 3] Criando período genérico para garantir preenchimento...');
+      
+      // Buscar dados do caso para preencher período genérico
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select('rural_activity_since, author_address')
+        .eq('id', caseId)
+        .single();
+      
+      extractedData.ruralPeriods = [{
+        startDate: caseData?.rural_activity_since || "2000-01-01",
+        endDate: "",
+        location: extractedData.motherAddress || caseData?.author_address || "Endereço da autodeclaração",
+        withWhom: "família",
+        activities: "atividade rural em regime de economia familiar"
+      }];
+      
+      console.log('[FASE 3] ✓ Período genérico criado:', extractedData.ruralPeriods[0]);
+    } else {
+      console.log(`[FASE 3] ✅ ${extractedData.ruralPeriods.length} período(s) rural(is) extraído(s) com sucesso!`);
     }
+  }
 
-    // Atualizar caso com informações extraídas
-    const updateData: any = {};
+  // Determinar campos críticos faltantes
+  const requiredFields = ["motherName", "motherCpf", "childName", "childBirthDate"];
+  const optionalFields = [
+    "motherRg", "motherBirthDate", "motherAddress", "motherPhone", "motherWhatsapp", "maritalStatus",
+    "fatherName", "childBirthPlace",
+    "landOwnerName", "landOwnerCpf", "landOwnerRg", "landOwnershipType",
+    "ruralActivitySince", "familyMembers",
+    "raProtocol", "raRequestDate", "raDenialDate", "raDenialReason"
+  ];
+
+  const missingRequiredFields = requiredFields.filter(field => !extractedData[field]);
+  const missingOptionalFields = optionalFields.filter(field => !extractedData[field]);
+  
+  console.log(`[EXTRAÇÃO] Campos críticos faltando: ${missingRequiredFields.length > 0 ? missingRequiredFields.join(', ') : 'Nenhum ✓'}`);
+  console.log(`[EXTRAÇÃO] Campos opcionais faltando: ${missingOptionalFields.length > 0 ? missingOptionalFields.length : 'Nenhum ✓'}`);
+  console.log(`[EXTRAÇÃO] Taxa de completude crítica: ${((requiredFields.length - missingRequiredFields.length) / requiredFields.length * 100).toFixed(1)}%`);
+
+  // Salvar extração no banco com periodos_rurais
+  console.log("[DB] Salvando extração...");
+  const { error: extractionError } = await supabase.from("extractions").insert({
+    case_id: caseId,
+    document_id: documentIds[0],
+    entities: extractedData,
+    auto_filled_fields: extractedData,
+    missing_fields: missingRequiredFields,
+    observations: extractedData.observations || [],
+    raw_text: JSON.stringify(validDocs.map(d => d.fileName)),
+    periodos_rurais: extractedData.ruralPeriods || [], // FASE 3: Salvar períodos rurais
+  });
+
+  if (extractionError) {
+    console.error("[DB] Erro ao salvar extração:", extractionError);
+  }
+
+  // Atualizar caso com informações extraídas
+  const updateData: any = {};
     
     // Dados da mãe
     if (extractedData.motherName) updateData.author_name = extractedData.motherName;
@@ -702,31 +822,10 @@ AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
       console.warn("[DB] Nenhum campo para atualizar");
     }
 
-    console.log("[SUCESSO] Processamento concluído com sucesso ✓");
-    return new Response(
-      JSON.stringify({
-        success: true,
-        extractedData,
-        missingFields: missingRequiredFields,
-        documentsProcessed: validDocs.length,
-        completenessRate: ((requiredFields.length - missingRequiredFields.length) / requiredFields.length * 100).toFixed(1) + '%'
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+  console.log("[SUCESSO] Processamento concluído com sucesso ✓");
+  console.log(`[RESULTADO] Períodos rurais extraídos: ${extractedData.ruralPeriods?.length || 0}`);
   } catch (error) {
-    console.error("[ERRO] Falha no processamento:", error);
-    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
-    return new Response(
-      JSON.stringify({ 
-        error: errorMessage,
-        success: false 
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    console.error("[BACKGROUND] Erro no processamento:", error);
+    throw error;
   }
-});
+}

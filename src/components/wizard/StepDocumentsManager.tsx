@@ -322,10 +322,13 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
       const uploadedDocs = await Promise.all(uploadPromises);
 
-      // Chamar edge function para processar com IA e aguardar conclusão
-      setUploadProgress("Processando com IA...");
+      // FASE 2: Chamar edge function sem aguardar (processamento em background)
+      setUploadProgress("Iniciando processamento IA...");
       
-      const { data: processingResult, error: processingError } = await supabase.functions.invoke(
+      const uploadStartTime = new Date();
+      
+      // Chamar sem await - processamento em background
+      supabase.functions.invoke(
         "process-documents-with-ai",
         {
           body: {
@@ -333,27 +336,58 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             documentIds: uploadedDocs.map(d => d.id),
           },
         }
-      );
+      ).then(({ error }) => {
+        if (error) {
+          console.error('Erro ao iniciar processamento IA:', error);
+        } else {
+          console.log('✓ Processamento IA iniciado em background');
+        }
+      });
 
-      if (processingError) {
-        console.error('Erro ao processar com IA:', processingError);
-        toast({
-          title: "Documentos enviados com aviso",
-          description: `${uploadedDocs.length} documento(s) enviado(s), mas houve erro no processamento IA. Clique em "Re-processar" na aba de Informações Básicas.`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Documentos processados com sucesso!",
-          description: `${uploadedDocs.length} documento(s) enviado(s) e processados com IA. Os dados foram atualizados automaticamente.`,
-        });
-      }
+      toast({
+        title: "Documentos enviados!",
+        description: `${uploadedDocs.length} documento(s) enviado(s). Processamento com IA em andamento em segundo plano...`,
+      });
 
-      // Recarregar lista e notificar componente pai
+      // Recarregar lista imediatamente
       await loadDocuments();
-      if (onDocumentsChange) {
-        onDocumentsChange();
-      }
+      
+      // FASE 2: Polling para verificar quando o processamento terminar
+      const pollProcessing = setInterval(async () => {
+        const { data: extractions } = await supabase
+          .from('extractions')
+          .select('extracted_at')
+          .eq('case_id', caseId)
+          .order('extracted_at', { ascending: false })
+          .limit(1);
+        
+        if (extractions && extractions[0]?.extracted_at) {
+          const extractionTime = new Date(extractions[0].extracted_at);
+          
+          // Verificar se a extração é posterior ao upload
+          if (extractionTime > uploadStartTime) {
+            clearInterval(pollProcessing);
+            console.log('✅ Processamento IA concluído!');
+            
+            // Recarregar documentos e atualizar UI
+            await loadDocuments();
+            if (onDocumentsChange) {
+              onDocumentsChange();
+            }
+            
+            toast({
+              title: "Processamento concluído!",
+              description: "Dados extraídos com IA e atualizados automaticamente. Confira a aba de Informações Básicas.",
+            });
+          }
+        }
+      }, 3000); // Verificar a cada 3 segundos
+      
+      // Timeout de segurança: parar polling após 2 minutos
+      setTimeout(() => {
+        clearInterval(pollProcessing);
+        console.log('[POLLING] Timeout atingido, parando verificação');
+      }, 120000);
 
     } catch (error: any) {
       console.error("Erro ao enviar documentos:", error);
