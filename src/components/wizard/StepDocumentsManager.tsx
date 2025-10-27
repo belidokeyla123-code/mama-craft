@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
+import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
 import JSZip from "jszip";
 import {
   AlertDialog,
@@ -41,7 +42,9 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -168,6 +171,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     if (documents.length === 0) return;
     
     setIsDownloadingAll(true);
+    setDownloadProgress("Iniciando download...");
     
     try {
       const zip = new JSZip();
@@ -176,24 +180,61 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       
       if (!folder) throw new Error("Erro ao criar pasta no ZIP");
       
-      // Download de todos os documentos
-      for (const doc of documents) {
-        try {
+      // Agrupar documentos por nome original
+      setDownloadProgress("Agrupando documentos...");
+      const grouped = groupDocumentsByOriginalName(documents);
+      const groupKeys = Object.keys(grouped);
+      
+      let processedCount = 0;
+      let reconvertedPDFs = 0;
+      let individualFiles = 0;
+      
+      for (const [originalName, docs] of Object.entries(grouped)) {
+        processedCount++;
+        setDownloadProgress(`Processando ${processedCount}/${groupKeys.length}: ${originalName}...`);
+        
+        if (docs.length > 1 && docs[0].mime_type?.includes('image')) {
+          // É um PDF convertido em múltiplas páginas - reconverter para PDF único
+          console.log(`Reconvertendo ${docs.length} páginas para ${originalName}.pdf`);
+          
+          const imageBlobs: Blob[] = [];
+          const sortedDocs = docs.sort((a, b) => (a.pageNum || 0) - (b.pageNum || 0));
+          
+          for (const doc of sortedDocs) {
+            const { data, error } = await supabase.storage
+              .from("case-documents")
+              .download(doc.file_path);
+            
+            if (error) throw error;
+            imageBlobs.push(data);
+          }
+          
+          // Reconverter imagens para PDF
+          const pdfBlob = await reconvertImagesToPDF(imageBlobs, originalName);
+          folder.file(`${originalName}.pdf`, pdfBlob);
+          reconvertedPDFs++;
+          
+        } else {
+          // Documento individual - adicionar como está
+          const doc = docs[0];
           const { data, error } = await supabase.storage
             .from("case-documents")
             .download(doc.file_path);
           
           if (error) throw error;
-          
-          // Adicionar ao ZIP
           folder.file(doc.file_name, data);
-        } catch (error) {
-          console.error(`Erro ao baixar ${doc.file_name}:`, error);
+          individualFiles++;
         }
       }
       
       // Gerar e baixar o ZIP
-      const blob = await zip.generateAsync({ type: "blob" });
+      setDownloadProgress("Compactando arquivos...");
+      const blob = await zip.generateAsync({ 
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 }
+      });
+      
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -204,8 +245,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       URL.revokeObjectURL(url);
       
       toast({
-        title: "Download concluído",
-        description: `${documents.length} documento(s) baixados em ${folderName}.zip`,
+        title: "✅ Download Concluído",
+        description: `${groupKeys.length} documento(s) • ${reconvertedPDFs} PDF(s) reagrupados • ${individualFiles} arquivo(s) individuais`,
       });
     } catch (error: any) {
       console.error("Erro ao criar ZIP:", error);
@@ -216,6 +257,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       });
     } finally {
       setIsDownloadingAll(false);
+      setDownloadProgress("");
     }
   };
 
@@ -228,11 +270,17 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     if (files.length === 0) return;
 
     setIsUploading(true);
+    setUploadProgress("Iniciando upload...");
+    
     try {
       // Converter PDFs em imagens
       const processedFiles: File[] = [];
+      let fileIndex = 0;
+      
       for (const file of files) {
+        fileIndex++;
         if (isPDF(file)) {
+          setUploadProgress(`Convertendo ${file.name}...`);
           const { images } = await convertPDFToImages(file, 10);
           processedFiles.push(...images);
         } else {
@@ -241,7 +289,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       }
 
       // Upload para o storage
-      const uploadPromises = processedFiles.map(async (file) => {
+      setUploadProgress(`Enviando ${processedFiles.length} arquivo(s)...`);
+      const uploadPromises = processedFiles.map(async (file, idx) => {
         const fileExt = file.name.split('.').pop();
         const timestamp = Date.now();
         const randomId = Math.random().toString(36).substring(7);
@@ -273,8 +322,11 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
       const uploadedDocs = await Promise.all(uploadPromises);
 
-      // Chamar edge function para processar com IA
-      const { data: processingResult, error: processingError } = await supabase.functions.invoke(
+      // Chamar edge function para processar com IA (não-bloqueante)
+      setUploadProgress("Processando com IA...");
+      
+      // Fazer chamada não-bloqueante (fire-and-forget)
+      supabase.functions.invoke(
         "process-documents-with-ai",
         {
           body: {
@@ -282,18 +334,20 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             documentIds: uploadedDocs.map(d => d.id),
           },
         }
-      );
-
-      if (processingError) {
-        console.error('Erro ao processar com IA:', processingError);
-      }
+      ).then(({ error }) => {
+        if (error) {
+          console.error('Erro ao processar com IA:', error);
+        } else {
+          console.log('Processamento IA concluído em background');
+        }
+      });
 
       toast({
         title: "Documentos enviados",
-        description: `${uploadedDocs.length} documento(s) enviado(s) e processado(s) com IA`,
+        description: `${uploadedDocs.length} documento(s) enviado(s). Processamento IA em andamento...`,
       });
 
-      // Recarregar lista
+      // Recarregar lista imediatamente
       await loadDocuments();
       if (onDocumentsChange) onDocumentsChange();
 
@@ -306,6 +360,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       });
     } finally {
       setIsUploading(false);
+      setUploadProgress("");
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -331,31 +386,26 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  // Agrupar páginas de PDFs
-  const groupedDocuments = documents.reduce((acc, doc) => {
-    // Verificar se é uma página de PDF (nome formato "Página X")
-    const pageMatch = doc.file_name.match(/^Página (\d+)$/i);
-    
-    if (pageMatch) {
-      const pageNum = parseInt(pageMatch[1]);
-      const groupKey = 'pdf_pages';
-      
-      if (!acc[groupKey]) {
-        acc[groupKey] = {
-          isGroup: true,
-          groupName: `PDF convertido (${documents.filter(d => d.file_name.match(/^Página \d+$/i)).length} páginas)`,
-          docs: []
-        };
-      }
-      acc[groupKey].docs.push({ ...doc, pageNum });
+  // Agrupar páginas de PDFs usando a função de agrupamento
+  const grouped = groupDocumentsByOriginalName(documents);
+  
+  const groupedDocuments = Object.entries(grouped).reduce((acc, [key, docs]) => {
+    if (docs.length > 1 && docs[0].originalName) {
+      // É um grupo de páginas de PDF
+      const originalName = docs[0].originalName;
+      acc[key] = {
+        isGroup: true,
+        groupName: `${originalName}.pdf (${docs.length} páginas)`,
+        docs: docs.sort((a, b) => a.pageNum - b.pageNum)
+      };
     } else {
       // Documento individual
+      const doc = docs[0];
       acc[doc.id] = {
         isGroup: false,
         docs: [doc]
       };
     }
-    
     return acc;
   }, {} as Record<string, { isGroup: boolean; groupName?: string; docs: any[] }>);
 
@@ -440,7 +490,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 {isUploading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Enviando...
+                    {uploadProgress || "Enviando..."}
                   </>
                 ) : (
                   <>
@@ -458,7 +508,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 {isDownloadingAll ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Preparando ZIP...
+                    {downloadProgress || "Preparando..."}
                   </>
                 ) : (
                   <>
