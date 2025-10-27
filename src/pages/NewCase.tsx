@@ -104,6 +104,14 @@ export interface CaseData {
   extractedData?: any;
   missingFields?: string[];
   autoFilledFields?: string[];
+  
+  // Análise do CNIS
+  cnisAnalysis?: {
+    periodos_urbanos?: Array<{inicio: string; fim: string; empregador: string}>;
+    periodos_rurais?: Array<{inicio: string; fim: string; detalhes: string}>;
+    beneficios_anteriores?: Array<{tipo: string; data: string}>;
+    tempo_reconhecido_inss?: {anos: number; meses: number};
+  };
 }
 
 const STEPS = [

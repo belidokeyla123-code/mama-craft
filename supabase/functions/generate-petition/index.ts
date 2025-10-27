@@ -94,7 +94,7 @@ Retorne apenas o texto da petição, sem JSON. Use formatação markdown para ne
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-pro',
+          model: 'google/gemini-2.5-flash',
           messages: [{ role: 'user', content: prompt }],
         }),
         signal: controller.signal,

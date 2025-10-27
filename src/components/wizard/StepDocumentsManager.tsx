@@ -326,16 +326,40 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       // FASE 2: Adicionar à fila de processamento
       setUploadProgress("Adicionando à fila de processamento...");
       
-      const { error: queueError } = await supabase
+      // Verificar se já existe entrada na fila
+      const { data: existingQueue } = await supabase
         .from('processing_queue')
-        .insert({
-          case_id: caseId,
-          status: 'queued'
-        });
+        .select('id')
+        .eq('case_id', caseId)
+        .maybeSingle();
 
-      if (queueError) {
-        console.error('Erro ao adicionar à fila:', queueError);
-        throw queueError;
+      if (existingQueue) {
+        // Atualizar entrada existente
+        const { error: queueError } = await supabase
+          .from('processing_queue')
+          .update({
+            status: 'queued',
+            updated_at: new Date().toISOString()
+          })
+          .eq('case_id', caseId);
+        
+        if (queueError) {
+          console.error('Erro ao atualizar fila:', queueError);
+          throw queueError;
+        }
+      } else {
+        // Criar nova entrada
+        const { error: queueError } = await supabase
+          .from('processing_queue')
+          .insert({
+            case_id: caseId,
+            status: 'queued'
+          });
+
+        if (queueError) {
+          console.error('Erro ao adicionar à fila:', queueError);
+          throw queueError;
+        }
       }
 
       toast({

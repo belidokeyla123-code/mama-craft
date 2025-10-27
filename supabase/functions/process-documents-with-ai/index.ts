@@ -96,9 +96,23 @@ const classifyDocument = (fileName: string) => {
   if (name.includes('cpf') || name.includes('rg') || name.includes('identidade')) return 'identificacao';
   if (name.includes('residencia') || name.includes('endereco')) return 'comprovante_residencia';
   if (name.includes('autodeclaracao') || name.includes('rural')) return 'autodeclaracao_rural';
-  if (name.includes('terra') || name.includes('propriedade') || name.includes('comodato')) return 'documento_terra';
   if (name.includes('cnis') || name.includes('his')) return 'cnis';
   if (name.includes('cartao') || name.includes('gestante') || name.includes('vacina')) return 'cartao_gestante';
+  
+  // MELHORAR detecção de documento da terra
+  if (name.includes('terra') || 
+      name.includes('propriedade') || 
+      name.includes('comodato') ||
+      name.includes('itr') ||
+      name.includes('ccir') ||
+      name.includes('fazenda') ||
+      name.includes('sitio') ||
+      name.includes('sítio') ||
+      name.includes('escritura') ||
+      name.includes('matricula') ||
+      name.includes('matrícula')) {
+    return 'documento_terra';
+  }
   
   // Processo administrativo
   if (name.includes('indeferimento') || name.includes('inss') || name.includes('nb') || 
@@ -355,11 +369,21 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
       
       if (ownerCpfClean === motherCpfClean) {
         updateData.land_ownership_type = "propria";
-        console.log('[TERRA] Detectado: TERRA PRÓPRIA (CPF proprietário = CPF autora)');
+        // COPIAR dados da autora para proprietário
+        updateData.land_owner_name = extractedData.motherName;
+        updateData.land_owner_cpf = extractedData.motherCpf;
+        updateData.land_owner_rg = extractedData.motherRg;
+        console.log('[TERRA] ✅ TERRA PRÓPRIA - Dados da autora copiados para proprietário');
       } else {
         updateData.land_ownership_type = "terceiro";
-        console.log('[TERRA] Detectado: TERRA DE TERCEIRO (CPF proprietário ≠ CPF autora)');
+        console.log('[TERRA] ✅ TERRA DE TERCEIRO - Dados do proprietário extraídos');
       }
+    } else if (extractedData.landOwnershipType === "propria" && extractedData.motherCpf) {
+      // Se detectou terra própria mas não tem CPF do proprietário, copiar dados da autora
+      updateData.land_owner_name = extractedData.motherName;
+      updateData.land_owner_cpf = extractedData.motherCpf;
+      updateData.land_owner_rg = extractedData.motherRg;
+      console.log('[TERRA] ✅ TERRA PRÓPRIA (detectada) - Dados da autora copiados');
     }
     
     // Atividade rural com períodos estruturados

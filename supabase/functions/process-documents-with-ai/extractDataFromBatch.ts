@@ -146,6 +146,42 @@ Tipo: ${doc.docType}
 Agora extraia TODOS os períodos rurais mencionados:`;
     }
     
+    if (doc.docType === 'documento_terra') {
+      docPrompt = `🔍 DOCUMENTO DA TERRA - ATENÇÃO MÁXIMA:
+
+Este é um documento CRÍTICO que define se a terra é PRÓPRIA ou de TERCEIRO.
+
+**TAREFAS ESPECÍFICAS**:
+1. Identificar o PROPRIETÁRIO da terra:
+   - Nome COMPLETO do proprietário
+   - CPF do proprietário (apenas números)
+   - RG do proprietário com órgão expedidor
+
+2. Identificar o TIPO de documento:
+   - Escritura = TERRA PRÓPRIA
+   - ITR em nome da autora = TERRA PRÓPRIA
+   - Comodato = TERRA DE TERCEIRO
+   - Arrendamento = TERRA DE TERCEIRO
+   - Cessão = TERRA DE TERCEIRO
+
+3. Extrair TODOS os dados da terra:
+   - Área total (hectares)
+   - Área explorada (hectares)
+   - Nome da propriedade
+   - Município/UF
+   - Registro ITR (se houver)
+   - Forma de cessão (comodato/arrendamento/etc)
+
+⚠️ REGRA CRÍTICA:
+- Se o CPF do PROPRIETÁRIO for IGUAL ao CPF da AUTORA → landOwnershipType = "propria"
+- Se o CPF do PROPRIETÁRIO for DIFERENTE do CPF da AUTORA → landOwnershipType = "terceiro"
+
+Documento: ${doc.fileName}
+Tipo: ${doc.docType}
+
+Agora extraia TODOS os dados da propriedade:`;
+    }
+    
     messages.push({
       role: "user",
       content: [

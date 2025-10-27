@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw } from "lucide-react";
+import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText } from "lucide-react";
 import { CaseData, RuralPeriod, UrbanPeriod } from "@/pages/NewCase";
 import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMinimo";
 import { useEffect } from "react";
@@ -19,6 +19,20 @@ interface StepBasicInfoProps {
   data: CaseData;
   updateData: (data: Partial<CaseData>) => void;
 }
+
+// Função auxiliar para calcular tempo entre datas
+const calcularTempo = (inicio: string, fim: string) => {
+  const start = new Date(inicio);
+  const end = new Date(fim);
+  const diffMs = end.getTime() - start.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const anos = Math.floor(diffDays / 365);
+  const meses = Math.floor((diffDays % 365) / 30);
+  
+  if (anos > 0 && meses > 0) return `${anos}a ${meses}m`;
+  if (anos > 0) return `${anos} ano(s)`;
+  return `${meses} mês(es)`;
+};
 
 export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const autoFilledFields = data.autoFilledFields || [];
@@ -45,6 +59,28 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     }
     return null;
   };
+
+  // Carregar análise do CNIS quando o componente montar
+  useEffect(() => {
+    const loadCnisAnalysis = async () => {
+      if (!data.caseId) return;
+      
+      const { data: analysis } = await supabase
+        .from('case_analysis')
+        .select('draft_payload')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+      
+      if (analysis?.draft_payload && typeof analysis.draft_payload === 'object') {
+        const payload = analysis.draft_payload as any;
+        if (payload.cnis_analysis) {
+          updateData({ cnisAnalysis: payload.cnis_analysis });
+        }
+      }
+    };
+    
+    loadCnisAnalysis();
+  }, [data.caseId]);
 
   // Carregar períodos rurais automaticamente das extrações
   useEffect(() => {
@@ -383,6 +419,128 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             />
           </div>
         </div>
+      </Card>
+
+      {/* SEÇÃO CNIS - CADASTRO NACIONAL DE INFORMAÇÕES SOCIAIS */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            CNIS - Cadastro Nacional de Informações Sociais
+          </h3>
+        </div>
+        
+        <Alert className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Importância do CNIS</AlertTitle>
+          <AlertDescription>
+            Se o CNIS estiver vazio, isso REFORÇA que a autora não teve vínculos urbanos e comprova a condição de segurada especial rural.
+            Se houver períodos no CNIS, eles serão analisados automaticamente.
+          </AlertDescription>
+        </Alert>
+
+        {/* Análise do CNIS (se existir) */}
+        {data.cnisAnalysis && (
+          <div className="space-y-4 border-t pt-4">
+            <div>
+              <h4 className="font-semibold mb-2">Análise do CNIS</h4>
+              
+              {/* Períodos Urbanos */}
+              {data.cnisAnalysis.periodos_urbanos && data.cnisAnalysis.periodos_urbanos.length > 0 && (
+                <div className="mb-4">
+                  <Label className="text-sm font-semibold">Períodos Urbanos Identificados</Label>
+                  <div className="space-y-2 mt-2">
+                    {data.cnisAnalysis.periodos_urbanos.map((periodo: any, idx: number) => (
+                      <Card key={idx} className="p-3 bg-blue-50 dark:bg-blue-950">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium">{periodo.empregador}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(periodo.inicio).toLocaleDateString('pt-BR')} até {new Date(periodo.fim).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                          <Badge>{calcularTempo(periodo.inicio, periodo.fim)}</Badge>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Períodos Rurais no CNIS */}
+              {data.cnisAnalysis.periodos_rurais && data.cnisAnalysis.periodos_rurais.length > 0 && (
+                <div className="mb-4">
+                  <Label className="text-sm font-semibold">Períodos Rurais Reconhecidos pelo INSS</Label>
+                  <div className="space-y-2 mt-2">
+                    {data.cnisAnalysis.periodos_rurais.map((periodo: any, idx: number) => (
+                      <Card key={idx} className="p-3 bg-green-50 dark:bg-green-950">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm">{periodo.detalhes}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(periodo.inicio).toLocaleDateString('pt-BR')} até {new Date(periodo.fim).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="bg-green-100 dark:bg-green-900">
+                            {calcularTempo(periodo.inicio, periodo.fim)}
+                          </Badge>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Benefícios Anteriores */}
+              {data.cnisAnalysis.beneficios_anteriores && data.cnisAnalysis.beneficios_anteriores.length > 0 && (
+                <div className="mb-4">
+                  <Label className="text-sm font-semibold">Benefícios Anteriores de Maternidade</Label>
+                  <Alert className="mt-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertDescription>
+                      Encontrados {data.cnisAnalysis.beneficios_anteriores.length} benefício(s) anterior(es) de salário-maternidade.
+                      Isso COMPROVA atividade rural reconhecida pelo INSS!
+                    </AlertDescription>
+                  </Alert>
+                  <div className="space-y-2 mt-2">
+                    {data.cnisAnalysis.beneficios_anteriores.map((beneficio: any, idx: number) => (
+                      <Card key={idx} className="p-3">
+                        <p className="text-sm">
+                          <strong>{beneficio.tipo}</strong> em {new Date(beneficio.data).toLocaleDateString('pt-BR')}
+                        </p>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tempo Reconhecido */}
+              {data.cnisAnalysis.tempo_reconhecido_inss && (
+                <div>
+                  <Label className="text-sm font-semibold">Tempo Total Reconhecido pelo INSS</Label>
+                  <Card className="p-3 mt-2 bg-primary/5">
+                    <p className="text-lg font-bold">
+                      {data.cnisAnalysis.tempo_reconhecido_inss.anos} anos e {data.cnisAnalysis.tempo_reconhecido_inss.meses} meses
+                    </p>
+                  </Card>
+                </div>
+              )}
+
+              {/* CNIS Vazio - Reforço */}
+              {(!data.cnisAnalysis.periodos_urbanos || data.cnisAnalysis.periodos_urbanos.length === 0) &&
+               (!data.cnisAnalysis.periodos_rurais || data.cnisAnalysis.periodos_rurais.length === 0) && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>CNIS Vazio - Ponto Forte do Caso</AlertTitle>
+                  <AlertDescription>
+                    A ausência de vínculos no CNIS REFORÇA a condição de segurada especial rural, 
+                    demonstrando que a autora exerceu exclusivamente atividade rural em regime de economia familiar.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* SEÇÃO 3: PERFIL DA SEGURADA */}
