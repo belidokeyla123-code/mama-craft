@@ -2,11 +2,12 @@ import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Scale, Clock } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Scale, Clock, FileQuestion } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { TimelineChart } from "@/components/case/TimelineChart";
+import { DocumentUploadInline } from "./DocumentUploadInline";
 
 interface StepAnalysisProps {
   data: CaseData;
@@ -291,6 +292,32 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                   <li key={index}>{rec}</li>
                 ))}
               </ul>
+            </Card>
+          )}
+
+          {/* Sugestões de Documentos Complementares */}
+          {!analysis.carencia.cumprida && data.caseId && (
+            <Card className="p-6 border-2 border-orange-200">
+              <div className="flex items-start gap-3 mb-4">
+                <FileQuestion className="h-6 w-6 text-orange-600 flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-2">Documentos Sugeridos para Completar Carência</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Faltam {analysis.carencia.meses_faltantes} meses. Adicione documentos que comprovem atividade rural:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-sm mb-4">
+                    <li>Declaração da UBS/Posto de Saúde (ente público)</li>
+                    <li>Declaração de sindicato rural atualizada</li>
+                    <li>Notas fiscais de produtor rural</li>
+                    <li>Fotos da propriedade com metadados (data/localização)</li>
+                    <li>Documentos de terra (CCIR, ITR)</li>
+                  </ul>
+                </div>
+              </div>
+              <DocumentUploadInline 
+                caseId={data.caseId}
+                onUploadComplete={performAnalysis}
+              />
             </Card>
           )}
         </>

@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { DocumentUploadInline } from "./DocumentUploadInline";
 
 interface StepValidationProps {
   data: CaseData;
@@ -118,6 +119,14 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         </div>
         <Progress value={score * 10} className="h-3" />
       </Card>
+
+      {/* Upload Inline */}
+      {data.caseId && missing_docs && missing_docs.length > 0 && (
+        <DocumentUploadInline 
+          caseId={data.caseId}
+          onUploadComplete={handleValidate}
+        />
+      )}
 
       {checklist && checklist.length > 0 && (
         <Card className="p-6">
