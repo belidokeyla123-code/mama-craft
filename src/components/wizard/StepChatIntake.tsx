@@ -266,6 +266,34 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         extractedData,
       }]);
 
+      // Mapear os campos da API para os campos do formulário
+      const fieldMapping: Record<string, string> = {
+        motherName: 'authorName',
+        motherCpf: 'authorCpf',
+        motherRg: 'authorRg',
+        motherBirthDate: 'authorBirthDate',
+        motherAddress: 'authorAddress',
+        maritalStatus: 'authorMaritalStatus',
+        childName: 'childName',
+        childBirthDate: 'childBirthDate',
+        fatherName: 'fatherName',
+        landOwnerName: 'landOwnerName',
+        landOwnerCpf: 'landOwnerCpf',
+        landOwnerRg: 'landOwnerRg',
+        landOwnershipType: 'landOwnershipType',
+        ruralActivitySince: 'ruralActivitySince',
+        familyMembers: 'familyMembers',
+        raProtocol: 'raProtocol',
+        raRequestDate: 'raRequestDate',
+        raDenialDate: 'raDenialDate',
+        raDenialReason: 'raDenialReason',
+      };
+
+      // Criar array de campos preenchidos usando os nomes do formulário
+      const autoFilledFieldsList = Object.keys(extractedData)
+        .map(key => fieldMapping[key] || key)
+        .filter(field => field);
+
       // Atualizar dados do formulário com TODOS os campos extraídos
       updateData({
         ...data,
@@ -299,7 +327,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         // Metadados
         extractedData,
         missingFields,
-        autoFilledFields: Object.keys(extractedData),
+        autoFilledFields: autoFilledFieldsList,
         documents: uploadedFiles.map(f => f.name),
       });
 

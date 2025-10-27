@@ -20,30 +20,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const missingFields = data.missingFields || [];
 
   const isAutoFilled = (fieldName: string) => {
-    const fieldMapping: Record<string, string> = {
-      authorName: 'motherName',
-      authorCpf: 'motherCpf',
-      authorRg: 'motherRg',
-      authorBirthDate: 'motherBirthDate',
-      authorAddress: 'motherAddress',
-      authorMaritalStatus: 'maritalStatus',
-      childName: 'childName',
-      childBirthDate: 'childBirthDate',
-      fatherName: 'fatherName',
-      landOwnerName: 'landOwnerName',
-      landOwnerCpf: 'landOwnerCpf',
-      landOwnerRg: 'landOwnerRg',
-      landOwnershipType: 'landOwnershipType',
-      ruralActivitySince: 'ruralActivitySince',
-      familyMembers: 'familyMembers',
-      raProtocol: 'raProtocol',
-      raRequestDate: 'raRequestDate',
-      raDenialDate: 'raDenialDate',
-      raDenialReason: 'raDenialReason',
-    };
-    
-    const mappedField = fieldMapping[fieldName] || fieldName;
-    return autoFilledFields.includes(mappedField) || (data.extractedData && data.extractedData[mappedField]);
+    return autoFilledFields.includes(fieldName);
   };
 
   const FieldBadge = ({ fieldName }: { fieldName: string }) => {
@@ -86,14 +63,14 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               <Label htmlFor="authorName">
                 Nome Completo <span className="text-destructive">*</span>
               </Label>
-              <FieldBadge fieldName="motherName" />
+              <FieldBadge fieldName="authorName" />
             </div>
             <Input
               id="authorName"
               value={data.authorName}
               onChange={(e) => updateData({ authorName: e.target.value })}
               placeholder="Maria da Silva"
-              className={autoFilledFields.includes('motherName') || isAutoFilled('authorName') ? 'border-green-500' : ''}
+              className={isAutoFilled('authorName') ? 'border-green-500' : ''}
             />
           </div>
 
@@ -102,7 +79,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               <Label htmlFor="authorCpf">
                 CPF <span className="text-destructive">*</span>
               </Label>
-              <FieldBadge fieldName="motherCpf" />
+              <FieldBadge fieldName="authorCpf" />
             </div>
             <Input
               id="authorCpf"
@@ -110,7 +87,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               onChange={(e) => updateData({ authorCpf: e.target.value })}
               placeholder="000.000.000-00"
               maxLength={14}
-              className={autoFilledFields.includes('motherCpf') ? 'border-green-500' : ''}
+              className={isAutoFilled('authorCpf') ? 'border-green-500' : ''}
             />
           </div>
 
