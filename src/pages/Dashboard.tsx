@@ -4,7 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -39,6 +49,7 @@ export default function Dashboard() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     loadCases();
@@ -62,6 +73,62 @@ export default function Dashboard() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteCase = async () => {
+    if (!caseToDelete) return;
+
+    try {
+      // Buscar documentos do caso para excluir do storage
+      const { data: documents } = await supabase
+        .from("documents")
+        .select("file_path")
+        .eq("case_id", caseToDelete);
+
+      // Excluir arquivos do storage
+      if (documents && documents.length > 0) {
+        const filePaths = documents.map((doc) => doc.file_path);
+        await supabase.storage.from("case-documents").remove(filePaths);
+      }
+
+      // Excluir dados relacionados (as foreign keys com cascade devem fazer isso automaticamente)
+      // Mas vamos garantir a exclusão manual de todas as tabelas relacionadas
+      await supabase.from("extractions").delete().eq("case_id", caseToDelete);
+      await supabase.from("documents").delete().eq("case_id", caseToDelete);
+      await supabase.from("document_validation").delete().eq("case_id", caseToDelete);
+      await supabase.from("case_analysis").delete().eq("case_id", caseToDelete);
+      await supabase.from("case_jurisprudencias").delete().eq("case_id", caseToDelete);
+      await supabase.from("drafts").delete().eq("case_id", caseToDelete);
+      await supabase.from("case_timeline").delete().eq("case_id", caseToDelete);
+      await supabase.from("case_exceptions").delete().eq("case_id", caseToDelete);
+      await supabase.from("case_financial").delete().eq("case_id", caseToDelete);
+      await supabase.from("timeline_events").delete().eq("case_id", caseToDelete);
+
+      // Excluir o caso
+      const { error } = await supabase
+        .from("cases")
+        .delete()
+        .eq("id", caseToDelete);
+
+      if (error) throw error;
+
+      toast({
+        title: "Caso excluído",
+        description: "O caso foi excluído com sucesso.",
+      });
+
+      // Atualizar lista
+      await loadCases();
+    } catch (error: any) {
+      console.error("Erro ao excluir caso:", error);
+      toast({
+        title: "Erro ao excluir caso",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCaseToDelete(null);
     }
   };
 
@@ -253,6 +320,16 @@ export default function Dashboard() {
                         Abrir Caso
                       </Button>
                     </Link>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCaseToDelete(caso.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -279,6 +356,24 @@ export default function Dashboard() {
             </Link>
           </Card>
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!caseToDelete} onOpenChange={() => setCaseToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. O caso e todos os seus documentos e dados relacionados serão excluídos permanentemente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteCase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
