@@ -1,57 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
-const mockCases = [
-  {
-    id: "1",
-    autora: "Maria da Silva Santos",
-    status: "drafted",
-    benefit: "SM",
-    profile: "segurada_especial",
-    eventDate: "2025-01-05",
-    createdAt: "2025-01-20",
-    progress: 100,
-  },
-  {
-    id: "2",
-    autora: "Ana Paula Oliveira",
-    status: "pending_docs",
-    benefit: "SM",
-    profile: "urbana",
-    eventDate: "2024-12-15",
-    createdAt: "2025-01-18",
-    progress: 40,
-    missingDocs: ["Certidão de Nascimento", "CAF ou DAP"],
-    pendingReason: "Score de suficiência documental = 4/7",
-  },
-  {
-    id: "3",
-    autora: "Josefa Maria dos Santos",
-    status: "ready",
-    benefit: "SM",
-    profile: "segurada_especial",
-    eventDate: "2024-11-22",
-    createdAt: "2025-01-15",
-    progress: 75,
-  },
-  {
-    id: "4",
-    autora: "Francisca Oliveira Lima",
-    status: "protocolada",
-    benefit: "SM",
-    profile: "segurada_especial",
-    eventDate: "2024-10-10",
-    createdAt: "2024-12-01",
-    progress: 100,
-    protocolDate: "2025-01-10",
-    valorCausa: 12500.00,
-  },
-];
+interface Case {
+  id: string;
+  author_name: string;
+  status: string;
+  profile: string;
+  event_date: string;
+  created_at: string;
+  child_birth_date?: string;
+  salario_minimo_ref: number;
+  valor_causa?: number;
+}
 
 const statusConfig = {
   intake: { label: "Intake", color: "bg-muted text-muted-foreground", icon: FileText },
@@ -64,21 +31,68 @@ const statusConfig = {
   sentenca: { label: "Sentença", color: "bg-green-600 text-white", icon: CheckCircle2 },
 };
 
-type FilterStatus = "all" | "drafted" | "ready" | "pending_docs" | "protocolada";
+type FilterStatus = "all" | "drafted" | "ready" | "pending_docs" | "protocolada" | "intake";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [cases, setCases] = useState<Case[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadCases();
+  }, []);
+
+  const loadCases = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setCases(data || []);
+    } catch (error: any) {
+      console.error("Erro ao carregar casos:", error);
+      toast({
+        title: "Erro ao carregar casos",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredCases = filterStatus === "all" 
-    ? mockCases 
-    : mockCases.filter(c => c.status === filterStatus);
+    ? cases 
+    : cases.filter(c => c.status === filterStatus);
 
-  const totalCases = mockCases.length;
-  const concluidas = mockCases.filter(c => c.status === "drafted").length;
-  const emAnalise = mockCases.filter(c => c.status === "ready").length;
-  const pendentes = mockCases.filter(c => c.status === "pending_docs").length;
-  const protocoladas = mockCases.filter(c => c.status === "protocolada" || c.status === "em_audiencia" || c.status === "acordo" || c.status === "sentenca").length;
+  const totalCases = cases.length;
+  const concluidas = cases.filter(c => c.status === "drafted").length;
+  const emAnalise = cases.filter(c => c.status === "ready").length;
+  const pendentes = cases.filter(c => c.status === "pending_docs").length;
+  const protocoladas = cases.filter(c => c.status === "protocolada" || c.status === "em_audiencia" || c.status === "acordo" || c.status === "sentenca").length;
+
+  const calculateProgress = (caseItem: Case) => {
+    switch (caseItem.status) {
+      case "intake": return 10;
+      case "pending_docs": return 40;
+      case "ready": return 70;
+      case "drafted": return 100;
+      case "protocolada": return 100;
+      default: return 0;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-subtle p-4 md:p-8">
@@ -184,8 +198,9 @@ export default function Dashboard() {
         {/* Cases List */}
         <div className="space-y-4">
           {filteredCases.map((caso) => {
-            const StatusIcon = statusConfig[caso.status as keyof typeof statusConfig].icon;
-            const isPending = caso.status === "pending_docs";
+            const StatusIcon = statusConfig[caso.status as keyof typeof statusConfig]?.icon || FileText;
+            const statusStyle = statusConfig[caso.status as keyof typeof statusConfig];
+            const progress = calculateProgress(caso);
             
             return (
               <Card
@@ -197,64 +212,36 @@ export default function Dashboard() {
                     <div className="flex items-start gap-4">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-foreground mb-1 group-hover:text-primary transition-smooth">
-                          {caso.autora}
+                          {caso.author_name}
                         </h3>
                         <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                          <span>Caso #{caso.id}</span>
+                          <span>Caso #{caso.id.slice(0, 8)}</span>
                           <span>•</span>
-                          <span>Evento: {new Date(caso.eventDate).toLocaleDateString("pt-BR")}</span>
+                          <span>Evento: {new Date(caso.event_date).toLocaleDateString("pt-BR")}</span>
                           <span>•</span>
-                          <span className="capitalize">{caso.profile.replace("_", " ")}</span>
+                          <span className="capitalize">{caso.profile === "especial" ? "Segurada Especial" : "Segurada Urbana"}</span>
                         </div>
                       </div>
-                      <Badge
-                        className={`${
-                          statusConfig[caso.status as keyof typeof statusConfig].color
-                        } flex items-center gap-1 px-3 py-1`}
-                      >
-                        <StatusIcon className="h-3 w-3" />
-                        {statusConfig[caso.status as keyof typeof statusConfig].label}
-                      </Badge>
+                      {statusStyle && (
+                        <Badge
+                          className={`${statusStyle.color} flex items-center gap-1 px-3 py-1`}
+                        >
+                          <StatusIcon className="h-3 w-3" />
+                          {statusStyle.label}
+                        </Badge>
+                      )}
                     </div>
-
-                    {/* Detalhes para casos pendentes */}
-                    {isPending && caso.missingDocs && (
-                      <Alert variant="destructive" className="mt-2">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Documentos Faltantes:</AlertTitle>
-                        <AlertDescription>
-                          <ul className="list-disc list-inside mt-2 space-y-1">
-                            {caso.missingDocs.map((doc, idx) => (
-                              <li key={idx} className="text-sm">✗ {doc}</li>
-                            ))}
-                          </ul>
-                          <p className="text-xs mt-2 opacity-80">
-                            Motivo: {caso.pendingReason}
-                          </p>
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {/* Detalhes para casos protocoladas */}
-                    {caso.status === "protocolada" && caso.protocolDate && (
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <p>📅 Protocolada em: {new Date(caso.protocolDate).toLocaleDateString("pt-BR")}</p>
-                        {caso.valorCausa && (
-                          <p>💰 Valor da causa: {caso.valorCausa.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-                        )}
-                      </div>
-                    )}
 
                     {/* Progress Bar */}
                     <div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                         <span>Progresso</span>
-                        <span>{caso.progress}%</span>
+                        <span>{progress}%</span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
-                          style={{ width: `${caso.progress}%` }}
+                          style={{ width: `${progress}%` }}
                         />
                       </div>
                     </div>
