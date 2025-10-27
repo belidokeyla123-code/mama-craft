@@ -390,21 +390,26 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const grouped = groupDocumentsByOriginalName(documents);
   
   const groupedDocuments = Object.entries(grouped).reduce((acc, [key, docs]) => {
-    if (docs.length > 1 && docs[0].originalName) {
+    // Verificar se é um grupo de páginas (tem pageNum e originalName)
+    const isPageGroup = docs.length > 1 && docs[0]?.pageNum !== undefined && docs[0]?.originalName;
+    
+    if (isPageGroup) {
       // É um grupo de páginas de PDF
       const originalName = docs[0].originalName;
       acc[key] = {
         isGroup: true,
         groupName: `${originalName}.pdf (${docs.length} páginas)`,
-        docs: docs.sort((a, b) => a.pageNum - b.pageNum)
+        docs: docs.sort((a, b) => (a.pageNum || 0) - (b.pageNum || 0))
       };
     } else {
       // Documento individual
       const doc = docs[0];
-      acc[doc.id] = {
-        isGroup: false,
-        docs: [doc]
-      };
+      if (doc?.id) {
+        acc[doc.id] = {
+          isGroup: false,
+          docs: [doc]
+        };
+      }
     }
     return acc;
   }, {} as Record<string, { isGroup: boolean; groupName?: string; docs: any[] }>);
