@@ -79,6 +79,7 @@ export interface CaseData {
   // Referência
   salarioMinimoRef: number;
   salarioMinimoHistory?: Array<{ year: number; value: number }>;
+  valorCausa?: number;
   
   // Documentos
   documents: File[];

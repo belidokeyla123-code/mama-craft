@@ -18,14 +18,26 @@ interface DocumentWithType extends File {
 }
 
 const DOCUMENT_TYPES = [
+  // ⭐ DOCUMENTOS OBRIGATÓRIOS
+  { value: "PROCURACAO", label: "⭐ Procuração (OBRIGATÓRIO)", required: true },
+  { value: "CERTIDAO", label: "⭐ Certidão de Nascimento (OBRIGATÓRIO)", required: true },
+  { value: "RG_MAE", label: "⭐ RG da Mãe (OBRIGATÓRIO)", required: true },
+  { value: "CPF_MAE", label: "⭐ CPF da Mãe (OBRIGATÓRIO)", required: true },
+  
+  // DOCUMENTOS IMPORTANTES
   { value: "CNIS", label: "CNIS - Cadastro Nacional de Informações Sociais" },
-  { value: "CERTIDAO", label: "Certidão de Nascimento/Óbito" },
+  { value: "AUTODECLARACAO", label: "Autodeclaração Rural" },
+  { value: "PROCESSO_ADM", label: "Processo Administrativo / Indeferimento" },
+  
+  // PROVAS RURAIS
   { value: "CAF", label: "CAF - Cadastro de Atividade Rural" },
   { value: "DAP", label: "DAP - Declaração de Aptidão ao PRONAF" },
   { value: "NOTA_PRODUTOR", label: "Nota/Bloco de Produtor Rural" },
   { value: "ITR", label: "ITR - Imposto Territorial Rural" },
   { value: "CCIR", label: "CCIR - Certificado de Cadastro de Imóvel Rural" },
   { value: "DECL_SINDICAL", label: "Declaração de Sindicato Rural" },
+  
+  // OUTROS
   { value: "COMPROV_RESID", label: "Comprovante de Residência" },
   { value: "FOTOS", label: "Fotos da Propriedade/Atividade Rural" },
   { value: "OUTROS", label: "Outros Documentos" },
@@ -104,16 +116,25 @@ export const StepDocuments = ({ data, updateData }: StepDocumentsProps) => {
     const types = Object.values(documentTypes);
     const missing: string[] = [];
 
+    // SEMPRE OBRIGATÓRIOS
+    if (!types.includes("PROCURACAO")) missing.push("Procuração");
+    if (!types.includes("CERTIDAO")) missing.push("Certidão de Nascimento");
+    if (!types.includes("RG_MAE")) missing.push("RG da Mãe");
+    if (!types.includes("CPF_MAE")) missing.push("CPF da Mãe");
+
+    // Específico por perfil
     if (data.profile === "especial") {
-      if (!types.includes("CERTIDAO")) missing.push("Certidão");
+      if (!types.includes("AUTODECLARACAO")) missing.push("Autodeclaração Rural");
       const hasProvaRural = types.some(t => 
         ["CAF", "DAP", "ITR", "CCIR", "NOTA_PRODUTOR", "DECL_SINDICAL"].includes(t)
       );
       if (!hasProvaRural) missing.push("Pelo menos 1 prova material rural");
     } else {
-      if (!types.includes("CERTIDAO")) missing.push("Certidão");
       if (!types.includes("CNIS")) missing.push("CNIS");
     }
+
+    // Recomendados
+    if (!types.includes("PROCESSO_ADM")) missing.push("Processo Administrativo (recomendado)");
 
     return missing;
   };

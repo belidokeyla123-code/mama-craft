@@ -55,12 +55,17 @@ serve(async (req) => {
     const classifyDocument = (fileName: string) => {
       const name = fileName.toLowerCase();
       
+      // NOVO: Reconhecer procuração
+      if (name.includes('procuracao') || name.includes('procuração')) return 'procuracao';
       if (name.includes('certidao') && name.includes('nascimento')) return 'certidao_nascimento';
-      if (name.includes('cpf') || name.includes('rg')) return 'identificacao';
+      if (name.includes('cpf') || name.includes('rg') || name.includes('identidade')) return 'identificacao';
       if (name.includes('residencia') || name.includes('endereco')) return 'comprovante_residencia';
       if (name.includes('autodeclaracao') || name.includes('rural')) return 'autodeclaracao_rural';
       if (name.includes('terra') || name.includes('propriedade')) return 'documento_terra';
-      if (name.includes('processo') || name.includes('inss') || name.includes('nb') || name.includes('indeferimento')) return 'processo_administrativo';
+      
+      // MELHORAR: Processo administrativo
+      if (name.includes('indeferimento') || name.includes('inss') || name.includes('nb') || 
+          name.includes('processo') || name.includes('administrativo')) return 'processo_administrativo';
       
       return 'outro';
     };
@@ -135,6 +140,16 @@ serve(async (req) => {
 ═══════════════════════════════════════════════════════════════
 📋 TIPOS DE DOCUMENTOS E INSTRUÇÕES ESPECÍFICAS
 ═══════════════════════════════════════════════════════════════
+
+🔹 **PROCURAÇÃO** (CRÍTICO - CONTÉM ENDEREÇO COMPLETO!)
+   A procuração geralmente contém os dados MAIS COMPLETOS da autora:
+   ✓ Nome COMPLETO da outorgante (mãe/autora)
+   ✓ CPF completo
+   ✓ RG completo
+   ✓ Endereço COMPLETO: Rua + Nº + Bairro + Cidade + UF + CEP
+   ✓ Telefone/celular (se constar)
+   ⚠️ Este é o documento PRIORITÁRIO para dados de endereço e contato!
+   ⚠️ Se existir procuração, EXTRAIR TODOS estes dados!
 
 🔹 **CERTIDÃO DE NASCIMENTO** (CRÍTICO!)
    LEIA A SEÇÃO "DADOS DA MÃE" E "DADOS DO PAI" COM ATENÇÃO:
@@ -272,6 +287,68 @@ raDenialReason: "Falta de documentação"
 
 BOM ✅:
 raDenialReason: "O pedido foi indeferido com base no artigo 39, II, da Lei 8.213/91, uma vez que a segurada não conseguiu comprovar o exercício de atividade rural no período de carência exigido. Os documentos apresentados são insuficientes para demonstrar o vínculo laboral rural nos 10 meses anteriores ao parto. Necessário apresentar documentos em nome próprio que comprovem a atividade rural de forma contemporânea ao período de carência."
+
+═══════════════════════════════════════════════════════════════
+⚠️ SISTEMA DE QUALIDADE DA EXTRAÇÃO
+═══════════════════════════════════════════════════════════════
+
+Você será AVALIADO pela completude da extração:
+
+✅ CAMPOS CRÍTICOS (Pontuação máxima: 100 pontos)
+- Nome da mãe (20 pts) - SE VAZIO = FALHA CRÍTICA
+- CPF da mãe (20 pts) - SE VAZIO = FALHA CRÍTICA
+- Nome da criança (20 pts) - SE VAZIO = FALHA CRÍTICA
+- Data nascimento criança (20 pts) - SE VAZIO = FALHA CRÍTICA
+- Endereço completo (10 pts)
+- Telefone/WhatsApp (10 pts)
+
+✅ CAMPOS IMPORTANTES (50 pontos)
+- RG da mãe (5 pts)
+- Estado civil (5 pts)
+- Nome do pai (5 pts)
+- Períodos rurais estruturados (15 pts)
+- Dados do processo administrativo completos (20 pts)
+
+⚠️ REGRA: Se um campo crítico estiver VAZIO e o documento correspondente 
+foi fornecido (ex: procuração enviada mas endereço vazio), você FALHOU!
+
+OBJETIVO: Alcançar 100+ pontos em TODAS as extrações!
+
+═══════════════════════════════════════════════════════════════
+❌ EXEMPLO DE EXTRAÇÃO RUIM (NÃO FAÇA ISSO!)
+═══════════════════════════════════════════════════════════════
+
+{
+  "motherName": "MARIA", // ❌ Faltam sobrenomes
+  "motherAddress": "Rua X, 123", // ❌ Falta CEP, bairro, cidade
+  "raProtocol": "123456", // ❌ Falta formato completo
+  "raDenialReason": "Falta de documentos" // ❌ Muito vago, copiar LITERAL!
+}
+
+Pontuação: 40/150 ❌ REPROVADO
+
+═══════════════════════════════════════════════════════════════
+✅ EXEMPLO DE EXTRAÇÃO EXCELENTE (FAÇA ASSIM!)
+═══════════════════════════════════════════════════════════════
+
+{
+  "motherName": "MARIA DA SILVA SANTOS", // ✅ Nome COMPLETO
+  "motherCpf": "12345678900", // ✅ Só números
+  "motherRg": "MG-12.345.678 SSP/MG", // ✅ Com órgão
+  "motherAddress": "Rua das Flores, 123, Apto 201, Bairro Centro, Belo Horizonte - MG, CEP 30120-010", // ✅ COMPLETO
+  "motherPhone": "31987654321", // ✅ Extraído da procuração
+  "motherWhatsapp": "31987654321",
+  
+  "childName": "JOÃO DA SILVA SANTOS", // ✅ Nome completo da certidão
+  "childBirthDate": "2024-03-15", // ✅ Formato correto
+  
+  "raProtocol": "NB 187.654.321-5", // ✅ Número completo
+  "raRequestDate": "2024-01-10",
+  "raDenialDate": "2024-02-20",
+  "raDenialReason": "O benefício foi indeferido com fulcro no artigo 39, II, da Lei 8.213/91, uma vez que a segurada não logrou êxito em comprovar o exercício de atividade rural no período de carência exigido pela legislação previdenciária. A documentação apresentada, consistente em declaração de sindicato rural e fotos da propriedade, mostra-se insuficiente para demonstrar de forma contemporânea o labor campesino nos 10 (dez) meses imediatamente anteriores ao parto. Faz-se necessária a apresentação de documentos em nome próprio da autora que comprovem, de maneira inequívoca e em período próximo ao evento gerador do benefício, o efetivo exercício da atividade rural em regime de economia familiar." // ✅ Copiado PALAVRA POR PALAVRA do documento oficial
+}
+
+Pontuação: 150/150 ✅ PERFEITO!
 
 ═══════════════════════════════════════════════════════════════
 

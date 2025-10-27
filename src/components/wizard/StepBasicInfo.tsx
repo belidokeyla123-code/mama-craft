@@ -54,9 +54,13 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       const history = getSalarioMinimoHistory(birthYear, currentYear);
       const currentSalario = history[history.length - 1]?.value || 1412.00;
       
+      // Calcular valor da causa (4 meses de salário-maternidade)
+      const valorCausa = currentSalario * 4;
+      
       updateData({ 
         salarioMinimoHistory: history,
-        salarioMinimoRef: currentSalario
+        salarioMinimoRef: currentSalario,
+        valorCausa: valorCausa
       });
     }
   }, [data.childBirthDate]);
@@ -698,6 +702,21 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
                 R$ {data.salarioMinimoRef.toFixed(2)}
               </p>
             </div>
+
+            {/* VALOR DA CAUSA */}
+            {data.valorCausa && (
+              <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg border-2 border-green-200 dark:border-green-800 mt-4">
+                <Label className="text-sm text-muted-foreground block mb-1">
+                  Valor da Causa Estimado (4 meses de salário-maternidade)
+                </Label>
+                <p className="text-3xl font-bold text-green-700 dark:text-green-400">
+                  R$ {data.valorCausa.toFixed(2)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cálculo: R$ {data.salarioMinimoRef.toFixed(2)} × 4 meses
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <Alert>

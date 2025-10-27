@@ -47,3 +47,10 @@ export function getSalarioMinimoByDate(date: Date | string): number {
   const year = dateObj.getFullYear();
   return getSalarioMinimoByYear(year);
 }
+
+/**
+ * Calcula o valor da causa baseado no salário-maternidade (4 meses)
+ */
+export function calculateValorCausa(salarioMinimo: number): number {
+  return salarioMinimo * 4;
+}
