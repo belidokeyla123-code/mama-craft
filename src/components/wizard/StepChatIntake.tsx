@@ -29,6 +29,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [userInput, setUserInput] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -311,44 +312,84 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   };
 
   const transcribeAudio = async (audioBlob: Blob) => {
-    setIsProcessing(true);
+    setIsTranscribing(true);
+    
+    // Add temporary message in chat
+    const transcribingMessageIndex = messages.length;
+    setMessages(prev => [...prev, { 
+      role: "assistant", 
+      content: "🎤 Transcrevendo áudio..." 
+    }]);
+    
+    toast({
+      title: "Transcrevendo áudio...",
+      description: "Aguarde enquanto processamos sua gravação.",
+    });
     
     try {
-      // Converter blob para base64
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
+      console.log('Transcribing audio...');
       
-      reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
+      // Convert blob to base64
+      const reader = new FileReader();
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          resolve(base64.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
+
+      // Call voice-to-text function
+      const { data, error } = await supabase.functions.invoke('voice-to-text', {
+        body: { audio: base64Audio }
+      });
+
+      if (error) throw error;
+
+      console.log('Transcription result:', data);
+      
+      if (data.text) {
+        const transcribedText = data.text;
         
-        // Chamar edge function para transcrição
-        const { data: transcriptionResult, error } = await supabase.functions.invoke(
-          'voice-to-text',
-          { body: { audio: base64Audio } }
-        );
+        // Remove temporary transcribing message
+        setMessages(prev => prev.filter((_, idx) => idx !== transcribingMessageIndex));
         
-        if (error) throw error;
+        // Add user message with transcribed text
+        setMessages(prev => [...prev, { 
+          role: "user", 
+          content: transcribedText 
+        }]);
         
-        const transcribedText = transcriptionResult.text;
-        setUserInput(transcribedText);
+        // Detect special situation from transcribed text
+        await detectSpecialSituation(transcribedText);
+        
+        // Add assistant confirmation
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "✅ Áudio transcrito e registrado! Há mais alguma informação que gostaria de adicionar?"
+        }]);
         
         toast({
-          title: "Áudio transcrito",
-          description: "O texto foi inserido no campo de mensagem.",
+          title: "✅ Áudio transcrito com sucesso!",
+          description: "A informação foi registrada no chat.",
         });
         
-        // Detectar situação especial automaticamente
-        await detectSpecialSituation(transcribedText);
-      };
-    } catch (error: any) {
-      console.error('Erro na transcrição:', error);
+        setUserInput("");
+      }
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      
+      // Remove temporary transcribing message on error
+      setMessages(prev => prev.filter((_, idx) => idx !== transcribingMessageIndex));
+      
       toast({
-        title: "Erro na transcrição",
-        description: error.message,
+        title: "Erro ao transcrever áudio",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive",
       });
     } finally {
-      setIsProcessing(false);
+      setIsTranscribing(false);
     }
   };
 
@@ -480,25 +521,37 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         </Button>
 
         <Button
-          variant={isRecording ? "destructive" : "outline"}
+          variant={isRecording ? "destructive" : isTranscribing ? "secondary" : "outline"}
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={isProcessing}
+          disabled={isProcessing || isTranscribing}
           className="flex-shrink-0"
         >
-          <Mic className={`h-4 w-4 ${isRecording ? 'animate-pulse' : ''}`} />
+          {isRecording ? (
+            <>
+              <Mic className="h-4 w-4 mr-2 animate-pulse" />
+              Parar
+            </>
+          ) : isTranscribing ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Transcrevendo
+            </>
+          ) : (
+            <Mic className="h-4 w-4" />
+          )}
         </Button>
 
         <Input
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !isProcessing && handleSendMessage()}
+          onKeyDown={(e) => e.key === "Enter" && !isProcessing && !isTranscribing && handleSendMessage()}
           placeholder="Digite ou grave informações complementares..."
-          disabled={isProcessing || isRecording}
+          disabled={isProcessing || isRecording || isTranscribing}
         />
 
         <Button
           onClick={handleSendMessage}
-          disabled={!userInput.trim() || isProcessing || isRecording}
+          disabled={!userInput.trim() || isProcessing || isRecording || isTranscribing}
           className="flex-shrink-0"
         >
           <Send className="h-4 w-4" />
