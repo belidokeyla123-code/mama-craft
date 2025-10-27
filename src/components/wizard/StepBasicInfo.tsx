@@ -46,6 +46,44 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     return null;
   };
 
+  // Carregar períodos rurais automaticamente das extrações
+  useEffect(() => {
+    const loadRuralPeriodsFromExtractions = async () => {
+      if (!data.caseId) return;
+      if (data.ruralPeriods && data.ruralPeriods.length > 0) return; // Já tem períodos
+
+      try {
+        const { data: extractions, error } = await supabase
+          .from("extractions")
+          .select("*")
+          .eq("case_id", data.caseId)
+          .order("extracted_at", { ascending: false });
+
+        if (error) throw error;
+
+        // Buscar períodos rurais nas extrações
+        let foundRuralPeriods: RuralPeriod[] = [];
+        
+        for (const extraction of extractions || []) {
+          if (extraction.periodos_rurais && Array.isArray(extraction.periodos_rurais) && extraction.periodos_rurais.length > 0) {
+            foundRuralPeriods = extraction.periodos_rurais as unknown as RuralPeriod[];
+            break;
+          }
+        }
+
+        if (foundRuralPeriods.length > 0) {
+          console.log('[AUTO-FILL] Períodos rurais encontrados nas extrações:', foundRuralPeriods);
+          updateData({ ruralPeriods: foundRuralPeriods });
+          toast.success(`${foundRuralPeriods.length} período(s) rural(is) carregado(s) automaticamente da autodeclaração!`);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar períodos rurais:", error);
+      }
+    };
+
+    loadRuralPeriodsFromExtractions();
+  }, [data.caseId]);
+
   // Calcular histórico do salário mínimo quando a data de nascimento da criança mudar
   useEffect(() => {
     if (data.childBirthDate) {

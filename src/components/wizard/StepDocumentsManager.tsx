@@ -322,11 +322,10 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
       const uploadedDocs = await Promise.all(uploadPromises);
 
-      // Chamar edge function para processar com IA (não-bloqueante)
+      // Chamar edge function para processar com IA e aguardar conclusão
       setUploadProgress("Processando com IA...");
       
-      // Fazer chamada não-bloqueante (fire-and-forget)
-      supabase.functions.invoke(
+      const { data: processingResult, error: processingError } = await supabase.functions.invoke(
         "process-documents-with-ai",
         {
           body: {
@@ -334,22 +333,27 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             documentIds: uploadedDocs.map(d => d.id),
           },
         }
-      ).then(({ error }) => {
-        if (error) {
-          console.error('Erro ao processar com IA:', error);
-        } else {
-          console.log('Processamento IA concluído em background');
-        }
-      });
+      );
 
-      toast({
-        title: "Documentos enviados",
-        description: `${uploadedDocs.length} documento(s) enviado(s). Processamento IA em andamento...`,
-      });
+      if (processingError) {
+        console.error('Erro ao processar com IA:', processingError);
+        toast({
+          title: "Documentos enviados com aviso",
+          description: `${uploadedDocs.length} documento(s) enviado(s), mas houve erro no processamento IA. Clique em "Re-processar" na aba de Informações Básicas.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Documentos processados com sucesso!",
+          description: `${uploadedDocs.length} documento(s) enviado(s) e processados com IA. Os dados foram atualizados automaticamente.`,
+        });
+      }
 
-      // Recarregar lista imediatamente
+      // Recarregar lista e notificar componente pai
       await loadDocuments();
-      if (onDocumentsChange) onDocumentsChange();
+      if (onDocumentsChange) {
+        onDocumentsChange();
+      }
 
     } catch (error: any) {
       console.error("Erro ao enviar documentos:", error);
