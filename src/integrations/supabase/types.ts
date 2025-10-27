@@ -804,6 +804,50 @@ export type Database = {
         }
         Relationships: []
       }
+      processing_queue: {
+        Row: {
+          case_id: string
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          retry_count: number | null
+          started_at: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          case_id: string
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          retry_count?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          case_id?: string
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          retry_count?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_queue_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       templates: {
         Row: {
           created_at: string

@@ -3,6 +3,9 @@ project_id = "nwpgbnzvydweexruckpt"
 [functions.process-documents-with-ai]
 verify_jwt = false
 
+[functions.process-queue-worker]
+verify_jwt = false
+
 [functions.ai-financial-insights]
 verify_jwt = false
 

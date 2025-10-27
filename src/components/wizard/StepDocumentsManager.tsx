@@ -322,72 +322,62 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
       const uploadedDocs = await Promise.all(uploadPromises);
 
-      // FASE 2: Chamar edge function sem aguardar (processamento em background)
-      setUploadProgress("Iniciando processamento IA...");
+      // FASE 2: Adicionar à fila de processamento
+      setUploadProgress("Adicionando à fila de processamento...");
       
-      const uploadStartTime = new Date();
-      
-      // Chamar sem await - processamento em background
-      supabase.functions.invoke(
-        "process-documents-with-ai",
-        {
-          body: {
-            caseId,
-            documentIds: uploadedDocs.map(d => d.id),
-          },
-        }
-      ).then(({ error }) => {
-        if (error) {
-          console.error('Erro ao iniciar processamento IA:', error);
-        } else {
-          console.log('✓ Processamento IA iniciado em background');
-        }
-      });
+      const { error: queueError } = await supabase
+        .from('processing_queue')
+        .insert({
+          case_id: caseId,
+          status: 'queued'
+        });
+
+      if (queueError) {
+        console.error('Erro ao adicionar à fila:', queueError);
+        throw queueError;
+      }
 
       toast({
-        title: "Documentos enviados!",
-        description: `${uploadedDocs.length} documento(s) enviado(s). Processamento com IA em andamento em segundo plano...`,
+        title: "📥 Documentos adicionados à fila",
+        description: `${uploadedDocs.length} documento(s) enviado(s). Processamento iniciará em breve.`,
       });
 
       // Recarregar lista imediatamente
       await loadDocuments();
       
-      // FASE 2: Polling para verificar quando o processamento terminar
-      const pollProcessing = setInterval(async () => {
-        const { data: extractions } = await supabase
-          .from('extractions')
-          .select('extracted_at')
+      // Polling para verificar status na fila
+      const pollInterval = setInterval(async () => {
+        const { data: queue } = await supabase
+          .from('processing_queue')
+          .select('status, completed_at')
           .eq('case_id', caseId)
-          .order('extracted_at', { ascending: false })
-          .limit(1);
-        
-        if (extractions && extractions[0]?.extracted_at) {
-          const extractionTime = new Date(extractions[0].extracted_at);
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
           
-          // Verificar se a extração é posterior ao upload
-          if (extractionTime > uploadStartTime) {
-            clearInterval(pollProcessing);
-            console.log('✅ Processamento IA concluído!');
-            
-            // Recarregar documentos e atualizar UI
-            await loadDocuments();
-            if (onDocumentsChange) {
-              onDocumentsChange();
-            }
-            
-            toast({
-              title: "Processamento concluído!",
-              description: "Dados extraídos com IA e atualizados automaticamente. Confira a aba de Informações Básicas.",
-            });
-          }
+        if (queue?.status === 'completed') {
+          clearInterval(pollInterval);
+          await loadDocuments();
+          if (onDocumentsChange) onDocumentsChange();
+          toast({
+            title: "✅ Processamento concluído!",
+            description: "Dados extraídos com IA. Confira a aba de Informações Básicas.",
+          });
+        } else if (queue?.status === 'failed') {
+          clearInterval(pollInterval);
+          toast({
+            title: "❌ Erro no processamento",
+            description: "Tente enviar os documentos novamente.",
+            variant: "destructive"
+          });
         }
-      }, 3000); // Verificar a cada 3 segundos
+      }, 5000); // Verificar a cada 5 segundos
       
-      // Timeout de segurança: parar polling após 2 minutos
+      // Timeout de segurança: parar polling após 3 minutos
       setTimeout(() => {
-        clearInterval(pollProcessing);
-        console.log('[POLLING] Timeout atingido, parando verificação');
-      }, 120000);
+        clearInterval(pollInterval);
+        console.log('[POLLING] Timeout atingido');
+      }, 180000);
 
     } catch (error: any) {
       console.error("Erro ao enviar documentos:", error);
