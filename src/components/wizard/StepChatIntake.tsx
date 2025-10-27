@@ -39,7 +39,10 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    const validFiles = files.filter(file => {
+    const validFiles: File[] = [];
+    
+    for (const file of files) {
+      // Validação de tamanho
       const maxSize = 200 * 1024 * 1024; // 200MB
       if (file.size > maxSize) {
         toast({
@@ -47,16 +50,26 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           description: `${file.name} excede 200MB`,
           variant: "destructive",
         });
-        return false;
+        continue;
       }
-      return true;
-    });
+      
+      // Verificar duplicatas na sessão atual
+      if (uploadedFiles.some(f => f.name === file.name)) {
+        toast({
+          title: "Documento duplicado",
+          description: `"${file.name}" já foi adicionado`,
+          variant: "destructive",
+        });
+        continue;
+      }
+      
+      validFiles.push(file);
+    }
+    
+    if (validFiles.length === 0) return;
     
     setUploadedFiles(prev => [...prev, ...validFiles]);
-    
-    if (validFiles.length > 0) {
-      processDocuments(validFiles);
-    }
+    processDocuments(validFiles);
   };
 
   const processDocuments = async (files: File[]) => {
@@ -83,8 +96,48 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         updateData({ caseId });
       }
 
+      // Verificar duplicatas no banco antes de fazer upload
+      const fileNames = files.map(f => f.name);
+      const { data: existingDocs, error: checkError } = await supabase
+        .from("documents")
+        .select("file_name")
+        .eq("case_id", caseId)
+        .in("file_name", fileNames);
+
+      if (checkError) throw checkError;
+
+      const existingFileNames = existingDocs?.map(d => d.file_name) || [];
+      const filesToUpload = files.filter(file => {
+        if (existingFileNames.includes(file.name)) {
+          toast({
+            title: "Documento já existe",
+            description: `"${file.name}" já foi enviado anteriormente`,
+            variant: "destructive",
+          });
+          return false;
+        }
+        return true;
+      });
+
+      if (filesToUpload.length === 0) {
+        toast({
+          title: "Nenhum documento novo",
+          description: "Todos os arquivos já foram enviados",
+        });
+        return;
+      }
+
+      // Avisar sobre duplicatas ignoradas
+      if (files.length > filesToUpload.length) {
+        const duplicatedCount = files.length - filesToUpload.length;
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ ${duplicatedCount} documento(s) duplicado(s) foram ignorados.`
+        }]);
+      }
+
       // Upload dos arquivos para o Storage
-      const uploadPromises = files.map(async (file) => {
+      const uploadPromises = filesToUpload.map(async (file) => {
         const fileExt = file.name.split('.').pop();
         const fileName = `${caseId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         
@@ -219,8 +272,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         caseId,
         // Dados da mãe
         authorName: extractedData.motherName || data.authorName,
-        authorCPF: extractedData.motherCpf || data.authorCPF,
-        authorRG: extractedData.motherRg || data.authorRG,
+        authorCpf: extractedData.motherCpf || data.authorCpf,
+        authorRg: extractedData.motherRg || data.authorRg,
         authorBirthDate: extractedData.motherBirthDate || data.authorBirthDate,
         authorAddress: extractedData.motherAddress || data.authorAddress,
         authorMaritalStatus: extractedData.maritalStatus || data.authorMaritalStatus,
@@ -231,8 +284,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         fatherName: extractedData.fatherName || data.fatherName,
         // Proprietário da terra
         landOwnerName: extractedData.landOwnerName || data.landOwnerName,
-        landOwnerCPF: extractedData.landOwnerCpf || data.landOwnerCPF,
-        landOwnerRG: extractedData.landOwnerRg || data.landOwnerRG,
+        landOwnerCpf: extractedData.landOwnerCpf || data.landOwnerCpf,
+        landOwnerRg: extractedData.landOwnerRg || data.landOwnerRg,
         landOwnershipType: extractedData.landOwnershipType || data.landOwnershipType,
         // Atividade rural
         ruralActivitySince: extractedData.ruralActivitySince || data.ruralActivitySince,

@@ -40,7 +40,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -118,14 +118,11 @@ serve(async (req) => {
       throw new Error("Nenhum documento pôde ser processado");
     }
 
-    // Chamar Lovable AI com visão para extrair informações dos documentos
-    console.log("[IA] Chamando Gemini 2.5 Flash com visão para extrair dados...");
+    // Chamar OpenAI GPT-4o com visão para extrair informações dos documentos
+    console.log("[IA] Chamando OpenAI GPT-4o com visão para extrair dados...");
     console.log(`[IA] Total de imagens: ${validDocs.length}`);
     
-    const messages: any[] = [
-      {
-        role: "system",
-        content: `Você é um assistente especializado em extrair informações de documentos previdenciários brasileiros com OCR avançado.
+    const systemPrompt = `Você é um assistente especializado em extrair informações de documentos previdenciários brasileiros com OCR avançado.
 
 TIPOS DE DOCUMENTOS E O QUE EXTRAIR:
 
@@ -172,7 +169,12 @@ REGRAS CRÍTICAS:
 4. CPF sempre apenas números
 5. Copie nomes EXATAMENTE como aparecem
 6. Se o nome do arquivo menciona "documento de NOME", esse NOME é o proprietário da terra
-7. Motivo do indeferimento deve ser copiado LITERALMENTE do documento`,
+7. Motivo do indeferimento deve ser copiado LITERALMENTE do documento`;
+    
+    const messages: any[] = [
+      {
+        role: "system",
+        content: systemPrompt
       }
     ];
 
@@ -195,22 +197,22 @@ REGRAS CRÍTICAS:
       });
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
+        Authorization: `Bearer ${openaiApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o",
         messages,
-        tools: [
+        max_tokens: 4000,
+        temperature: 0.1,
+        functions: [
           {
-            type: "function",
-            function: {
-              name: "extract_case_info",
-              description: "Extrai informações estruturadas de documentos previdenciários brasileiros",
-              parameters: {
+            name: "extract_case_info",
+            description: "Extrai informações estruturadas de documentos previdenciários brasileiros",
+            parameters: {
                 type: "object",
                 properties: {
                   // Dados da mãe/autora
@@ -327,25 +329,21 @@ REGRAS CRÍTICAS:
                 },
                 required: [],
               },
-            },
           },
         ],
-        tool_choice: { type: "function", function: { name: "extract_case_info" } },
+        function_call: { name: "extract_case_info" },
       }),
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error("[IA] Erro na resposta da API:", aiResponse.status);
+      console.error("[IA] Erro na resposta da API OpenAI:", aiResponse.status);
       console.error("[IA] Detalhes do erro:", errorText);
       
-      // Tentar identificar o tipo de erro
-      let errorMessage = `Erro na API Lovable AI: ${aiResponse.status}`;
+      let errorMessage = `Erro na API OpenAI: ${aiResponse.status}`;
       try {
         const errorJson = JSON.parse(errorText);
-        if (errorJson.error?.message?.includes('Failed to extract')) {
-          errorMessage = `Falha ao processar imagens. Alguns documentos podem estar corrompidos, muito grandes ou em formato incompatível. Tente com arquivos menores ou em melhor qualidade.`;
-        } else if (errorJson.error?.message) {
+        if (errorJson.error?.message) {
           errorMessage = errorJson.error.message;
         }
       } catch {
@@ -358,17 +356,17 @@ REGRAS CRÍTICAS:
     const aiResult = await aiResponse.json();
     console.log("[IA] Resposta recebida com sucesso");
 
-    // Extrair dados do tool call
+    // Extrair dados do function call (OpenAI usa function_call ao invés de tool_calls)
     let extractedData: Record<string, any> = {};
     try {
-      const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-      if (!toolCall || toolCall.function?.name !== 'extract_case_info') {
-        console.error("[IA] Resposta não contém tool call esperado");
+      const functionCall = aiResult.choices?.[0]?.message?.function_call;
+      if (!functionCall || functionCall.name !== 'extract_case_info') {
+        console.error("[IA] Resposta não contém function call esperado");
         console.error("[IA] Resposta completa:", JSON.stringify(aiResult.choices[0]?.message, null, 2));
         throw new Error('A IA não retornou os dados no formato esperado');
       }
       
-      const args = toolCall.function.arguments;
+      const args = functionCall.arguments;
       console.log("[IA] Arguments raw:", args);
       extractedData = JSON.parse(args);
       console.log("[IA] Dados extraídos:", JSON.stringify(extractedData, null, 2));
