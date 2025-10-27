@@ -42,8 +42,8 @@ export async function convertPDFToImages(
       console.log(`[PDF→IMG] Processando página ${pageNum}/${totalPages}...`);
       const page = await pdf.getPage(pageNum);
       
-      // Configurar escala para qualidade adequada (1.5x para boa qualidade)
-      const scale = 1.5;
+      // Configurar escala para qualidade adequada (1.0x para OCR - mais leve)
+      const scale = 1.0;
       const viewport = page.getViewport({ scale });
       console.log(`[PDF→IMG] Viewport: ${viewport.width}x${viewport.height}`);
       
@@ -66,7 +66,7 @@ export async function convertPDFToImages(
       }).promise;
       console.log(`[PDF→IMG] Página ${pageNum} renderizada com sucesso`);
       
-      // Converter canvas para Blob PNG
+      // Converter canvas para Blob PNG (qualidade 0.8 para arquivos menores)
       console.log(`[PDF→IMG] Convertendo para PNG...`);
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
@@ -75,7 +75,7 @@ export async function convertPDFToImages(
             return;
           }
           resolve(blob);
-        }, 'image/png', 0.95);
+        }, 'image/png', 0.8);
       });
       
       // Criar arquivo de imagem

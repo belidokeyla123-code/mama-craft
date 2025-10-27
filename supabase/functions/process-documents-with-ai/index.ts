@@ -6,24 +6,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Process base64 in chunks to prevent memory issues with large files
-function processBase64Chunks(arrayBuffer: ArrayBuffer): string {
-  const uint8Array = new Uint8Array(arrayBuffer);
-  const CHUNK_SIZE = 8192; // 8KB chunks to be safe
-  let base64 = '';
+// Convert ArrayBuffer to base64 safely
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000; // 32KB chunks
   
-  for (let i = 0; i < uint8Array.length; i += CHUNK_SIZE) {
-    const end = Math.min(i + CHUNK_SIZE, uint8Array.length);
-    const chunk = uint8Array.slice(i, end);
-    const chunkArray = Array.from(chunk);
-    base64 += btoa(String.fromCharCode.apply(null, chunkArray as any));
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
   }
   
-  return base64;
+  return btoa(binary);
 }
 
-// Check if file is too large (limit to 5MB)
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+// Check if file is too large (limit to 4MB per image for OpenAI)
+const MAX_FILE_SIZE = 4 * 1024 * 1024;
 
 function isFileSizeAcceptable(size: number): boolean {
   return size <= MAX_FILE_SIZE;
@@ -68,51 +66,61 @@ serve(async (req) => {
     };
 
     // Processar cada documento com OCR REAL
-    const extractedTexts = await Promise.all(
-      documents.map(async (doc) => {
-        try {
-          console.log(`[OCR] Processando ${doc.file_name} (${doc.mime_type})`);
-          const docType = classifyDocument(doc.file_name);
-          
-          // Baixar o arquivo do Storage
-          const { data: fileData, error: downloadError } = await supabase.storage
-            .from("case-documents")
-            .download(doc.file_path);
+    const processedDocs: any[] = [];
+    
+    for (const doc of documents) {
+      try {
+        console.log(`[OCR] Processando ${doc.file_name} (${doc.mime_type})`);
+        const docType = classifyDocument(doc.file_name);
+        
+        // Baixar o arquivo do Storage
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from("case-documents")
+          .download(doc.file_path);
 
-          if (downloadError) {
-            console.error(`[OCR] Erro ao baixar ${doc.file_name}:`, downloadError);
-            return null;
-          }
-
-          console.log(`[OCR] Arquivo ${doc.file_name} baixado. Tamanho: ${fileData.size} bytes`);
-
-          // Check file size before processing
-          if (!isFileSizeAcceptable(fileData.size)) {
-            console.warn(`[OCR] Arquivo ${doc.file_name} muito grande (${fileData.size} bytes). Limite: ${MAX_FILE_SIZE} bytes. Pulando...`);
-            return null;
-          }
-
-          // Converter para base64 usando chunks para evitar stack overflow
-          const arrayBuffer = await fileData.arrayBuffer();
-          const base64 = processBase64Chunks(arrayBuffer);
-          
-          console.log(`[OCR] ${doc.file_name} convertido para base64 (${base64.length} chars)`);
-          
-          return {
-            fileName: doc.file_name,
-            docType,
-            mimeType: doc.mime_type,
-            base64Content: base64
-          };
-        } catch (error) {
-          console.error(`[OCR] Erro ao processar ${doc.file_name}:`, error);
-          return null;
+        if (downloadError) {
+          console.error(`[OCR] ❌ Erro ao baixar ${doc.file_name}:`, downloadError);
+          continue; // Skip this document
         }
-      })
-    );
 
-    const validDocs = extractedTexts.filter(d => d !== null);
-    console.log(`[OCR] ${validDocs.length} documentos processados com sucesso`);
+        const fileSizeKB = (fileData.size / 1024).toFixed(1);
+        const fileSizeMB = (fileData.size / 1024 / 1024).toFixed(2);
+        console.log(`[OCR] ✓ Arquivo ${doc.file_name} baixado. Tamanho: ${fileSizeKB} KB (${fileSizeMB} MB)`);
+
+        // Check file size before processing
+        if (!isFileSizeAcceptable(fileData.size)) {
+          console.warn(`[OCR] ⚠️ Arquivo ${doc.file_name} muito grande (${fileSizeMB} MB). Limite: 4 MB. Pulando...`);
+          continue; // Skip this document
+        }
+
+        // Converter para base64 de forma segura
+        console.log(`[OCR] Convertendo ${doc.file_name} para base64...`);
+        const arrayBuffer = await fileData.arrayBuffer();
+        const base64 = arrayBufferToBase64(arrayBuffer);
+        
+        const base64SizeKB = (base64.length / 1024).toFixed(1);
+        console.log(`[OCR] ✓ ${doc.file_name} convertido para base64 (${base64SizeKB} KB encoded)`);
+        console.log(`[OCR] Base64 preview: ${base64.substring(0, 50)}...`);
+        
+        processedDocs.push({
+          fileName: doc.file_name,
+          docType,
+          mimeType: doc.mime_type,
+          base64Content: base64,
+          originalSize: fileData.size
+        });
+        
+        console.log(`[OCR] ✅ ${doc.file_name} processado com sucesso`);
+      } catch (error) {
+        console.error(`[OCR] ❌ Erro fatal ao processar ${doc.file_name}:`, error);
+        console.error(`[OCR] Stack:`, error instanceof Error ? error.stack : 'N/A');
+        // Continue with other documents
+      }
+    }
+
+    console.log(`[OCR] ✅ ${processedDocs.length}/${documents.length} documentos processados com sucesso`);
+    
+    const validDocs = processedDocs;
 
     if (validDocs.length === 0) {
       throw new Error("Nenhum documento pôde ser processado");
