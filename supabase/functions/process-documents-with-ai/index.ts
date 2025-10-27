@@ -6,6 +6,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Process base64 in chunks to prevent memory issues with large files
+function processBase64Chunks(arrayBuffer: ArrayBuffer): string {
+  const uint8Array = new Uint8Array(arrayBuffer);
+  const CHUNK_SIZE = 8192; // 8KB chunks to be safe
+  let base64 = '';
+  
+  for (let i = 0; i < uint8Array.length; i += CHUNK_SIZE) {
+    const end = Math.min(i + CHUNK_SIZE, uint8Array.length);
+    const chunk = uint8Array.slice(i, end);
+    const chunkArray = Array.from(chunk);
+    base64 += btoa(String.fromCharCode.apply(null, chunkArray as any));
+  }
+  
+  return base64;
+}
+
+// Check if file is too large (limit to 5MB)
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+function isFileSizeAcceptable(size: number): boolean {
+  return size <= MAX_FILE_SIZE;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -39,7 +62,7 @@ serve(async (req) => {
       if (name.includes('residencia') || name.includes('endereco')) return 'comprovante_residencia';
       if (name.includes('autodeclaracao') || name.includes('rural')) return 'autodeclaracao_rural';
       if (name.includes('terra') || name.includes('propriedade')) return 'documento_terra';
-      if (name.includes('processo') || name.includes('inss') || name.includes('nb')) return 'processo_administrativo';
+      if (name.includes('processo') || name.includes('inss') || name.includes('nb') || name.includes('indeferimento')) return 'processo_administrativo';
       
       return 'outro';
     };
@@ -58,14 +81,20 @@ serve(async (req) => {
 
           if (downloadError) {
             console.error(`[OCR] Erro ao baixar ${doc.file_name}:`, downloadError);
-            throw downloadError;
+            return null;
           }
 
           console.log(`[OCR] Arquivo ${doc.file_name} baixado. Tamanho: ${fileData.size} bytes`);
 
-          // Converter para base64 para enviar à IA (visão)
+          // Check file size before processing
+          if (!isFileSizeAcceptable(fileData.size)) {
+            console.warn(`[OCR] Arquivo ${doc.file_name} muito grande (${fileData.size} bytes). Limite: ${MAX_FILE_SIZE} bytes. Pulando...`);
+            return null;
+          }
+
+          // Converter para base64 usando chunks para evitar stack overflow
           const arrayBuffer = await fileData.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          const base64 = processBase64Chunks(arrayBuffer);
           
           console.log(`[OCR] ${doc.file_name} convertido para base64 (${base64.length} chars)`);
           
@@ -91,28 +120,59 @@ serve(async (req) => {
 
     // Chamar Lovable AI com visão para extrair informações dos documentos
     console.log("[IA] Chamando Gemini 2.5 Flash com visão para extrair dados...");
+    console.log(`[IA] Total de imagens: ${validDocs.length}`);
     
     const messages: any[] = [
       {
         role: "system",
-        content: `Você é um assistente especializado em extrair informações de documentos previdenciários brasileiros.
-Analise CUIDADOSAMENTE cada imagem de documento e extraia TODAS as informações visíveis.
+        content: `Você é um assistente especializado em extrair informações de documentos previdenciários brasileiros com OCR avançado.
 
-TIPOS DE DOCUMENTOS:
-- Certidão de Nascimento → Nome completo da criança, data nascimento DD/MM/AAAA, nome completo do pai, nome completo da mãe, local de nascimento
-- CPF/RG/CNH → Nome completo, CPF (apenas números), RG, data nascimento DD/MM/AAAA, filiação
-- Comprovante de Residência → Endereço COMPLETO (rua, número, bairro, cidade, UF, CEP), nome do titular
-- Autodeclaração Rural → Desde quando trabalha (data ou "desde nascimento"), membros da família, tipo de terra
-- Documento da Terra → Nome do proprietário, tipo de propriedade
-- Processo INSS → Número NB completo, data requerimento, data indeferimento, motivo COMPLETO do indeferimento
+TIPOS DE DOCUMENTOS E O QUE EXTRAIR:
 
-REGRAS IMPORTANTES:
-1. Extraia TODOS os dados visíveis no documento
-2. Use formato DD/MM/AAAA para datas
-3. CPF apenas números (sem pontos ou traços)
-4. Se o nome do arquivo menciona "documento da terra + nome", esse é o proprietário
-5. Copie o motivo do indeferimento PALAVRA POR PALAVRA
-6. Se não conseguir ler algo, deixe vazio (não invente)`,
+**Certidão de Nascimento:**
+- Nome COMPLETO da criança
+- Data de nascimento DD/MM/AAAA
+- Local de nascimento (cidade e UF)
+- Nome COMPLETO do pai
+- Nome COMPLETO da mãe
+- Data de nascimento da mãe (se constar na seção DADOS DA MÃE)
+
+**CPF/RG/CNH:**
+- Nome completo exatamente como aparece
+- CPF (apenas números, sem pontos ou traços)
+- RG (com órgão expedidor)
+- Data de nascimento DD/MM/AAAA
+- Filiação (nome da mãe e do pai)
+
+**Comprovante de Residência:**
+- Endereço COMPLETO (rua + número + complemento + bairro + cidade + UF + CEP)
+- Nome do titular
+
+**Autodeclaração Rural:**
+- Desde quando trabalha na atividade rural (data ou "desde nascimento")
+- Membros da família que moram junto
+- Tipo de trabalho (lavoura, criação, etc)
+- Se menciona ser proprietária ou trabalhar em terra de terceiro
+
+**Documento da Terra:**
+- Nome do proprietário
+- CPF/RG do proprietário
+- Tipo de propriedade
+
+**Processo INSS:**
+- Número COMPLETO do protocolo/NB
+- Data do requerimento DD/MM/AAAA
+- Data do indeferimento DD/MM/AAAA
+- Motivo COMPLETO do indeferimento (copiar PALAVRA POR PALAVRA)
+
+REGRAS CRÍTICAS:
+1. Leia TODOS os textos, incluindo manuscritos e carimbos
+2. Se um campo não estiver visível, deixe vazio (não invente)
+3. Datas sempre em formato DD/MM/AAAA
+4. CPF sempre apenas números
+5. Copie nomes EXATAMENTE como aparecem
+6. Se o nome do arquivo menciona "documento de NOME", esse NOME é o proprietário da terra
+7. Motivo do indeferimento deve ser copiado LITERALMENTE do documento`,
       }
     ];
 
@@ -123,7 +183,7 @@ REGRAS IMPORTANTES:
         content: [
           {
             type: "text",
-            text: `Documento: ${doc.fileName}\nTipo: ${doc.docType}\n\nExtraia TODAS as informações deste documento:`
+            text: `Documento: ${doc.fileName}\nTipo classificado: ${doc.docType}\n\nExtraia TODAS as informações visíveis neste documento com máxima precisão:`
           },
           {
             type: "image_url",
@@ -149,40 +209,122 @@ REGRAS IMPORTANTES:
             type: "function",
             function: {
               name: "extract_case_info",
-              description: "Extrai informações estruturadas de documentos previdenciários",
+              description: "Extrai informações estruturadas de documentos previdenciários brasileiros",
               parameters: {
                 type: "object",
-                  properties: {
-                    // Dados da mãe/autora
-                    motherName: { type: "string", description: "Nome COMPLETO da mãe/autora exatamente como aparece no documento" },
-                    motherCpf: { type: "string", description: "CPF sem formatação (apenas 11 números)" },
-                    motherRg: { type: "string", description: "RG da mãe" },
-                    motherBirthDate: { type: "string", description: "Data nascimento da mãe formato YYYY-MM-DD (converter de DD/MM/AAAA)" },
-                    motherAddress: { type: "string", description: "Endereço COMPLETO com rua, número, bairro, cidade, UF e CEP" },
-                    maritalStatus: { type: "string", description: "Estado civil (solteira, casada, divorciada, viúva, união estável)" },
-                    
-                    // Dados da criança
-                    childName: { type: "string", description: "Nome COMPLETO do filho/filha" },
-                    childBirthDate: { type: "string", description: "Data nascimento criança YYYY-MM-DD (esta é a DATA DO EVENTO)" },
-                    childBirthPlace: { type: "string", description: "Local de nascimento (cidade e UF)" },
-                    fatherName: { type: "string", description: "Nome COMPLETO do pai da criança" },
-                    
-                    // Proprietário da terra
-                    landOwnerName: { type: "string", description: "Nome do proprietário (do documento OU do nome do arquivo se mencionar)" },
-                    landOwnerCpf: { type: "string", description: "CPF do proprietário apenas números" },
-                    landOwnerRg: { type: "string", description: "RG do proprietário" },
-                    landOwnershipType: { type: "string", enum: ["propria", "terceiro"], description: "propria ou terceiro" },
-                    
-                    // Atividade rural
-                    ruralActivitySince: { type: "string", description: "Desde quando trabalha rural (YYYY-MM-DD ou 'desde nascimento')" },
-                    familyMembers: { type: "array", items: { type: "string" }, description: "Lista de quem mora junto com a autora" },
-                    
-                    // Processo administrativo
-                    raProtocol: { type: "string", description: "Número COMPLETO do protocolo/NB do INSS" },
-                    raRequestDate: { type: "string", description: "Data do requerimento YYYY-MM-DD" },
-                    raDenialDate: { type: "string", description: "Data do indeferimento YYYY-MM-DD" },
-                    raDenialReason: { type: "string", description: "Motivo COMPLETO do indeferimento COPIADO EXATAMENTE do documento" },
+                properties: {
+                  // Dados da mãe/autora
+                  motherName: { 
+                    type: "string", 
+                    description: "Nome COMPLETO da mãe/autora exatamente como aparece no documento (certidão ou RG)" 
                   },
+                  motherCpf: { 
+                    type: "string", 
+                    description: "CPF da mãe sem formatação (apenas 11 números)" 
+                  },
+                  motherRg: { 
+                    type: "string", 
+                    description: "RG da mãe com órgão expedidor se possível" 
+                  },
+                  motherBirthDate: { 
+                    type: "string", 
+                    description: "Data nascimento da mãe formato YYYY-MM-DD (converter de DD/MM/AAAA se encontrado)" 
+                  },
+                  motherAddress: { 
+                    type: "string", 
+                    description: "Endereço COMPLETO da mãe: rua + número + bairro + cidade + UF + CEP" 
+                  },
+                  motherPhone: {
+                    type: "string",
+                    description: "Telefone ou celular da mãe (apenas números)"
+                  },
+                  motherWhatsapp: {
+                    type: "string",
+                    description: "WhatsApp da mãe (apenas números, pode ser igual ao telefone)"
+                  },
+                  maritalStatus: { 
+                    type: "string", 
+                    description: "Estado civil: solteira, casada, divorciada, viúva ou união estável" 
+                  },
+                  
+                  // Dados da criança
+                  childName: { 
+                    type: "string", 
+                    description: "Nome COMPLETO da criança exatamente como aparece na certidão de nascimento" 
+                  },
+                  childBirthDate: { 
+                    type: "string", 
+                    description: "Data nascimento criança YYYY-MM-DD (converter de DD/MM/AAAA) - ESTE É O EVENT_DATE" 
+                  },
+                  childBirthPlace: { 
+                    type: "string", 
+                    description: "Local de nascimento da criança (cidade e UF)" 
+                  },
+                  fatherName: { 
+                    type: "string", 
+                    description: "Nome COMPLETO do pai da criança conforme certidão" 
+                  },
+                  
+                  // Proprietário da terra (se não for a autora)
+                  landOwnerName: { 
+                    type: "string", 
+                    description: "Nome do proprietário da terra (do documento OU extraído do nome do arquivo se mencionar 'documento de NOME')" 
+                  },
+                  landOwnerCpf: { 
+                    type: "string", 
+                    description: "CPF do proprietário apenas números" 
+                  },
+                  landOwnerRg: { 
+                    type: "string", 
+                    description: "RG do proprietário da terra" 
+                  },
+                  landOwnershipType: { 
+                    type: "string", 
+                    description: "Tipo de relação com a terra: 'proprietaria' (se ela é dona), 'parceria', 'arrendamento', 'meeiro', 'comodato', 'posseiro', 'terceiro' (genérico)" 
+                  },
+                  
+                  // Atividade rural
+                  ruralActivitySince: { 
+                    type: "string", 
+                    description: "Desde quando trabalha na atividade rural. Formato YYYY-MM-DD ou texto como 'desde nascimento'. Se só tiver ano, usar 01/01/ANO" 
+                  },
+                  familyMembers: { 
+                    type: "array", 
+                    items: { 
+                      type: "object",
+                      properties: {
+                        name: { type: "string", description: "Nome do membro da família" },
+                        relationship: { type: "string", description: "Relação: esposo, filho(a), pai, mãe, irmão(ã), etc" }
+                      }
+                    },
+                    description: "Lista de membros da família que moram junto e trabalham na lavoura" 
+                  },
+                  
+                  // Processo administrativo
+                  raProtocol: { 
+                    type: "string", 
+                    description: "Número COMPLETO do protocolo/NB do processo administrativo no INSS" 
+                  },
+                  raRequestDate: { 
+                    type: "string", 
+                    description: "Data do requerimento administrativo YYYY-MM-DD (converter de DD/MM/AAAA)" 
+                  },
+                  raDenialDate: { 
+                    type: "string", 
+                    description: "Data do indeferimento YYYY-MM-DD (converter de DD/MM/AAAA)" 
+                  },
+                  raDenialReason: { 
+                    type: "string", 
+                    description: "Motivo COMPLETO do indeferimento COPIADO PALAVRA POR PALAVRA do documento oficial. Incluir TODOS os detalhes" 
+                  },
+                  
+                  // Observações
+                  observations: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Lista de observações importantes ou inconsistências encontradas entre documentos"
+                  }
+                },
                 required: [],
               },
             },
@@ -194,39 +336,63 @@ REGRAS IMPORTANTES:
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error("Erro na API Lovable AI:", errorText);
-      throw new Error(`Erro na API: ${aiResponse.status}`);
-    }
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("[IA] Erro na API:", aiResponse.status, errorText);
-      throw new Error(`Erro na API Lovable AI: ${aiResponse.status}`);
+      console.error("[IA] Erro na resposta da API:", aiResponse.status);
+      console.error("[IA] Detalhes do erro:", errorText);
+      
+      // Tentar identificar o tipo de erro
+      let errorMessage = `Erro na API Lovable AI: ${aiResponse.status}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.message?.includes('Failed to extract')) {
+          errorMessage = `Falha ao processar imagens. Alguns documentos podem estar corrompidos, muito grandes ou em formato incompatível. Tente com arquivos menores ou em melhor qualidade.`;
+        } else if (errorJson.error?.message) {
+          errorMessage = errorJson.error.message;
+        }
+      } catch {
+        // Se não for JSON, usar a mensagem padrão
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const aiResult = await aiResponse.json();
-    console.log("[IA] Resposta recebida:", JSON.stringify(aiResult, null, 2));
+    console.log("[IA] Resposta recebida com sucesso");
 
     // Extrair dados do tool call
     let extractedData: Record<string, any> = {};
     try {
       const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-      if (toolCall?.function?.arguments) {
-        const args = toolCall.function.arguments;
-        console.log("[IA] Arguments raw:", args);
-        extractedData = JSON.parse(args);
-        console.log("[IA] Dados extraídos:", JSON.stringify(extractedData, null, 2));
-      } else {
-        console.warn("[IA] Nenhum tool call encontrado na resposta");
+      if (!toolCall || toolCall.function?.name !== 'extract_case_info') {
+        console.error("[IA] Resposta não contém tool call esperado");
+        console.error("[IA] Resposta completa:", JSON.stringify(aiResult.choices[0]?.message, null, 2));
+        throw new Error('A IA não retornou os dados no formato esperado');
       }
+      
+      const args = toolCall.function.arguments;
+      console.log("[IA] Arguments raw:", args);
+      extractedData = JSON.parse(args);
+      console.log("[IA] Dados extraídos:", JSON.stringify(extractedData, null, 2));
     } catch (error) {
       console.error("[IA] Erro ao parsear resposta:", error);
+      throw new Error('Falha ao interpretar resposta da IA');
     }
 
-    // Determinar campos faltantes (campos críticos)
-    const allFields = ["motherName", "motherCpf", "childName", "childBirthDate"];
-    const missingFields = allFields.filter(field => !extractedData[field]);
-    console.log(`[IA] Campos faltantes: ${missingFields.length > 0 ? missingFields.join(", ") : "nenhum"}`);
+    // Determinar campos críticos faltantes
+    const requiredFields = ["motherName", "motherCpf", "childName", "childBirthDate"];
+    const optionalFields = [
+      "motherRg", "motherBirthDate", "motherAddress", "motherPhone", "motherWhatsapp", "maritalStatus",
+      "fatherName", "childBirthPlace",
+      "landOwnerName", "landOwnerCpf", "landOwnerRg", "landOwnershipType",
+      "ruralActivitySince", "familyMembers",
+      "raProtocol", "raRequestDate", "raDenialDate", "raDenialReason"
+    ];
+
+    const missingRequiredFields = requiredFields.filter(field => !extractedData[field]);
+    const missingOptionalFields = optionalFields.filter(field => !extractedData[field]);
+    
+    console.log(`[EXTRAÇÃO] Campos críticos faltando: ${missingRequiredFields.length > 0 ? missingRequiredFields.join(', ') : 'Nenhum ✓'}`);
+    console.log(`[EXTRAÇÃO] Campos opcionais faltando: ${missingOptionalFields.length > 0 ? missingOptionalFields.length : 'Nenhum ✓'}`);
+    console.log(`[EXTRAÇÃO] Taxa de completude crítica: ${((requiredFields.length - missingRequiredFields.length) / requiredFields.length * 100).toFixed(1)}%`);
 
     // Salvar extração no banco
     console.log("[DB] Salvando extração...");
@@ -235,7 +401,8 @@ REGRAS IMPORTANTES:
       document_id: documentIds[0],
       entities: extractedData,
       auto_filled_fields: extractedData,
-      missing_fields: missingFields,
+      missing_fields: missingRequiredFields,
+      observations: extractedData.observations || [],
       raw_text: JSON.stringify(validDocs.map(d => d.fileName)),
     });
 
@@ -252,6 +419,8 @@ REGRAS IMPORTANTES:
     if (extractedData.motherRg) updateData.author_rg = extractedData.motherRg;
     if (extractedData.motherBirthDate) updateData.author_birth_date = extractedData.motherBirthDate;
     if (extractedData.motherAddress) updateData.author_address = extractedData.motherAddress;
+    if (extractedData.motherPhone) updateData.author_phone = extractedData.motherPhone.replace(/\D/g, '');
+    if (extractedData.motherWhatsapp) updateData.author_whatsapp = extractedData.motherWhatsapp.replace(/\D/g, '');
     if (extractedData.maritalStatus) updateData.author_marital_status = extractedData.maritalStatus;
     
     // Dados da criança
@@ -269,7 +438,14 @@ REGRAS IMPORTANTES:
     if (extractedData.landOwnershipType) updateData.land_ownership_type = extractedData.landOwnershipType;
     
     // Atividade rural
-    if (extractedData.ruralActivitySince) updateData.rural_activity_since = extractedData.ruralActivitySince;
+    if (extractedData.ruralActivitySince) {
+      // Se for texto como "desde nascimento", tentar converter
+      if (extractedData.ruralActivitySince.toLowerCase().includes('nascimento') && extractedData.motherBirthDate) {
+        updateData.rural_activity_since = extractedData.motherBirthDate;
+      } else {
+        updateData.rural_activity_since = extractedData.ruralActivitySince;
+      }
+    }
     if (extractedData.familyMembers && Array.isArray(extractedData.familyMembers)) {
       updateData.family_members = JSON.stringify(extractedData.familyMembers);
     }
@@ -296,18 +472,19 @@ REGRAS IMPORTANTES:
         console.error("[DB] Erro ao atualizar caso:", updateError);
         throw updateError;
       }
-      console.log("[DB] Caso atualizado com sucesso");
+      console.log("[DB] Caso atualizado com sucesso ✓");
     } else {
       console.warn("[DB] Nenhum campo para atualizar");
     }
 
-    console.log("[SUCESSO] Processamento concluído");
+    console.log("[SUCESSO] Processamento concluído com sucesso ✓");
     return new Response(
       JSON.stringify({
         success: true,
         extractedData,
-        missingFields,
+        missingFields: missingRequiredFields,
         documentsProcessed: validDocs.length,
+        completenessRate: ((requiredFields.length - missingRequiredFields.length) / requiredFields.length * 100).toFixed(1) + '%'
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
