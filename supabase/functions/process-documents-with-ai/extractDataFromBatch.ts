@@ -42,35 +42,47 @@ export async function extractDataFromBatch(
    ✓ Endereço COMPLETO: Rua + Nº + Complemento + Bairro + Cidade + UF + CEP
    ✓ Nome do titular
 
-🔹 **AUTODECLARAÇÃO RURAL** (CRÍTICO - MÚLTIPLOS PERÍODOS!)
-   **INSTRUÇÕES ESPECIAIS**: Se o texto mencionar MÚLTIPLOS PERÍODOS, EXTRAIA TODOS!
+🔹 **AUTODECLARAÇÃO RURAL** (CRÍTICO - SEÇÕES ESPECÍFICAS!)
+
+📋 **SEÇÃO 2: PERÍODOS DE ATIVIDADE RURAL**
+   ✓ Tabela de períodos: DESDE XX/XX/XXXX ATÉ XX/XX/XXXX
+   ✓ CONDIÇÃO EM RELAÇÃO AO IMÓVEL: COMODATO/Proprietário/Arrendatário/etc
+   ✓ SITUAÇÃO: Individual ou Regime de Economia Familiar (checkbox)
    
-   Exemplo: "Morei de 1990 a 2000 com minha mãe no Sítio São José. 
-             Depois morei de 2001 a 2025 com meu esposo na Fazenda Esperança."
+   **SEÇÃO 2.1: CONDIÇÃO NO GRUPO**
+   ✓ Titular ou Componente do grupo familiar
    
-   → EXTRAIR 2 PERÍODOS SEPARADOS:
-   Período 1: {
-     startDate: "1990-01-01",
-     endDate: "2000-12-31",
-     location: "Sítio São José",
-     withWhom: "com minha mãe",
-     activities: "atividade rural"
-   }
-   Período 2: {
-     startDate: "2001-01-01",
-     endDate: "2025-12-31",
-     location: "Fazenda Esperança",
-     withWhom: "com meu esposo",
-     activities: "atividade rural"
-   }
+   **SEÇÃO 2.2: GRUPO FAMILIAR COMPLETO**
+   ✓ NOME + DN + CPF + ESTADO CIVIL + PARENTESCO de CADA membro
+   ✓ Extrair TODOS os membros listados na tabela
    
-   ✓ TODOS os períodos de atividade rural (início e fim)
-   ✓ Local de CADA período (sítio, fazenda, município)
-   ✓ Com quem morava em CADA período
-   ✓ Tipo de trabalho (lavoura, gado, agricultura familiar, etc)
-   ✓ Se menciona zona urbana, EXTRAIR também (urbanPeriods)
-   ✓ Membros da família que moram junto ATUALMENTE
-   ⚠️ NÃO agrupe períodos diferentes! Separe cada um!
+📋 **SEÇÃO 3: DADOS DA TERRA**
+   
+   **SEÇÃO 3.1: INFORMAÇÕES DO IMÓVEL**
+   ✓ FORMA DE CESSÃO: Comodato/Arrendamento/etc
+   ✓ PERÍODO: Desde quando até quando
+   ✓ ÁREA CEDIDA em hectare - ha (campo numérico)
+   ✓ Registro ITR (se possuir)
+   ✓ Nome da propriedade
+   ✓ Município/UF
+   ✓ Área total do imóvel (ha)
+   ✓ Área explorada pelo requerente (ha)
+   ✓ Nome do proprietário
+   ✓ CPF do Proprietário
+   
+   **SEÇÃO 3.2: ATIVIDADES RURAIS**
+   ✓ ATIVIDADE: Lista de culturas/criações
+   ✓ SUBSISTÊNCIA/VENDA: Checkbox marcado
+   
+   Exemplo:
+   - PLANTIO: CAFÉ, CACAU, BANANA, MANDIOCA, MILHO, ARROZ → Subsistência/Venda
+   - CRIAÇÃO: GALINHA E PORCO → Subsistência
+
+⚠️ **REGRA CRÍTICA**: 
+- Se o CPF do proprietário for DIFERENTE do CPF da autora/mãe → landOwnershipType = "terceiro"
+- Se o CPF do proprietário for IGUAL ao CPF da autora/mãe → landOwnershipType = "propria"
+- NÃO agrupe períodos diferentes! Separe cada um!
+- Se menciona zona urbana, EXTRAIR também (urbanPeriods)
 
 🔹 **DOCUMENTO DA TERRA / PROPRIEDADE**
    ✓ Nome do proprietário
@@ -190,7 +202,55 @@ Agora extraia TODOS os períodos rurais mencionados:`;
               landOwnerName: { type: "string", description: "Nome do proprietário da terra" },
               landOwnerCpf: { type: "string", description: "CPF do proprietário" },
               landOwnerRg: { type: "string", description: "RG do proprietário" },
-              landOwnershipType: { type: "string", description: "Tipo de relação com a terra" },
+              landOwnershipType: { type: "string", description: "Tipo de relação com a terra (propria ou terceiro)" },
+              
+              // Dados detalhados da terra (seção 3.1 e 3.2)
+              landArea: { 
+                type: "number", 
+                description: "Área cedida em hectares (campo 'ÁREA CEDIDA em hectare - ha')" 
+              },
+              landTotalArea: { 
+                type: "number", 
+                description: "Área total do imóvel em hectares" 
+              },
+              landExploitedArea: { 
+                type: "number", 
+                description: "Área explorada pelo requerente em hectares" 
+              },
+              landITR: { 
+                type: "string", 
+                description: "Registro ITR, se possuir" 
+              },
+              landPropertyName: { 
+                type: "string", 
+                description: "Nome da propriedade (sítio, fazenda, etc)" 
+              },
+              landMunicipality: { 
+                type: "string", 
+                description: "Município/UF onde fica o imóvel" 
+              },
+              landCessionType: { 
+                type: "string", 
+                description: "Forma de cessão (COMODATO, arrendamento, parceria, etc)" 
+              },
+
+              // Atividades rurais detalhadas (seção 3.2)
+              ruralActivitiesPlanting: { 
+                type: "string", 
+                description: "Atividades de PLANTIO (ex: 'CAFÉ, CACAU, BANANA, MANDIOCA, MILHO, ARROZ')" 
+              },
+              ruralActivitiesBreeding: { 
+                type: "string", 
+                description: "Atividades de CRIAÇÃO (ex: 'GALINHA E PORCO')" 
+              },
+              ruralActivitiesSubsistence: { 
+                type: "boolean", 
+                description: "Se é para subsistência" 
+              },
+              ruralActivitiesSale: { 
+                type: "boolean", 
+                description: "Se é para venda" 
+              },
               
               // Atividade rural
               ruralPeriods: {
@@ -227,7 +287,24 @@ Agora extraia TODOS os períodos rurais mencionados:`;
                     name: { type: "string" },
                     relationship: { type: "string" }
                   }
-                }
+                },
+                description: "Membros do grupo familiar (apenas nome e parentesco)"
+              },
+              
+              // Grupo familiar completo (seção 2.2)
+              familyMembersDetailed: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "Nome completo" },
+                    birthDate: { type: "string", description: "Data nascimento YYYY-MM-DD" },
+                    cpf: { type: "string", description: "CPF sem formatação (11 dígitos)" },
+                    maritalStatus: { type: "string", description: "Estado civil" },
+                    relationship: { type: "string", description: "Parentesco (marido, mãe, pai, etc)" }
+                  }
+                },
+                description: "Lista COMPLETA de membros do grupo familiar conforme seção 2.2 da autodeclaração"
               },
               
               // Processo administrativo

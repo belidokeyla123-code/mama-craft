@@ -330,6 +330,38 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     if (extractedData.landOwnerRg) updateData.land_owner_rg = extractedData.landOwnerRg;
     if (extractedData.landOwnershipType) updateData.land_ownership_type = extractedData.landOwnershipType;
     
+    // Dados detalhados da terra
+    if (extractedData.landArea) updateData.land_area = extractedData.landArea;
+    if (extractedData.landTotalArea) updateData.land_total_area = extractedData.landTotalArea;
+    if (extractedData.landExploitedArea) updateData.land_exploited_area = extractedData.landExploitedArea;
+    if (extractedData.landITR) updateData.land_itr = extractedData.landITR;
+    if (extractedData.landPropertyName) updateData.land_property_name = extractedData.landPropertyName;
+    if (extractedData.landMunicipality) updateData.land_municipality = extractedData.landMunicipality;
+    if (extractedData.landCessionType) updateData.land_cession_type = extractedData.landCessionType;
+
+    // Atividades rurais detalhadas
+    if (extractedData.ruralActivitiesPlanting) updateData.rural_activities_planting = extractedData.ruralActivitiesPlanting;
+    if (extractedData.ruralActivitiesBreeding) updateData.rural_activities_breeding = extractedData.ruralActivitiesBreeding;
+
+    // Grupo familiar detalhado
+    if (extractedData.familyMembersDetailed && extractedData.familyMembersDetailed.length > 0) {
+      updateData.family_members = extractedData.familyMembersDetailed;
+    }
+
+    // Lógica terra própria vs terceiro (AUTOMÁTICA baseada em CPF)
+    if (extractedData.landOwnerCpf && extractedData.motherCpf) {
+      const ownerCpfClean = extractedData.landOwnerCpf.replace(/\D/g, '');
+      const motherCpfClean = extractedData.motherCpf.replace(/\D/g, '');
+      
+      if (ownerCpfClean === motherCpfClean) {
+        updateData.land_ownership_type = "propria";
+        console.log('[TERRA] Detectado: TERRA PRÓPRIA (CPF proprietário = CPF autora)');
+      } else {
+        updateData.land_ownership_type = "terceiro";
+        console.log('[TERRA] Detectado: TERRA DE TERCEIRO (CPF proprietário ≠ CPF autora)');
+      }
+    }
+    
     // Atividade rural com períodos estruturados
     if (extractedData.ruralPeriods && Array.isArray(extractedData.ruralPeriods) && extractedData.ruralPeriods.length > 0) {
       updateData.rural_periods = extractedData.ruralPeriods;

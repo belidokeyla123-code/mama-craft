@@ -473,6 +473,130 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         </Card>
       )}
 
+      {/* SEÇÃO 4.5: DADOS DA TERRA (apenas se especial) */}
+      {data.profile === "especial" && (
+        <Card className="p-6 bg-green-50/50 dark:bg-green-950/20">
+          <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-green-600" />
+            Dados da Terra / Propriedade Rural
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Área cedida */}
+            <div className="space-y-2">
+              <Label htmlFor="landArea">Área Cedida (hectares)</Label>
+              <Input
+                id="landArea"
+                type="number"
+                step="0.01"
+                value={data.landArea || ""}
+                onChange={(e) => updateData({ landArea: parseFloat(e.target.value) || undefined })}
+                placeholder="Ex: 52.17"
+              />
+            </div>
+
+            {/* Área total */}
+            <div className="space-y-2">
+              <Label htmlFor="landTotalArea">Área Total (hectares)</Label>
+              <Input
+                id="landTotalArea"
+                type="number"
+                step="0.01"
+                value={data.landTotalArea || ""}
+                onChange={(e) => updateData({ landTotalArea: parseFloat(e.target.value) || undefined })}
+                placeholder="Ex: 52.0"
+              />
+            </div>
+
+            {/* Área explorada */}
+            <div className="space-y-2">
+              <Label htmlFor="landExploitedArea">Área Explorada (hectares)</Label>
+              <Input
+                id="landExploitedArea"
+                type="number"
+                step="0.01"
+                value={data.landExploitedArea || ""}
+                onChange={(e) => updateData({ landExploitedArea: parseFloat(e.target.value) || undefined })}
+                placeholder="Ex: 10.0"
+              />
+            </div>
+
+            {/* Forma de cessão */}
+            <div className="space-y-2">
+              <Label htmlFor="landCessionType">Forma de Cessão</Label>
+              <Input
+                id="landCessionType"
+                value={data.landCessionType || ""}
+                onChange={(e) => updateData({ landCessionType: e.target.value })}
+                placeholder="Ex: COMODATO, Arrendamento"
+              />
+            </div>
+
+            {/* Registro ITR */}
+            <div className="space-y-2">
+              <Label htmlFor="landITR">Registro ITR</Label>
+              <Input
+                id="landITR"
+                value={data.landITR || ""}
+                onChange={(e) => updateData({ landITR: e.target.value })}
+                placeholder="NÃO POSSUI ou número do ITR"
+              />
+            </div>
+
+            {/* Nome da propriedade */}
+            <div className="space-y-2">
+              <Label htmlFor="landPropertyName">Nome da Propriedade</Label>
+              <Input
+                id="landPropertyName"
+                value={data.landPropertyName || ""}
+                onChange={(e) => updateData({ landPropertyName: e.target.value })}
+                placeholder="Ex: Sítio Santa Rita"
+              />
+            </div>
+
+            {/* Município */}
+            <div className="space-y-2 col-span-full">
+              <Label htmlFor="landMunicipality">Município/UF do Imóvel</Label>
+              <Input
+                id="landMunicipality"
+                value={data.landMunicipality || ""}
+                onChange={(e) => updateData({ landMunicipality: e.target.value })}
+                placeholder="Ex: Porto Velho/RO"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 pt-6 border-t">
+            <h4 className="font-semibold mb-4">Atividades Rurais Desenvolvidas</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Atividades de plantio */}
+              <div className="space-y-2">
+                <Label htmlFor="ruralActivitiesPlanting">Plantio / Culturas</Label>
+                <Textarea
+                  id="ruralActivitiesPlanting"
+                  value={data.ruralActivitiesPlanting || ""}
+                  onChange={(e) => updateData({ ruralActivitiesPlanting: e.target.value })}
+                  placeholder="Ex: CAFÉ, CACAU, BANANA, MANDIOCA, MILHO, ARROZ"
+                  rows={3}
+                />
+              </div>
+
+              {/* Atividades de criação */}
+              <div className="space-y-2">
+                <Label htmlFor="ruralActivitiesBreeding">Criação de Animais</Label>
+                <Textarea
+                  id="ruralActivitiesBreeding"
+                  value={data.ruralActivitiesBreeding || ""}
+                  onChange={(e) => updateData({ ruralActivitiesBreeding: e.target.value })}
+                  placeholder="Ex: GALINHA E PORCO, GADO"
+                  rows={3}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* SEÇÃO 5: PERÍODOS DE ATIVIDADE RURAL (apenas se especial) */}
       {data.profile === "especial" && (
         <Card className="p-6">

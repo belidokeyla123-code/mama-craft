@@ -54,6 +54,19 @@ export interface CaseData {
   landOwnerRg?: string;
   landOwnershipType?: "propria" | "terceiro";
   
+  // Dados detalhados da terra
+  landArea?: number;
+  landTotalArea?: number;
+  landExploitedArea?: number;
+  landITR?: string;
+  landPropertyName?: string;
+  landMunicipality?: string;
+  landCessionType?: string;
+  
+  // Atividades rurais detalhadas
+  ruralActivitiesPlanting?: string;
+  ruralActivitiesBreeding?: string;
+  
   // Atividade rural (agora com períodos estruturados)
   ruralActivitySince?: string;
   ruralPeriods?: RuralPeriod[];

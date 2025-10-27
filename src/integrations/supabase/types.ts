@@ -352,16 +352,25 @@ export type Database = {
           has_ra: boolean | null
           has_special_situation: boolean | null
           id: string
+          land_area: number | null
+          land_cession_type: string | null
+          land_exploited_area: number | null
+          land_itr: string | null
+          land_municipality: string | null
           land_owner_cpf: string | null
           land_owner_name: string | null
           land_owner_rg: string | null
           land_ownership_type: string | null
+          land_property_name: string | null
+          land_total_area: number | null
           profile: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date: string | null
           ra_denial_reason: string | null
           ra_protocol: string | null
           ra_request_date: string | null
           rmi_calculated: number | null
+          rural_activities_breeding: string | null
+          rural_activities_planting: string | null
           rural_activity_since: string | null
           rural_periods: Json | null
           salario_minimo_history: Json | null
@@ -393,16 +402,25 @@ export type Database = {
           has_ra?: boolean | null
           has_special_situation?: boolean | null
           id?: string
+          land_area?: number | null
+          land_cession_type?: string | null
+          land_exploited_area?: number | null
+          land_itr?: string | null
+          land_municipality?: string | null
           land_owner_cpf?: string | null
           land_owner_name?: string | null
           land_owner_rg?: string | null
           land_ownership_type?: string | null
+          land_property_name?: string | null
+          land_total_area?: number | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
           ra_protocol?: string | null
           ra_request_date?: string | null
           rmi_calculated?: number | null
+          rural_activities_breeding?: string | null
+          rural_activities_planting?: string | null
           rural_activity_since?: string | null
           rural_periods?: Json | null
           salario_minimo_history?: Json | null
@@ -434,16 +452,25 @@ export type Database = {
           has_ra?: boolean | null
           has_special_situation?: boolean | null
           id?: string
+          land_area?: number | null
+          land_cession_type?: string | null
+          land_exploited_area?: number | null
+          land_itr?: string | null
+          land_municipality?: string | null
           land_owner_cpf?: string | null
           land_owner_name?: string | null
           land_owner_rg?: string | null
           land_ownership_type?: string | null
+          land_property_name?: string | null
+          land_total_area?: number | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
           ra_protocol?: string | null
           ra_request_date?: string | null
           rmi_calculated?: number | null
+          rural_activities_breeding?: string | null
+          rural_activities_planting?: string | null
           rural_activity_since?: string | null
           rural_periods?: Json | null
           salario_minimo_history?: Json | null
