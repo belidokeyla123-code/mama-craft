@@ -173,12 +173,24 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         }
       }
       
-      console.log(`[UPLOAD] Total de arquivos a enviar: ${processedFiles.length}`);
+      // Buscar nome da autora para criar a pasta
+      const { data: caseInfo, error: caseError } = await supabase
+        .from("cases")
+        .select("author_name")
+        .eq("id", caseId)
+        .single();
+
+      if (caseError) throw caseError;
+      
+      const clientFolderName = caseInfo.author_name || `caso_${caseId.slice(0, 8)}`;
+      console.log(`[UPLOAD] Criando pasta para cliente: ${clientFolderName}`);
 
       // Upload dos arquivos processados para o Storage
       const uploadPromises = processedFiles.map(async (file) => {
         const fileExt = file.name.split('.').pop();
-        const fileName = `${caseId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(7);
+        const fileName = `${clientFolderName}/${timestamp}_${randomId}.${fileExt}`;
         
         const { error: uploadError } = await supabase.storage
           .from("case-documents")
@@ -205,6 +217,14 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       });
 
       const documents = await Promise.all(uploadPromises);
+      
+      // Atualizar status do caso para "ready" (em análise)
+      await supabase
+        .from("cases")
+        .update({ status: "ready" })
+        .eq("id", caseId);
+
+      console.log(`[UPLOAD] ✓ Pasta "${clientFolderName}" criada com ${documents.length} documento(s)`);
 
       // Chamar edge function para extrair informações
       const { data: extractionResult, error: extractionError } = await supabase.functions.invoke(

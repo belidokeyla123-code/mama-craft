@@ -2,8 +2,9 @@ import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Copy, CheckCheck } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface StepDraftProps {
   data: CaseData;
@@ -12,6 +13,22 @@ interface StepDraftProps {
 
 export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [copied, setCopied] = useState(false);
+
+  // Atualizar status para "drafted" quando a minuta estiver pronta
+  useEffect(() => {
+    const updateStatus = async () => {
+      if (data.caseId) {
+        await supabase
+          .from("cases")
+          .update({ status: "drafted" })
+          .eq("id", data.caseId);
+        
+        console.log(`[DRAFT] Status do caso ${data.caseId} atualizado para "drafted"`);
+      }
+    };
+    
+    updateStatus();
+  }, [data.caseId]);
 
   const generateExceptionLegalText = (exceptions?: Array<{ type: string; description: string }>) => {
     if (!exceptions || exceptions.length === 0) return '';
