@@ -12,5 +12,23 @@ verify_jwt = false
 [functions.voice-to-text]
 verify_jwt = false
 
+[functions.validate-case-documents]
+verify_jwt = false
+
+[functions.analyze-case-legal]
+verify_jwt = false
+
+[functions.search-jurisprudence]
+verify_jwt = false
+
+[functions.generate-petition]
+verify_jwt = false
+
+[functions.analyze-petition-judge-view]
+verify_jwt = false
+
+[functions.adapt-petition-regional]
+verify_jwt = false
+
 [functions.detect-special-situation]
 verify_jwt = false

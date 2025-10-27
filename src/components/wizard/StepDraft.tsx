@@ -1,7 +1,10 @@
 import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Copy, CheckCheck } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,8 +14,46 @@ interface StepDraftProps {
   updateData: (data: Partial<CaseData>) => void;
 }
 
+interface JudgeAnalysis {
+  brechas: Array<{
+    tipo: string;
+    descricao: string;
+    gravidade: string;
+    localizacao: string;
+    sugestao: string;
+  }>;
+  pontos_fortes: string[];
+  pontos_fracos: string[];
+  risco_improcedencia: number;
+  recomendacoes: string[];
+}
+
+interface RegionalAdaptation {
+  trf: string;
+  tendencias: string[];
+  estilo_preferido: string;
+  jurisprudencias_locais_sugeridas: Array<{
+    numero: string;
+    tese: string;
+    motivo: string;
+  }>;
+  adaptacoes_sugeridas: Array<{
+    secao: string;
+    adaptacao: string;
+    justificativa: string;
+  }>;
+  petition_adaptada?: string;
+}
+
 export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [petition, setPetition] = useState("");
+  const [judgeAnalysis, setJudgeAnalysis] = useState<JudgeAnalysis | null>(null);
+  const [regionalAdaptation, setRegionalAdaptation] = useState<RegionalAdaptation | null>(null);
+  const [analyzingJudge, setAnalyzingJudge] = useState(false);
+  const [adaptingRegional, setAdaptingRegional] = useState(false);
+  const [templateFile, setTemplateFile] = useState<File | null>(null);
 
   // Atualizar status para "drafted" quando a minuta estiver pronta
   useEffect(() => {
@@ -30,75 +71,126 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     updateStatus();
   }, [data.caseId]);
 
-  const generateExceptionLegalText = (exceptions?: Array<{ type: string; description: string }>) => {
-    if (!exceptions || exceptions.length === 0) return '';
+  useEffect(() => {
+    if (data.caseId && !petition) {
+      generatePetition();
+    }
+  }, [data.caseId]);
+
+  const generatePetition = async () => {
+    if (!data.caseId) return;
     
-    return exceptions.map(exc => {
-      switch(exc.type) {
-        case 'obito_filho':
-          return `\n**SITUAÇÃO ESPECIAL - ÓBITO DO FILHO:**\n\nImportante ressaltar que, embora o filho tenha falecido, o direito ao salário-maternidade persiste, conforme jurisprudência consolidada do STJ (REsp 1.452.732/SP), uma vez que o fato gerador do benefício é o parto, independentemente da sobrevivência do nascituro.\n\nDescrição: ${exc.description}`;
-        
-        case 'gemeos':
-          return `\n**SITUAÇÃO ESPECIAL - PARTO MÚLTIPLO:**\n\nTrata-se de caso de parto múltiplo (gêmeos), o que, segundo jurisprudência pacífica, pode ensejar o pagamento de salário-maternidade em dobro, considerando a duplicidade de eventos geradores.\n\nDescrição: ${exc.description}`;
-        
-        case 'prematuridade':
-          return `\n**SITUAÇÃO ESPECIAL - PREMATURIDADE:**\n\nO parto ocorreu de forma prematura, conforme documentação anexa, o que não afasta o direito ao benefício, visto que a lei não estabelece idade gestacional mínima.\n\nDescrição: ${exc.description}`;
-        
-        default:
-          return `\n**SITUAÇÃO ESPECIAL:**\n\n${exc.description}`;
+    setLoading(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('generate-petition', {
+        body: { 
+          caseId: data.caseId,
+          selectedJurisprudencias: [] // TODO: passar jurisprudências selecionadas
+        }
+      });
+
+      if (error) throw error;
+
+      if (result?.petition) {
+        setPetition(result.petition);
+        toast.success("Petição gerada com sucesso!");
       }
-    }).join('\n');
+    } catch (error) {
+      console.error('Erro ao gerar petição:', error);
+      toast.error('Erro ao gerar petição');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const mockDraft = `EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA VARA ÚNICA DE [CIDADE]/[UF]
+  const analyzeWithJudgeModule = async () => {
+    if (!petition) {
+      toast.error("Gere a petição primeiro");
+      return;
+    }
 
-SALÁRIO-MATERNIDADE
+    setAnalyzingJudge(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('analyze-petition-judge-view', {
+        body: { petition }
+      });
 
-${data.authorName}, brasileira, ${data.authorMaritalStatus || "estado civil"}, portadora do CPF ${data.authorCpf}${data.authorRg ? `, RG ${data.authorRg}` : ''}, residente e domiciliada ${data.authorAddress || "endereço"}, vem, por intermédio de seu advogado, com fundamento nos artigos 71 e seguintes da Lei 8.213/91, propor a presente
+      if (error) throw error;
 
-AÇÃO DE CONCESSÃO DE SALÁRIO-MATERNIDADE
+      if (result) {
+        setJudgeAnalysis(result);
+        toast.success("Análise crítica concluída!");
+      }
+    } catch (error) {
+      console.error('Erro ao analisar petição:', error);
+      toast.error('Erro ao analisar petição');
+    } finally {
+      setAnalyzingJudge(false);
+    }
+  };
 
-em face do INSTITUTO NACIONAL DO SEGURO SOCIAL - INSS, pelos fatos e fundamentos jurídicos a seguir expostos:
+  const adaptToRegion = async () => {
+    if (!petition) {
+      toast.error("Gere a petição primeiro");
+      return;
+    }
 
-I - DOS FATOS
+    const estado = data.authorAddress?.match(/[A-Z]{2}$/)?.[0] || 'SP';
+    
+    setAdaptingRegional(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('adapt-petition-regional', {
+        body: { petition, estado }
+      });
 
-A autora é ${data.profile === "especial" ? "segurada especial" : "segurada urbana"} e teve ${data.eventType === "parto" ? `parto de ${data.childName || "seu filho"}` : data.eventType} em ${data.childBirthDate || data.eventDate}.${data.fatherName ? ` O pai da criança é ${data.fatherName}.` : ''}
-${data.hasSpecialSituation && data.specialNotes ? generateExceptionLegalText(data.exceptions) : ''}
-${data.profile === "especial" && data.ruralActivitySince ? `\n\nA autora desenvolve atividade rural desde ${data.ruralActivitySince}${data.landOwnershipType === 'terceiro' && data.landOwnerName ? `, em regime de economia familiar, em terra de propriedade de ${data.landOwnerName}` : ''}.` : ''}
-${data.hasRa && data.raProtocol ? `\n\nA autora requereu administrativamente o benefício sob o protocolo ${data.raProtocol} em ${data.raRequestDate}, sendo indeferido em ${data.raDenialDate} sob o fundamento de: "${data.raDenialReason}".` : ''}
+      if (error) throw error;
 
-[Análise detalhada será gerada pela IA nas próximas fases]
+      if (result) {
+        setRegionalAdaptation(result);
+        if (result.petition_adaptada) {
+          setPetition(result.petition_adaptada);
+          toast.success(`Petição adaptada para ${result.trf}`);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao adaptar petição:', error);
+      toast.error('Erro ao adaptar petição regionalmente');
+    } finally {
+      setAdaptingRegional(false);
+    }
+  };
 
-II - DO DIREITO
-
-[Fundamentos legais e jurisprudência serão inseridos aqui]
-
-III - DOS PEDIDOS
-
-Diante do exposto, requer:
-
-a) A concessão do benefício de salário-maternidade;${data.exceptions?.some(e => e.type === 'gemeos') ? '\na.1) Considerando o parto múltiplo (gêmeos), o pagamento em dobro do benefício;' : ''}
-b) O pagamento das parcelas de 120 dias no valor de R$ ${data.salarioMinimoRef.toFixed(2)} cada;
-c) Valor da causa: R$ ${(data.salarioMinimoRef * 4).toFixed(2)};
-d) A citação do INSS.
-
-Termos em que,
-Pede deferimento.
-
-[Cidade], [Data]
-
-[Advogado]
-OAB/[UF] [número]`;
+  const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        toast.error('Por favor, envie apenas arquivos .docx');
+        return;
+      }
+      setTemplateFile(file);
+      toast.success(`Template "${file.name}" carregado`);
+      toast.info("Funcionalidade de merge com template será implementada em breve");
+    }
+  };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(mockDraft);
+    navigator.clipboard.writeText(petition);
     setCopied(true);
-    toast.success("Minuta copiada!");
+    toast.success("Petição copiada!");
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
-    toast.info("Download DOCX será implementado nas próximas fases");
+    toast.info("Download DOCX com formatação ABNT será implementado em breve");
+  };
+
+  const getSeverityColor = (gravidade: string) => {
+    switch (gravidade) {
+      case 'alta': return 'destructive';
+      case 'media': return 'default';
+      case 'baixa': return 'secondary';
+      default: return 'outline';
+    }
   };
 
   return (
@@ -106,33 +198,300 @@ OAB/[UF] [número]`;
       <div>
         <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
           <FileText className="h-7 w-7 text-primary" />
-          Minuta da Petição Inicial
+          Petição Inicial Completa
         </h2>
         <p className="text-muted-foreground">
-          Preview e exportação da petição gerada
+          Petição gerada com formatação ABNT, persuasão e análise crítica
         </p>
       </div>
 
-      <div className="flex gap-3">
-        <Button onClick={handleCopy} className="gap-2">
+      {/* Seção 1: Geração e Ações */}
+      <div className="flex flex-wrap gap-3">
+        <Button onClick={generatePetition} disabled={loading} className="gap-2">
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Gerando...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Gerar Nova Versão
+            </>
+          )}
+        </Button>
+        <Button onClick={handleCopy} variant="outline" disabled={!petition} className="gap-2">
           {copied ? <CheckCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           {copied ? "Copiado!" : "Copiar"}
         </Button>
-        <Button onClick={handleDownload} variant="outline" className="gap-2">
+        <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
-          Baixar DOCX
+          Baixar DOCX (ABNT)
         </Button>
-      </div>
-
-      <Card className="p-6">
-        <div className="bg-muted/30 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
-          {mockDraft}
+        <div>
+          <input
+            type="file"
+            accept=".docx"
+            onChange={handleTemplateUpload}
+            className="hidden"
+            id="template-upload"
+          />
+          <label htmlFor="template-upload">
+            <Button variant="outline" className="gap-2" asChild>
+              <span>
+                <Upload className="h-4 w-4" />
+                Enviar Modelo com Placeholders
+              </span>
+            </Button>
+          </label>
         </div>
-      </Card>
-
-      <div className="text-center text-sm text-muted-foreground">
-        Esta é uma versão simplificada. A geração completa com seu template DOCX será implementada nas próximas fases.
+        {templateFile && (
+          <Badge variant="secondary" className="px-3 py-2">
+            Template: {templateFile.name}
+          </Badge>
+        )}
       </div>
+
+      {/* Petição Gerada */}
+      {loading ? (
+        <Card className="p-12">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="text-lg font-medium">Gerando petição inicial completa...</p>
+            <p className="text-sm text-muted-foreground">
+              Aplicando técnicas de PNL, formatação ABNT e argumentação persuasiva
+            </p>
+          </div>
+        </Card>
+      ) : petition ? (
+        <Card className="p-6">
+          <div className="bg-muted/30 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+            {petition}
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-8 text-center text-muted-foreground">
+          Clique em "Gerar Nova Versão" para criar a petição inicial
+        </Card>
+      )}
+
+      {/* Seção 2: Módulo Juiz */}
+      {petition && (
+        <Card className="p-6 border-2 border-orange-200 dark:border-orange-900">
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <Target className="h-6 w-6 text-orange-600" />
+                  <div>
+                    <h3 className="text-xl font-bold">Módulo Juiz - Análise Crítica</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Identifique brechas e pontos fracos antes do protocolo
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={analyzeWithJudgeModule} disabled={analyzingJudge}>
+                  {analyzingJudge ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Analisando...
+                    </>
+                  ) : (
+                    "Analisar como Juiz"
+                  )}
+                </Button>
+              </div>
+            </CollapsibleTrigger>
+
+            {judgeAnalysis && (
+              <CollapsibleContent className="mt-6 space-y-4">
+                {/* Risco de Improcedência */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">Risco de Improcedência</p>
+                    <Badge variant={judgeAnalysis.risco_improcedencia > 50 ? 'destructive' : 'default'}>
+                      {judgeAnalysis.risco_improcedencia}%
+                    </Badge>
+                  </div>
+                  <Progress value={judgeAnalysis.risco_improcedencia} className="h-2" />
+                </div>
+
+                {/* Brechas Identificadas */}
+                {judgeAnalysis.brechas.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Brechas Identificadas
+                    </h4>
+                    {judgeAnalysis.brechas.map((brecha, index) => (
+                      <Card key={index} className="p-4 border-l-4" style={{
+                        borderLeftColor: brecha.gravidade === 'alta' ? 'hsl(var(--destructive))' : 
+                                       brecha.gravidade === 'media' ? 'hsl(var(--warning))' : 
+                                       'hsl(var(--muted))'
+                      }}>
+                        <div className="flex items-start justify-between mb-2">
+                          <Badge variant={getSeverityColor(brecha.gravidade) as any}>
+                            {brecha.tipo} - {brecha.gravidade}
+                          </Badge>
+                        </div>
+                        <p className="font-medium mb-1">{brecha.descricao}</p>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Local: {brecha.localizacao}
+                        </p>
+                        <div className="bg-muted/50 p-3 rounded mt-2">
+                          <p className="text-sm">
+                            <strong>Sugestão:</strong> {brecha.sugestao}
+                          </p>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* Pontos Fortes e Fracos */}
+                <div className="grid grid-cols-2 gap-4">
+                  <Card className="p-4">
+                    <h4 className="font-semibold text-green-600 mb-2">Pontos Fortes</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      {judgeAnalysis.pontos_fortes.map((ponto, index) => (
+                        <li key={index}>{ponto}</li>
+                      ))}
+                    </ul>
+                  </Card>
+                  <Card className="p-4">
+                    <h4 className="font-semibold text-red-600 mb-2">Pontos Fracos</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      {judgeAnalysis.pontos_fracos.map((ponto, index) => (
+                        <li key={index}>{ponto}</li>
+                      ))}
+                    </ul>
+                  </Card>
+                </div>
+
+                {/* Recomendações */}
+                {judgeAnalysis.recomendacoes.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">Recomendações</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      {judgeAnalysis.recomendacoes.map((rec, index) => (
+                        <li key={index}>{rec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CollapsibleContent>
+            )}
+          </Collapsible>
+        </Card>
+      )}
+
+      {/* Seção 3: Módulo Tribunal */}
+      {petition && (
+        <Card className="p-6 border-2 border-blue-200 dark:border-blue-900">
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-6 w-6 text-blue-600" />
+                  <div>
+                    <h3 className="text-xl font-bold">Módulo Tribunal - Adaptação Regional</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Adapte a petição ao estilo e entendimento do tribunal local
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={adaptToRegion} disabled={adaptingRegional}>
+                  {adaptingRegional ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Adaptando...
+                    </>
+                  ) : (
+                    "Adaptar para Região"
+                  )}
+                </Button>
+              </div>
+            </CollapsibleTrigger>
+
+            {regionalAdaptation && (
+              <CollapsibleContent className="mt-6 space-y-4">
+                {/* Identificação do TRF */}
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline" className="text-lg px-4 py-2">
+                    {regionalAdaptation.trf}
+                  </Badge>
+                  <p className="text-sm text-muted-foreground">
+                    Tribunal Regional Federal identificado
+                  </p>
+                </div>
+
+                {/* Tendências do Tribunal */}
+                {regionalAdaptation.tendencias.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">Tendências do {regionalAdaptation.trf}</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      {regionalAdaptation.tendencias.map((tend, index) => (
+                        <li key={index}>{tend}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Estilo Preferido */}
+                <Card className="p-4 bg-blue-50 dark:bg-blue-950">
+                  <h4 className="font-semibold mb-2">Estilo Argumentativo Preferido</h4>
+                  <p className="text-sm">{regionalAdaptation.estilo_preferido}</p>
+                </Card>
+
+                {/* Jurisprudências Locais */}
+                {regionalAdaptation.jurisprudencias_locais_sugeridas.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Jurisprudências Locais Recomendadas</h4>
+                    {regionalAdaptation.jurisprudencias_locais_sugeridas.map((juris, index) => (
+                      <Card key={index} className="p-4">
+                        <p className="text-sm font-medium mb-1">{juris.numero}</p>
+                        <p className="text-sm mb-2">{juris.tese}</p>
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Por que usar:</strong> {juris.motivo}
+                        </p>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* Adaptações Sugeridas */}
+                {regionalAdaptation.adaptacoes_sugeridas.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Adaptações Sugeridas por Seção</h4>
+                    {regionalAdaptation.adaptacoes_sugeridas.map((adapt, index) => (
+                      <Card key={index} className="p-4">
+                        <Badge variant="outline" className="mb-2">{adapt.secao}</Badge>
+                        <p className="text-sm mb-2">{adapt.adaptacao}</p>
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Justificativa:</strong> {adapt.justificativa}
+                        </p>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CollapsibleContent>
+            )}
+          </Collapsible>
+        </Card>
+      )}
+
+      {/* Ações Finais */}
+      {petition && (
+        <div className="flex gap-3">
+          <Button size="lg" className="gap-2">
+            <CheckCheck className="h-5 w-5" />
+            Salvar Versão Final
+          </Button>
+          <Button size="lg" variant="outline" className="gap-2">
+            Marcar como Protocolada
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
