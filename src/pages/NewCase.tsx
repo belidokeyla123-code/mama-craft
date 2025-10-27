@@ -13,6 +13,20 @@ import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
 import { StepDraft } from "@/components/wizard/StepDraft";
 import { toast } from "sonner";
 
+export interface RuralPeriod {
+  startDate: string;
+  endDate?: string;
+  location: string;
+  withWhom?: string;
+  activities?: string;
+}
+
+export interface UrbanPeriod {
+  startDate: string;
+  endDate: string;
+  details: string;
+}
+
 export interface CaseData {
   // Identificação da autora
   authorName: string;
@@ -40,8 +54,10 @@ export interface CaseData {
   landOwnerRg?: string;
   landOwnershipType?: "propria" | "terceiro";
   
-  // Atividade rural
+  // Atividade rural (agora com períodos estruturados)
   ruralActivitySince?: string;
+  ruralPeriods?: RuralPeriod[];
+  urbanPeriods?: UrbanPeriod[];
   familyMembers?: string[];
   
   // RA
@@ -62,6 +78,7 @@ export interface CaseData {
   
   // Referência
   salarioMinimoRef: number;
+  salarioMinimoHistory?: Array<{ year: number; value: number }>;
   
   // Documentos
   documents: File[];
@@ -96,6 +113,9 @@ const NewCase = () => {
     profile: "especial",
     hasRa: false,
     salarioMinimoRef: 1412.00,
+    ruralPeriods: [],
+    urbanPeriods: [],
+    salarioMinimoHistory: [],
     documents: [],
   });
 

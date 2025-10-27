@@ -130,54 +130,152 @@ serve(async (req) => {
     console.log("[IA] Chamando OpenAI GPT-4o com visão para extrair dados...");
     console.log(`[IA] Total de imagens: ${validDocs.length}`);
     
-    const systemPrompt = `Você é um assistente especializado em extrair informações de documentos previdenciários brasileiros com OCR avançado.
+    const systemPrompt = `Você é um especialista em OCR e extração de dados de documentos previdenciários brasileiros. Sua missão é extrair TODAS as informações visíveis com MÁXIMA PRECISÃO.
 
-TIPOS DE DOCUMENTOS E O QUE EXTRAIR:
+═══════════════════════════════════════════════════════════════
+📋 TIPOS DE DOCUMENTOS E INSTRUÇÕES ESPECÍFICAS
+═══════════════════════════════════════════════════════════════
 
-**Certidão de Nascimento:**
-- Nome COMPLETO da criança
-- Data de nascimento DD/MM/AAAA
-- Local de nascimento (cidade e UF)
-- Nome COMPLETO do pai
-- Nome COMPLETO da mãe
-- Data de nascimento da mãe (se constar na seção DADOS DA MÃE)
+🔹 **CERTIDÃO DE NASCIMENTO** (CRÍTICO!)
+   LEIA A SEÇÃO "DADOS DA MÃE" E "DADOS DO PAI" COM ATENÇÃO:
+   ✓ Nome COMPLETO da criança (campo principal na certidão)
+   ✓ Data de nascimento da criança DD/MM/AAAA (CAMPO CRÍTICO!)
+   ✓ Local de nascimento (cidade e UF)
+   ✓ Nome COMPLETO da mãe (na seção "DADOS DA MÃE")
+   ✓ Data de nascimento da mãe (se constar na certidão)
+   ✓ Nome COMPLETO do pai (na seção "DADOS DO PAI")
+   ⚠️ Se tiver CARIMBO ou MANUSCRITO, leia também!
 
-**CPF/RG/CNH:**
-- Nome completo exatamente como aparece
-- CPF (apenas números, sem pontos ou traços)
-- RG (com órgão expedidor)
-- Data de nascimento DD/MM/AAAA
-- Filiação (nome da mãe e do pai)
+🔹 **CPF / RG / CNH / IDENTIDADE**
+   ✓ Nome completo EXATAMENTE como aparece
+   ✓ CPF (apenas 11 números, sem pontos ou traços)
+   ✓ RG com órgão expedidor (ex: "12.345.678-9 SSP/MG")
+   ✓ Data de nascimento DD/MM/AAAA
+   ✓ Nome da mãe (filiação)
+   ✓ Endereço (se constar)
+   ⚠️ Leia até números manuscritos e carimbos!
 
-**Comprovante de Residência:**
-- Endereço COMPLETO (rua + número + complemento + bairro + cidade + UF + CEP)
-- Nome do titular
+🔹 **COMPROVANTE DE RESIDÊNCIA**
+   ✓ Endereço COMPLETO: Rua + Nº + Complemento + Bairro + Cidade + UF + CEP
+   ✓ Nome do titular
+   ⚠️ Extraia o endereço COMPLETO, não apenas parte dele
 
-**Autodeclaração Rural:**
-- Desde quando trabalha na atividade rural (data ou "desde nascimento")
-- Membros da família que moram junto
-- Tipo de trabalho (lavoura, criação, etc)
-- Se menciona ser proprietária ou trabalhar em terra de terceiro
+🔹 **AUTODECLARAÇÃO RURAL** (CRÍTICO - MÚLTIPLOS PERÍODOS!)
+   **INSTRUÇÕES ESPECIAIS**: Se o texto mencionar MÚLTIPLOS PERÍODOS, EXTRAIA TODOS!
+   
+   Exemplo: "Morei de 1990 a 2000 com minha mãe no Sítio São José. 
+             Depois morei de 2001 a 2025 com meu esposo na Fazenda Esperança."
+   
+   → EXTRAIR 2 PERÍODOS SEPARADOS:
+   Período 1: {
+     startDate: "1990-01-01",
+     endDate: "2000-12-31",
+     location: "Sítio São José",
+     withWhom: "com minha mãe",
+     activities: "atividade rural"
+   }
+   Período 2: {
+     startDate: "2001-01-01",
+     endDate: "2025-12-31", (ou deixar vazio se ainda ativo)
+     location: "Fazenda Esperança",
+     withWhom: "com meu esposo",
+     activities: "atividade rural"
+   }
+   
+   ✓ TODOS os períodos de atividade rural (início e fim)
+   ✓ Local de CADA período (sítio, fazenda, município)
+   ✓ Com quem morava em CADA período
+   ✓ Tipo de trabalho (lavoura, gado, agricultura familiar, etc)
+   ✓ Se menciona zona urbana, EXTRAIR também (urbanPeriods)
+   ✓ Membros da família que moram junto ATUALMENTE
+   ⚠️ NÃO agrupe períodos diferentes! Separe cada um!
 
-**Documento da Terra:**
-- Nome do proprietário
-- CPF/RG do proprietário
-- Tipo de propriedade
+🔹 **DOCUMENTO DA TERRA / PROPRIEDADE**
+   ✓ Nome do proprietário
+   ✓ CPF do proprietário (apenas números)
+   ✓ RG do proprietário
+   ✓ Tipo de propriedade/relação
+   ⚠️ Se o nome do arquivo menciona "documento de FULANO", FULANO é o proprietário!
 
-**Processo INSS:**
-- Número COMPLETO do protocolo/NB
-- Data do requerimento DD/MM/AAAA
-- Data do indeferimento DD/MM/AAAA
-- Motivo COMPLETO do indeferimento (copiar PALAVRA POR PALAVRA)
+🔹 **PROCESSO INSS / INDEFERIMENTO / NB** (CRÍTICO!)
+   ✓ Número COMPLETO do protocolo/NB (ex: "NB 123.456.789-0")
+   ✓ Data do requerimento DD/MM/AAAA
+   ✓ Data do indeferimento DD/MM/AAAA
+   ✓ Motivo COMPLETO do indeferimento:
+      → Copie PALAVRA POR PALAVRA todo o texto do motivo
+      → Inclua fundamentação jurídica, artigos de lei, etc
+      → NÃO resuma, copie LITERALMENTE tudo
+   ⚠️ O motivo do indeferimento é ESSENCIAL para a petição!
 
-REGRAS CRÍTICAS:
-1. Leia TODOS os textos, incluindo manuscritos e carimbos
-2. Se um campo não estiver visível, deixe vazio (não invente)
-3. Datas sempre em formato DD/MM/AAAA
-4. CPF sempre apenas números
-5. Copie nomes EXATAMENTE como aparecem
-6. Se o nome do arquivo menciona "documento de NOME", esse NOME é o proprietário da terra
-7. Motivo do indeferimento deve ser copiado LITERALMENTE do documento`;
+═══════════════════════════════════════════════════════════════
+⚠️ REGRAS ABSOLUTAS - SIGA RIGOROSAMENTE!
+═══════════════════════════════════════════════════════════════
+
+1. ✅ Leia TODOS os textos, incluindo:
+   - Textos manuscritos
+   - Carimbos oficiais
+   - Assinaturas com informações
+   - Anotações laterais
+   - Observações em canetas
+
+2. ✅ Se um campo estiver visível, EXTRAIA-O
+   - Não invente informações
+   - Mas NUNCA deixe de extrair o que está visível
+   - Prefira extrair demais do que de menos
+
+3. ✅ Formato de datas: SEMPRE converter para YYYY-MM-DD
+   - Exemplos: "15/03/2020" → "2020-03-15"
+   - Se só tiver ano, usar 01/01: "2020" → "2020-01-01"
+
+4. ✅ CPF: SEMPRE apenas os 11 números
+   - "123.456.789-00" → "12345678900"
+
+5. ✅ Nomes: Copiar EXATAMENTE como aparecem
+   - Incluir todos os sobrenomes
+   - Manter maiúsculas/minúsculas originais
+
+6. ✅ Endereços: SEMPRE completos
+   - Não omitir CEP, bairro, complemento
+   - Incluir tudo que estiver visível
+
+7. ✅ Motivo indeferimento: Copiar LITERALMENTE
+   - Incluir TODA a fundamentação
+   - Não resumir, não parafrasear
+
+═══════════════════════════════════════════════════════════════
+🎯 EXEMPLOS DE BOA EXTRAÇÃO
+═══════════════════════════════════════════════════════════════
+
+RUIM ❌:
+ruralActivitySince: "2000"
+
+BOM ✅:
+ruralPeriods: [
+  {
+    startDate: "2000-01-01",
+    endDate: "2010-12-31",
+    location: "Sítio Santa Maria, Município X - MG",
+    withWhom: "com meus pais",
+    activities: "lavoura de milho e feijão"
+  },
+  {
+    startDate: "2011-01-01",
+    endDate: "",
+    location: "Fazenda Boa Vista, Município Y - MG",
+    withWhom: "com meu esposo",
+    activities: "criação de gado leiteiro e agricultura familiar"
+  }
+]
+
+RUIM ❌:
+raDenialReason: "Falta de documentação"
+
+BOM ✅:
+raDenialReason: "O pedido foi indeferido com base no artigo 39, II, da Lei 8.213/91, uma vez que a segurada não conseguiu comprovar o exercício de atividade rural no período de carência exigido. Os documentos apresentados são insuficientes para demonstrar o vínculo laboral rural nos 10 meses anteriores ao parto. Necessário apresentar documentos em nome próprio que comprovem a atividade rural de forma contemporânea ao período de carência."
+
+═══════════════════════════════════════════════════════════════
+
+AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
     
     const messages: any[] = [
       {
@@ -293,10 +391,49 @@ REGRAS CRÍTICAS:
                     description: "Tipo de relação com a terra: 'proprietaria' (se ela é dona), 'parceria', 'arrendamento', 'meeiro', 'comodato', 'posseiro', 'terceiro' (genérico)" 
                   },
                   
-                  // Atividade rural
-                  ruralActivitySince: { 
-                    type: "string", 
-                    description: "Desde quando trabalha na atividade rural. Formato YYYY-MM-DD ou texto como 'desde nascimento'. Se só tiver ano, usar 01/01/ANO" 
+                  // Atividade rural (ESTRUTURADO EM PERÍODOS)
+                  ruralPeriods: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        startDate: { 
+                          type: "string", 
+                          description: "Data início do período rural YYYY-MM-DD. Se só tiver ano, usar 01/01/ANO" 
+                        },
+                        endDate: { 
+                          type: "string", 
+                          description: "Data fim do período rural YYYY-MM-DD. Deixar vazio se ainda ativo" 
+                        },
+                        location: { 
+                          type: "string", 
+                          description: "Local COMPLETO: Sítio/Fazenda + Município + UF. Ex: 'Sítio São José, Município X - MG'" 
+                        },
+                        withWhom: { 
+                          type: "string", 
+                          description: "Com quem morava: 'com minha mãe', 'com meu esposo', etc" 
+                        },
+                        activities: { 
+                          type: "string", 
+                          description: "Atividades desenvolvidas: 'lavoura', 'criação de gado', 'agricultura familiar', etc" 
+                        }
+                      },
+                      required: ["startDate", "location"]
+                    },
+                    description: "CRÍTICO: TODOS os períodos de atividade rural mencionados na autodeclaração. Se houver múltiplos períodos (ex: 'morei de 1990 a 2000 no Sítio X, depois de 2001 a 2025 na Fazenda Y'), EXTRAIR CADA UM SEPARADAMENTE!"
+                  },
+                  urbanPeriods: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        startDate: { type: "string", description: "Data início YYYY-MM-DD" },
+                        endDate: { type: "string", description: "Data fim YYYY-MM-DD" },
+                        details: { type: "string", description: "Detalhes do trabalho urbano: empresa, função, etc" }
+                      },
+                      required: ["startDate", "endDate"]
+                    },
+                    description: "Períodos em zona urbana, se mencionados na autodeclaração"
                   },
                   familyMembers: { 
                     type: "array", 
@@ -307,7 +444,7 @@ REGRAS CRÍTICAS:
                         relationship: { type: "string", description: "Relação: esposo, filho(a), pai, mãe, irmão(ã), etc" }
                       }
                     },
-                    description: "Lista de membros da família que moram junto e trabalham na lavoura" 
+                    description: "Membros da família que moram junto ATUALMENTE e trabalham na lavoura" 
                   },
                   
                   // Processo administrativo
@@ -443,17 +580,22 @@ REGRAS CRÍTICAS:
     if (extractedData.landOwnerRg) updateData.land_owner_rg = extractedData.landOwnerRg;
     if (extractedData.landOwnershipType) updateData.land_ownership_type = extractedData.landOwnershipType;
     
-    // Atividade rural
-    if (extractedData.ruralActivitySince) {
-      // Se for texto como "desde nascimento", tentar converter
-      if (extractedData.ruralActivitySince.toLowerCase().includes('nascimento') && extractedData.motherBirthDate) {
-        updateData.rural_activity_since = extractedData.motherBirthDate;
-      } else {
-        updateData.rural_activity_since = extractedData.ruralActivitySince;
-      }
+    // Atividade rural com períodos estruturados
+    if (extractedData.ruralPeriods && Array.isArray(extractedData.ruralPeriods) && extractedData.ruralPeriods.length > 0) {
+      updateData.rural_periods = extractedData.ruralPeriods;
+      // Usar a data mais antiga como "rural_activity_since"
+      const oldestPeriod = extractedData.ruralPeriods.reduce((oldest: any, current: any) => {
+        return new Date(current.startDate) < new Date(oldest.startDate) ? current : oldest;
+      });
+      updateData.rural_activity_since = oldestPeriod.startDate;
     }
+    
+    if (extractedData.urbanPeriods && Array.isArray(extractedData.urbanPeriods) && extractedData.urbanPeriods.length > 0) {
+      updateData.urban_periods = extractedData.urbanPeriods;
+    }
+    
     if (extractedData.familyMembers && Array.isArray(extractedData.familyMembers)) {
-      updateData.family_members = JSON.stringify(extractedData.familyMembers);
+      updateData.family_members = extractedData.familyMembers;
     }
     
     // Processo administrativo

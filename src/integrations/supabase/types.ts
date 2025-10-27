@@ -363,11 +363,14 @@ export type Database = {
           ra_request_date: string | null
           rmi_calculated: number | null
           rural_activity_since: string | null
+          rural_periods: Json | null
+          salario_minimo_history: Json | null
           salario_minimo_ref: number | null
           special_notes: string | null
           started_with_chat: boolean | null
           status: Database["public"]["Enums"]["case_status"]
           updated_at: string
+          urban_periods: Json | null
           valor_causa: number | null
         }
         Insert: {
@@ -401,11 +404,14 @@ export type Database = {
           ra_request_date?: string | null
           rmi_calculated?: number | null
           rural_activity_since?: string | null
+          rural_periods?: Json | null
+          salario_minimo_history?: Json | null
           salario_minimo_ref?: number | null
           special_notes?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string
+          urban_periods?: Json | null
           valor_causa?: number | null
         }
         Update: {
@@ -439,11 +445,14 @@ export type Database = {
           ra_request_date?: string | null
           rmi_calculated?: number | null
           rural_activity_since?: string | null
+          rural_periods?: Json | null
+          salario_minimo_history?: Json | null
           salario_minimo_ref?: number | null
           special_notes?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string
+          urban_periods?: Json | null
           valor_causa?: number | null
         }
         Relationships: []
