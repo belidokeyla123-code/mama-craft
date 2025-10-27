@@ -157,6 +157,53 @@ export type Database = {
           },
         ]
       }
+      case_financial: {
+        Row: {
+          case_id: string
+          created_at: string
+          data_protocolo: string | null
+          data_recebimento: string | null
+          id: string
+          observacoes: string | null
+          status: string
+          updated_at: string
+          valor_causa: number | null
+          valor_recebido: number | null
+        }
+        Insert: {
+          case_id: string
+          created_at?: string
+          data_protocolo?: string | null
+          data_recebimento?: string | null
+          id?: string
+          observacoes?: string | null
+          status: string
+          updated_at?: string
+          valor_causa?: number | null
+          valor_recebido?: number | null
+        }
+        Update: {
+          case_id?: string
+          created_at?: string
+          data_protocolo?: string | null
+          data_recebimento?: string | null
+          id?: string
+          observacoes?: string | null
+          status?: string
+          updated_at?: string
+          valor_causa?: number | null
+          valor_recebido?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_financial_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_jurisprudencias: {
         Row: {
           case_id: string
@@ -196,6 +243,41 @@ export type Database = {
           },
         ]
       }
+      case_timeline: {
+        Row: {
+          case_id: string
+          created_at: string
+          data_fase: string
+          fase: string
+          id: string
+          observacoes: string | null
+        }
+        Insert: {
+          case_id: string
+          created_at?: string
+          data_fase: string
+          fase: string
+          id?: string
+          observacoes?: string | null
+        }
+        Update: {
+          case_id?: string
+          created_at?: string
+          data_fase?: string
+          fase?: string
+          id?: string
+          observacoes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_timeline_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cases: {
         Row: {
           author_address: string | null
@@ -218,6 +300,7 @@ export type Database = {
           ra_request_date: string | null
           rmi_calculated: number | null
           salario_minimo_ref: number | null
+          started_with_chat: boolean | null
           status: Database["public"]["Enums"]["case_status"]
           updated_at: string
           valor_causa: number | null
@@ -243,6 +326,7 @@ export type Database = {
           ra_request_date?: string | null
           rmi_calculated?: number | null
           salario_minimo_ref?: number | null
+          started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string
           valor_causa?: number | null
@@ -268,6 +352,7 @@ export type Database = {
           ra_request_date?: string | null
           rmi_calculated?: number | null
           salario_minimo_ref?: number | null
+          started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string
           valor_causa?: number | null
@@ -446,31 +531,40 @@ export type Database = {
       }
       extractions: {
         Row: {
+          auto_filled_fields: Json | null
           case_id: string
+          chat_messages: Json | null
           document_id: string
           entities: Json
           extracted_at: string
           id: string
+          missing_fields: string[] | null
           observations: string[] | null
           periodos_rurais: Json | null
           raw_text: string | null
         }
         Insert: {
+          auto_filled_fields?: Json | null
           case_id: string
+          chat_messages?: Json | null
           document_id: string
           entities?: Json
           extracted_at?: string
           id?: string
+          missing_fields?: string[] | null
           observations?: string[] | null
           periodos_rurais?: Json | null
           raw_text?: string | null
         }
         Update: {
+          auto_filled_fields?: Json | null
           case_id?: string
+          chat_messages?: Json | null
           document_id?: string
           entities?: Json
           extracted_at?: string
           id?: string
+          missing_fields?: string[] | null
           observations?: string[] | null
           periodos_rurais?: Json | null
           raw_text?: string | null
@@ -491,6 +585,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      jurisprudence_cache: {
+        Row: {
+          created_at: string
+          event_type: Database["public"]["Enums"]["event_type"]
+          hits: number | null
+          id: string
+          profile: Database["public"]["Enums"]["perfil_segurada"]
+          query_hash: string
+          results: Json
+        }
+        Insert: {
+          created_at?: string
+          event_type: Database["public"]["Enums"]["event_type"]
+          hits?: number | null
+          id?: string
+          profile: Database["public"]["Enums"]["perfil_segurada"]
+          query_hash: string
+          results: Json
+        }
+        Update: {
+          created_at?: string
+          event_type?: Database["public"]["Enums"]["event_type"]
+          hits?: number | null
+          id?: string
+          profile?: Database["public"]["Enums"]["perfil_segurada"]
+          query_hash?: string
+          results?: Json
+        }
+        Relationships: []
       }
       jurisprudencias: {
         Row: {
@@ -637,6 +761,10 @@ export type Database = {
         | "ready"
         | "drafted"
         | "exported"
+        | "protocolada"
+        | "em_audiencia"
+        | "acordo"
+        | "sentenca"
       document_type:
         | "CNIS"
         | "CERTIDAO"
@@ -786,6 +914,10 @@ export const Constants = {
         "ready",
         "drafted",
         "exported",
+        "protocolada",
+        "em_audiencia",
+        "acordo",
+        "sentenca",
       ],
       document_type: [
         "CNIS",

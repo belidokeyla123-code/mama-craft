@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { StepChatIntake } from "@/components/wizard/StepChatIntake";
 import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
 import { StepDocuments } from "@/components/wizard/StepDocuments";
 import { StepValidation } from "@/components/wizard/StepValidation";
@@ -50,6 +51,7 @@ export interface CaseData {
 }
 
 const STEPS = [
+  { id: 0, name: "Chat Inteligente" },
   { id: 1, name: "Informações Básicas" },
   { id: 2, name: "Documentos" },
   { id: 3, name: "Validação" },
@@ -60,7 +62,7 @@ const STEPS = [
 
 const NewCase = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // Começa no chat
   const [caseData, setCaseData] = useState<CaseData>({
     authorName: "",
     authorCpf: "",
@@ -72,7 +74,7 @@ const NewCase = () => {
     documents: [],
   });
 
-  const progress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
+  const progress = ((currentStep) / (STEPS.length - 1)) * 100;
 
   const updateCaseData = (data: Partial<CaseData>) => {
     setCaseData(prev => ({ ...prev, ...data }));
@@ -80,6 +82,9 @@ const NewCase = () => {
 
   const canGoNext = () => {
     switch (currentStep) {
+      case 0:
+        // Chat - não precisa validação, usuário avança quando quiser
+        return true;
       case 1:
         return caseData.authorName && caseData.authorCpf && caseData.eventDate;
       case 2:
@@ -102,13 +107,15 @@ const NewCase = () => {
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
+    if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
     }
   };
 
   const renderStep = () => {
     switch (currentStep) {
+      case 0:
+        return <StepChatIntake data={caseData} updateData={updateCaseData} onComplete={handleNext} />;
       case 1:
         return <StepBasicInfo data={caseData} updateData={updateCaseData} />;
       case 2:
@@ -199,25 +206,27 @@ const NewCase = () => {
         <Card className="p-8 mb-6">{renderStep()}</Card>
 
         {/* Navigation Buttons */}
-        <div className="flex justify-between">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={currentStep === 1}
-            className="gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Button>
-          <Button
-            onClick={handleNext}
-            disabled={!canGoNext()}
-            className="gap-2"
-          >
-            {currentStep === STEPS.length ? "Finalizar" : "Próximo"}
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
+        {currentStep > 0 && (
+          <div className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              disabled={currentStep === 0}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+            <Button
+              onClick={handleNext}
+              disabled={!canGoNext()}
+              className="gap-2"
+            >
+              {currentStep === STEPS.length - 1 ? "Finalizar" : "Próximo"}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

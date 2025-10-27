@@ -1,1 +1,4 @@
 project_id = "nwpgbnzvydweexruckpt"
+
+[functions.process-documents-with-ai]
+verify_jwt = false
