@@ -1,10 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configurar o worker do PDF.js para Vite - método correto para bundling
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url
-).toString();
+// Configurar o worker do PDF.js para Vite - usar o arquivo copiado para public
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/pdf.worker.mjs';
 
 export interface PDFConversionResult {
   images: File[];

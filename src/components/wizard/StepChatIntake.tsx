@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic } from "lucide-react";
+import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic, X } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 
 interface Message {
@@ -71,6 +71,14 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     
     setUploadedFiles(prev => [...prev, ...validFiles]);
     processDocuments(validFiles);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, idx) => idx !== index));
+    toast({
+      title: "Documento removido",
+      description: "O arquivo foi removido da lista",
+    });
   };
 
   const processDocuments = async (files: File[]) => {
@@ -630,9 +638,20 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             <strong>{uploadedFiles.length} arquivo(s) carregado(s):</strong>
             <ul className="mt-2 space-y-1">
               {uploadedFiles.map((file, idx) => (
-                <li key={idx} className="text-sm flex items-center gap-2">
-                  <CheckCircle className="h-3 w-3 text-green-500" />
-                  {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                <li key={idx} className="text-sm flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                    <span>{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveFile(idx)}
+                    className="h-6 w-6 p-0 hover:bg-destructive/10"
+                    title="Remover documento"
+                  >
+                    <X className="h-4 w-4 text-destructive" />
+                  </Button>
                 </li>
               ))}
             </ul>
