@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2 } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown } from "lucide-react";
+import JSZip from "jszip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,14 +30,16 @@ interface Document {
 
 interface StepDocumentsManagerProps {
   caseId: string;
+  caseName?: string;
   onDocumentsChange?: () => void;
 }
 
-export const StepDocumentsManager = ({ caseId, onDocumentsChange }: StepDocumentsManagerProps) => {
+export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: StepDocumentsManagerProps) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const { toast } = useToast();
 
   const loadDocuments = async () => {
@@ -158,6 +161,61 @@ export const StepDocumentsManager = ({ caseId, onDocumentsChange }: StepDocument
     }
   };
 
+  const handleDownloadAll = async () => {
+    if (documents.length === 0) return;
+    
+    setIsDownloadingAll(true);
+    
+    try {
+      const zip = new JSZip();
+      const folderName = caseName || `caso_${caseId.slice(0, 8)}`;
+      const folder = zip.folder(folderName);
+      
+      if (!folder) throw new Error("Erro ao criar pasta no ZIP");
+      
+      // Download de todos os documentos
+      for (const doc of documents) {
+        try {
+          const { data, error } = await supabase.storage
+            .from("case-documents")
+            .download(doc.file_path);
+          
+          if (error) throw error;
+          
+          // Adicionar ao ZIP
+          folder.file(doc.file_name, data);
+        } catch (error) {
+          console.error(`Erro ao baixar ${doc.file_name}:`, error);
+        }
+      }
+      
+      // Gerar e baixar o ZIP
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${folderName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Download concluído",
+        description: `${documents.length} documento(s) baixados em ${folderName}.zip`,
+      });
+    } catch (error: any) {
+      console.error("Erro ao criar ZIP:", error);
+      toast({
+        title: "Erro ao baixar todos",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -216,8 +274,28 @@ export const StepDocumentsManager = ({ caseId, onDocumentsChange }: StepDocument
       <Card className="p-6">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Documentos Enviados</h3>
-            <Badge variant="outline">{documents.length} arquivo(s)</Badge>
+            <div>
+              <h3 className="text-lg font-semibold">Documentos Enviados</h3>
+              <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
+            </div>
+            <Button
+              onClick={handleDownloadAll}
+              disabled={isDownloadingAll || documents.length === 0}
+              variant="outline"
+              className="gap-2"
+            >
+              {isDownloadingAll ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Preparando ZIP...
+                </>
+              ) : (
+                <>
+                  <FolderDown className="h-4 w-4" />
+                  Baixar Todos em ZIP
+                </>
+              )}
+            </Button>
           </div>
 
           <div className="space-y-2">

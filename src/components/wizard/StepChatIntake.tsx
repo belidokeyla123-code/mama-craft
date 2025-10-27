@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic } from "lucide-react";
+import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 
 interface Message {
   role: "assistant" | "user";
@@ -136,8 +137,46 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         }]);
       }
 
-      // Upload dos arquivos para o Storage
-      const uploadPromises = filesToUpload.map(async (file) => {
+      // Converter PDFs em imagens antes do upload
+      console.log("[UPLOAD] Processando arquivos...");
+      const processedFiles: File[] = [];
+      
+      for (const file of filesToUpload) {
+        if (isPDF(file)) {
+          console.log(`[UPLOAD] Arquivo é PDF, convertendo: ${file.name}`);
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `🔄 Convertendo PDF "${file.name}" em imagens...`
+          }]);
+          
+          try {
+            const { images } = await convertPDFToImages(file, 10);
+            console.log(`[UPLOAD] PDF convertido em ${images.length} imagens`);
+            processedFiles.push(...images);
+            
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `✓ PDF convertido: ${images.length} página(s)`
+            }]);
+          } catch (error: any) {
+            console.error("[UPLOAD] Erro ao converter PDF:", error);
+            toast({
+              title: "Erro ao converter PDF",
+              description: error.message,
+              variant: "destructive",
+            });
+            throw error;
+          }
+        } else {
+          // Arquivos não-PDF (imagens) vão direto
+          processedFiles.push(file);
+        }
+      }
+      
+      console.log(`[UPLOAD] Total de arquivos a enviar: ${processedFiles.length}`);
+
+      // Upload dos arquivos processados para o Storage
+      const uploadPromises = processedFiles.map(async (file) => {
         const fileExt = file.name.split('.').pop();
         const fileName = `${caseId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         
