@@ -165,9 +165,13 @@ export type Database = {
           data_recebimento: string | null
           id: string
           observacoes: string | null
+          percentual_honorarios: number | null
           status: string
+          tipo_conclusao: string | null
           updated_at: string
           valor_causa: number | null
+          valor_cliente: number | null
+          valor_honorarios: number | null
           valor_recebido: number | null
         }
         Insert: {
@@ -177,9 +181,13 @@ export type Database = {
           data_recebimento?: string | null
           id?: string
           observacoes?: string | null
+          percentual_honorarios?: number | null
           status: string
+          tipo_conclusao?: string | null
           updated_at?: string
           valor_causa?: number | null
+          valor_cliente?: number | null
+          valor_honorarios?: number | null
           valor_recebido?: number | null
         }
         Update: {
@@ -189,9 +197,13 @@ export type Database = {
           data_recebimento?: string | null
           id?: string
           observacoes?: string | null
+          percentual_honorarios?: number | null
           status?: string
+          tipo_conclusao?: string | null
           updated_at?: string
           valor_causa?: number | null
+          valor_cliente?: number | null
+          valor_honorarios?: number | null
           valor_recebido?: number | null
         }
         Relationships: [
@@ -246,27 +258,33 @@ export type Database = {
       case_timeline: {
         Row: {
           case_id: string
+          concluida: boolean | null
           created_at: string
           data_fase: string
-          fase: string
+          fase: Database["public"]["Enums"]["fase_processual"]
           id: string
           observacoes: string | null
+          ordem: number | null
         }
         Insert: {
           case_id: string
+          concluida?: boolean | null
           created_at?: string
           data_fase: string
-          fase: string
+          fase: Database["public"]["Enums"]["fase_processual"]
           id?: string
           observacoes?: string | null
+          ordem?: number | null
         }
         Update: {
           case_id?: string
+          concluida?: boolean | null
           created_at?: string
           data_fase?: string
-          fase?: string
+          fase?: Database["public"]["Enums"]["fase_processual"]
           id?: string
           observacoes?: string | null
+          ordem?: number | null
         }
         Relationships: [
           {
@@ -586,6 +604,54 @@ export type Database = {
           },
         ]
       }
+      financial_statistics: {
+        Row: {
+          created_at: string | null
+          id: string
+          periodo_fim: string
+          periodo_inicio: string
+          periodo_tipo: string
+          total_acordos: number | null
+          total_protocoladas: number | null
+          total_sentencas_improcedentes: number | null
+          total_sentencas_procedentes: number | null
+          updated_at: string | null
+          valor_total_cliente: number | null
+          valor_total_honorarios: number | null
+          valor_total_recebido: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          periodo_fim: string
+          periodo_inicio: string
+          periodo_tipo: string
+          total_acordos?: number | null
+          total_protocoladas?: number | null
+          total_sentencas_improcedentes?: number | null
+          total_sentencas_procedentes?: number | null
+          updated_at?: string | null
+          valor_total_cliente?: number | null
+          valor_total_honorarios?: number | null
+          valor_total_recebido?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          periodo_fim?: string
+          periodo_inicio?: string
+          periodo_tipo?: string
+          total_acordos?: number | null
+          total_protocoladas?: number | null
+          total_sentencas_improcedentes?: number | null
+          total_sentencas_procedentes?: number | null
+          updated_at?: string | null
+          valor_total_cliente?: number | null
+          valor_total_honorarios?: number | null
+          valor_total_recebido?: number | null
+        }
+        Relationships: []
+      }
       jurisprudence_cache: {
         Row: {
           created_at: string
@@ -778,6 +844,18 @@ export type Database = {
         | "FOTOS"
         | "OUTROS"
       event_type: "parto" | "adocao" | "guarda"
+      fase_processual:
+        | "distribuida"
+        | "citacao_inss"
+        | "contestacao"
+        | "impugnacao"
+        | "despacho_saneador"
+        | "especificacao_provas"
+        | "juntada_documentos"
+        | "audiencia_instrucao"
+        | "alegacoes_finais"
+        | "acordo"
+        | "sentenca"
       perfil_segurada: "especial" | "urbana"
     }
     CompositeTypes: {
@@ -933,6 +1011,19 @@ export const Constants = {
         "OUTROS",
       ],
       event_type: ["parto", "adocao", "guarda"],
+      fase_processual: [
+        "distribuida",
+        "citacao_inss",
+        "contestacao",
+        "impugnacao",
+        "despacho_saneador",
+        "especificacao_provas",
+        "juntada_documentos",
+        "audiencia_instrucao",
+        "alegacoes_finais",
+        "acordo",
+        "sentenca",
+      ],
       perfil_segurada: ["especial", "urbana"],
     },
   },

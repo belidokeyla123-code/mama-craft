@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +67,7 @@ const statusConfig = {
 type FilterStatus = "all" | "drafted" | "ready" | "pending_docs" | "protocolada";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
 
   const filteredCases = filterStatus === "all" 
@@ -151,15 +152,15 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className={`p-6 cursor-pointer hover:shadow-lg transition-smooth ${filterStatus === "protocolada" ? "ring-2 ring-accent" : ""}`}
-            onClick={() => setFilterStatus("protocolada")}
+            className="p-6 cursor-pointer hover:shadow-lg transition-smooth"
+            onClick={() => navigate('/protocoladas')}
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Protocoladas</p>
-                <p className="text-3xl font-bold text-accent">{protocoladas}</p>
+                <p className="text-3xl font-bold text-green-600">{protocoladas}</p>
               </div>
-              <Scale className="h-10 w-10 text-accent/60" />
+              <Scale className="h-10 w-10 text-green-600/60" />
             </div>
           </Card>
         </div>
