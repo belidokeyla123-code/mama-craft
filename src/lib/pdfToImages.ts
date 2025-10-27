@@ -19,12 +19,19 @@ export async function convertPDFToImages(
   file: File,
   maxPages: number = 10
 ): Promise<PDFConversionResult> {
-  console.log(`[PDF→IMG] Iniciando conversão de: ${file.name}`);
+  console.log(`[PDF→IMG] Iniciando conversão de: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+  console.log(`[PDF→IMG] Worker configurado: ${pdfjsLib.GlobalWorkerOptions.workerSrc}`);
   
   try {
     // Carregar o PDF
+    console.log(`[PDF→IMG] Lendo arquivo como ArrayBuffer...`);
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    console.log(`[PDF→IMG] ArrayBuffer carregado: ${arrayBuffer.byteLength} bytes`);
+    
+    console.log(`[PDF→IMG] Carregando documento PDF...`);
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    console.log(`[PDF→IMG] PDF carregado com sucesso`);
     
     const totalPages = Math.min(pdf.numPages, maxPages);
     console.log(`[PDF→IMG] Total de páginas a converter: ${totalPages}/${pdf.numPages}`);
@@ -33,11 +40,13 @@ export async function convertPDFToImages(
     
     // Converter cada página em imagem
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      console.log(`[PDF→IMG] Processando página ${pageNum}/${totalPages}...`);
       const page = await pdf.getPage(pageNum);
       
       // Configurar escala para qualidade adequada (1.5x para boa qualidade)
       const scale = 1.5;
       const viewport = page.getViewport({ scale });
+      console.log(`[PDF→IMG] Viewport: ${viewport.width}x${viewport.height}`);
       
       // Criar canvas
       const canvas = document.createElement('canvas');
@@ -50,16 +59,22 @@ export async function convertPDFToImages(
       canvas.height = viewport.height;
       
       // Renderizar página no canvas
+      console.log(`[PDF→IMG] Renderizando página ${pageNum}...`);
       await page.render({
         canvasContext: context,
         viewport: viewport,
         canvas: canvas,
       }).promise;
+      console.log(`[PDF→IMG] Página ${pageNum} renderizada com sucesso`);
       
       // Converter canvas para Blob PNG
-      const blob = await new Promise<Blob>((resolve) => {
+      console.log(`[PDF→IMG] Convertendo para PNG...`);
+      const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
-          if (!blob) throw new Error('Falha ao converter canvas para blob');
+          if (!blob) {
+            reject(new Error('Falha ao converter canvas para blob'));
+            return;
+          }
           resolve(blob);
         }, 'image/png', 0.95);
       });
@@ -84,7 +99,9 @@ export async function convertPDFToImages(
     };
     
   } catch (error) {
-    console.error('[PDF→IMG] Erro na conversão:', error);
+    console.error('[PDF→IMG] Erro detalhado:', error);
+    console.error('[PDF→IMG] Stack trace:', error instanceof Error ? error.stack : 'N/A');
+    console.error('[PDF→IMG] Tipo do erro:', error instanceof Error ? error.constructor.name : typeof error);
     throw new Error(`Falha ao converter PDF "${file.name}": ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
   }
 }
