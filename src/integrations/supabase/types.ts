@@ -157,6 +157,41 @@ export type Database = {
           },
         ]
       }
+      case_exceptions: {
+        Row: {
+          case_id: string
+          created_at: string | null
+          description: string
+          exception_type: string
+          id: string
+          voice_transcribed: boolean | null
+        }
+        Insert: {
+          case_id: string
+          created_at?: string | null
+          description: string
+          exception_type: string
+          id?: string
+          voice_transcribed?: boolean | null
+        }
+        Update: {
+          case_id?: string
+          created_at?: string | null
+          description?: string
+          exception_type?: string
+          id?: string
+          voice_transcribed?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_exceptions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_financial: {
         Row: {
           case_id: string
@@ -304,20 +339,32 @@ export type Database = {
           author_marital_status: string | null
           author_name: string
           author_phone: string | null
+          author_rg: string | null
           author_whatsapp: string | null
+          child_birth_date: string | null
+          child_name: string | null
           created_at: string
           dum: string | null
           event_date: string
           event_type: Database["public"]["Enums"]["event_type"]
+          family_members: Json | null
+          father_name: string | null
           has_ra: boolean | null
+          has_special_situation: boolean | null
           id: string
+          land_owner_cpf: string | null
+          land_owner_name: string | null
+          land_owner_rg: string | null
+          land_ownership_type: string | null
           profile: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date: string | null
           ra_denial_reason: string | null
           ra_protocol: string | null
           ra_request_date: string | null
           rmi_calculated: number | null
+          rural_activity_since: string | null
           salario_minimo_ref: number | null
+          special_notes: string | null
           started_with_chat: boolean | null
           status: Database["public"]["Enums"]["case_status"]
           updated_at: string
@@ -330,20 +377,32 @@ export type Database = {
           author_marital_status?: string | null
           author_name: string
           author_phone?: string | null
+          author_rg?: string | null
           author_whatsapp?: string | null
+          child_birth_date?: string | null
+          child_name?: string | null
           created_at?: string
           dum?: string | null
           event_date: string
           event_type?: Database["public"]["Enums"]["event_type"]
+          family_members?: Json | null
+          father_name?: string | null
           has_ra?: boolean | null
+          has_special_situation?: boolean | null
           id?: string
+          land_owner_cpf?: string | null
+          land_owner_name?: string | null
+          land_owner_rg?: string | null
+          land_ownership_type?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
           ra_protocol?: string | null
           ra_request_date?: string | null
           rmi_calculated?: number | null
+          rural_activity_since?: string | null
           salario_minimo_ref?: number | null
+          special_notes?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string
@@ -356,20 +415,32 @@ export type Database = {
           author_marital_status?: string | null
           author_name?: string
           author_phone?: string | null
+          author_rg?: string | null
           author_whatsapp?: string | null
+          child_birth_date?: string | null
+          child_name?: string | null
           created_at?: string
           dum?: string | null
           event_date?: string
           event_type?: Database["public"]["Enums"]["event_type"]
+          family_members?: Json | null
+          father_name?: string | null
           has_ra?: boolean | null
+          has_special_situation?: boolean | null
           id?: string
+          land_owner_cpf?: string | null
+          land_owner_name?: string | null
+          land_owner_rg?: string | null
+          land_ownership_type?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
           ra_protocol?: string | null
           ra_request_date?: string | null
           rmi_calculated?: number | null
+          rural_activity_since?: string | null
           salario_minimo_ref?: number | null
+          special_notes?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string

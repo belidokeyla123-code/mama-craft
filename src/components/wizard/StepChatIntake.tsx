@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic } from "lucide-react";
 
 interface Message {
   role: "assistant" | "user";
@@ -24,13 +24,16 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Olá! Vou te ajudar a criar uma nova petição de salário-maternidade. Para começar, faça upload dos documentos da cliente (certidões, comprovantes, documentos de identificação, etc.).",
+      content: "Olá! Vou te ajudar a criar uma nova petição de salário-maternidade. Para começar, faça upload dos documentos da cliente (certidões, comprovantes, documentos de identificação, etc.). Você também pode usar o microfone para narrar informações especiais.",
     },
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [userInput, setUserInput] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const { toast } = useToast();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,21 +182,135 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     }
   };
 
-  const handleSendMessage = () => {
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeAudio(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      
+      toast({
+        title: "Gravando áudio",
+        description: "Fale agora. Clique novamente para parar.",
+      });
+    } catch (error) {
+      console.error('Erro ao iniciar gravação:', error);
+      toast({
+        title: "Erro ao acessar microfone",
+        description: "Verifique as permissões do navegador.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setIsProcessing(true);
+    
+    try {
+      // Converter blob para base64
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      
+      reader.onloadend = async () => {
+        const base64Audio = (reader.result as string).split(',')[1];
+        
+        // Chamar edge function para transcrição
+        const { data: transcriptionResult, error } = await supabase.functions.invoke(
+          'voice-to-text',
+          { body: { audio: base64Audio } }
+        );
+        
+        if (error) throw error;
+        
+        const transcribedText = transcriptionResult.text;
+        setUserInput(transcribedText);
+        
+        toast({
+          title: "Áudio transcrito",
+          description: "O texto foi inserido no campo de mensagem.",
+        });
+        
+        // Detectar situação especial automaticamente
+        await detectSpecialSituation(transcribedText);
+      };
+    } catch (error: any) {
+      console.error('Erro na transcrição:', error);
+      toast({
+        title: "Erro na transcrição",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const detectSpecialSituation = async (text: string) => {
+    try {
+      const { data: detectionResult, error } = await supabase.functions.invoke(
+        'detect-special-situation',
+        { body: { text } }
+      );
+      
+      if (error) throw error;
+      
+      if (detectionResult.isException && detectionResult.confidence > 0.6) {
+        const newException = {
+          type: detectionResult.type,
+          description: text,
+          voiceTranscribed: true,
+        };
+        
+        updateData({
+          hasSpecialSituation: true,
+          specialNotes: text,
+          exceptions: [...(data.exceptions || []), newException],
+        });
+        
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ **Situação especial detectada:** ${detectionResult.typeName}\n\n` +
+                   `Esta informação será incluída automaticamente na petição inicial.\n\n` +
+                   `Descrição registrada: "${text}"`,
+        }]);
+      }
+    } catch (error) {
+      console.error('Erro ao detectar situação especial:', error);
+    }
+  };
+
+  const handleSendMessage = async () => {
     if (!userInput.trim()) return;
 
     setMessages(prev => [...prev, { role: "user", content: userInput }]);
     
-    // Processar resposta do usuário (informações complementares)
-    const message = userInput.toLowerCase();
+    // Detectar situação especial
+    await detectSpecialSituation(userInput);
+    
     let response = "Obrigado pela informação! ";
-    
-    // Lógica simples para capturar informações
-    if (message.includes("estado civil") || message.includes("casad") || message.includes("solteir")) {
-      response += "Estado civil registrado. ";
-      updateData({ ...data, authorMaritalStatus: userInput });
-    }
-    
     response += "Há mais alguma informação que você gostaria de adicionar?";
     
     setMessages(prev => [...prev, { role: "assistant", content: response }]);
@@ -271,24 +388,33 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         <Button
           variant="outline"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isProcessing}
+          disabled={isProcessing || isRecording}
           className="flex-shrink-0"
         >
           <Upload className="h-4 w-4 mr-2" />
-          Adicionar Documentos
+          Documentos
+        </Button>
+
+        <Button
+          variant={isRecording ? "destructive" : "outline"}
+          onClick={isRecording ? stopRecording : startRecording}
+          disabled={isProcessing}
+          className="flex-shrink-0"
+        >
+          <Mic className={`h-4 w-4 ${isRecording ? 'animate-pulse' : ''}`} />
         </Button>
 
         <Input
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-          placeholder="Digite informações complementares..."
-          disabled={isProcessing}
+          onKeyDown={(e) => e.key === "Enter" && !isProcessing && handleSendMessage()}
+          placeholder="Digite ou grave informações complementares..."
+          disabled={isProcessing || isRecording}
         />
 
         <Button
           onClick={handleSendMessage}
-          disabled={!userInput.trim() || isProcessing}
+          disabled={!userInput.trim() || isProcessing || isRecording}
           className="flex-shrink-0"
         >
           <Send className="h-4 w-4" />

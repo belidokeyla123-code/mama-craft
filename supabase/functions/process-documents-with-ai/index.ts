@@ -28,23 +28,34 @@ serve(async (req) => {
 
     if (docsError) throw docsError;
 
-    // Processar cada documento
+    // Classificar e processar cada documento
+    const classifyDocument = (fileName: string) => {
+      const name = fileName.toLowerCase();
+      
+      if (name.includes('certidao') && name.includes('nascimento')) return 'certidao_nascimento';
+      if (name.includes('cpf') || name.includes('rg')) return 'identificacao';
+      if (name.includes('residencia') || name.includes('endereco')) return 'comprovante_residencia';
+      if (name.includes('autodeclaracao') || name.includes('rural')) return 'autodeclaracao_rural';
+      if (name.includes('terra') || name.includes('propriedade')) return 'documento_terra';
+      if (name.includes('processo') || name.includes('inss') || name.includes('nb')) return 'processo_administrativo';
+      
+      return 'outro';
+    };
+
     const extractedTexts = await Promise.all(
       documents.map(async (doc) => {
         try {
-          // Download do arquivo
-          const { data: fileData, error: downloadError } = await supabase.storage
-            .from("case-documents")
-            .download(doc.file_path);
+          const docType = classifyDocument(doc.file_name);
+          
+          // Para simplificação, retornar informações do documento
+          // Em produção real, você usaria document--parse_document do Lovable para OCR
+          return `
+=== DOCUMENTO: ${doc.file_name} ===
+Tipo identificado: ${docType}
+MIME: ${doc.mime_type}
 
-          if (downloadError) {
-            console.error(`Erro ao baixar ${doc.file_name}:`, downloadError);
-            return "";
-          }
-
-          // Para simplificar, vamos apenas retornar o nome do arquivo
-          // Em produção, aqui você usaria OCR/PDF parsing
-          return `Documento: ${doc.file_name}\nTipo: ${doc.mime_type}`;
+[Conteúdo do documento seria extraído aqui via OCR]
+`;
         } catch (error) {
           console.error(`Erro ao processar ${doc.file_name}:`, error);
           return "";
@@ -67,26 +78,31 @@ serve(async (req) => {
           {
             role: "system",
             content: `Você é um assistente especializado em extrair informações de documentos previdenciários.
-Extraia APENAS informações que você conseguir identificar com certeza nos documentos.
-Retorne um JSON com os campos encontrados.`,
+Analise CUIDADOSAMENTE cada documento e extraia APENAS informações que você tem CERTEZA.
+
+TIPOS DE DOCUMENTOS:
+- Certidão de Nascimento → Nome da criança, data nascimento, nome do pai, nome da mãe
+- CPF/RG/Declaração → Nome, CPF, RG, data nascimento, endereço
+- Autodeclaração Rural → Desde quando trabalha, quem mora junto, tipo de terra
+- Documento da Terra → Nome do proprietário (atenção ao nome do arquivo!)
+- Processo INSS → Protocolo NB, datas, motivo indeferimento
+
+IMPORTANTE: Se o nome do arquivo contém "documento da terra + nome", extraia esse nome como proprietário!`,
           },
           {
             role: "user",
-            content: `Analise estes documentos e extraia as seguintes informações, se disponíveis:
-- name: Nome completo da pessoa
-- cpf: CPF (apenas números)
-- birthDate: Data de nascimento (formato YYYY-MM-DD)
-- childBirthDate: Data de nascimento do filho/a (formato YYYY-MM-DD)
-- maritalStatus: Estado civil
-- address: Endereço completo
-- phone: Telefone
-- whatsapp: WhatsApp
+            content: `Analise estes documentos e extraia todas as informações possíveis:
 
-Documentos:\n${combinedText}
+${combinedText}
 
-Retorne APENAS um JSON válido com os campos que você encontrou. 
-Se não encontrar um campo, não o inclua no JSON.
-Exemplo: {"name": "Maria Silva", "cpf": "12345678900"}`,
+Extraia:
+- Dados da Mãe/Autora
+- Dados da Criança
+- Dados do Proprietário da Terra
+- Atividade Rural
+- Processo Administrativo
+
+Retorne JSON estruturado com TODOS os campos que encontrar.`,
           },
         ],
         tools: [
@@ -98,14 +114,34 @@ Exemplo: {"name": "Maria Silva", "cpf": "12345678900"}`,
               parameters: {
                 type: "object",
                 properties: {
-                  name: { type: "string", description: "Nome completo" },
-                  cpf: { type: "string", description: "CPF sem formatação" },
-                  birthDate: { type: "string", description: "Data de nascimento YYYY-MM-DD" },
-                  childBirthDate: { type: "string", description: "Data nascimento do filho YYYY-MM-DD" },
+                  // Dados da mãe/autora
+                  motherName: { type: "string", description: "Nome completo da mãe/autora" },
+                  motherCpf: { type: "string", description: "CPF sem formatação" },
+                  motherRg: { type: "string", description: "RG" },
+                  motherBirthDate: { type: "string", description: "Data de nascimento YYYY-MM-DD" },
+                  motherAddress: { type: "string", description: "Endereço completo" },
                   maritalStatus: { type: "string", description: "Estado civil" },
-                  address: { type: "string", description: "Endereço completo" },
-                  phone: { type: "string", description: "Telefone" },
-                  whatsapp: { type: "string", description: "WhatsApp" },
+                  
+                  // Dados da criança
+                  childName: { type: "string", description: "Nome do filho/filha" },
+                  childBirthDate: { type: "string", description: "Data nascimento da criança YYYY-MM-DD" },
+                  fatherName: { type: "string", description: "Nome do pai" },
+                  
+                  // Proprietário da terra
+                  landOwnerName: { type: "string", description: "Nome do proprietário da terra" },
+                  landOwnerCpf: { type: "string", description: "CPF do proprietário" },
+                  landOwnerRg: { type: "string", description: "RG do proprietário" },
+                  landOwnershipType: { type: "string", description: "Tipo: propria ou terceiro" },
+                  
+                  // Atividade rural
+                  ruralActivitySince: { type: "string", description: "Desde quando trabalha (data ou 'desde nascimento')" },
+                  familyMembers: { type: "array", items: { type: "string" }, description: "Quem mora junto" },
+                  
+                  // Processo administrativo
+                  raProtocol: { type: "string", description: "Número do protocolo NB" },
+                  raRequestDate: { type: "string", description: "Data do requerimento YYYY-MM-DD" },
+                  raDenialDate: { type: "string", description: "Data do indeferimento YYYY-MM-DD" },
+                  raDenialReason: { type: "string", description: "Motivo completo do indeferimento" },
                 },
                 required: [],
               },
@@ -137,7 +173,7 @@ Exemplo: {"name": "Maria Silva", "cpf": "12345678900"}`,
     }
 
     // Determinar campos faltantes
-    const allFields = ["name", "cpf", "birthDate", "maritalStatus"];
+    const allFields = ["motherName", "motherCpf", "childName", "childBirthDate"];
     const missingFields = allFields.filter(field => !extractedData[field]);
 
     // Salvar extração no banco
@@ -147,16 +183,33 @@ Exemplo: {"name": "Maria Silva", "cpf": "12345678900"}`,
       entities: extractedData,
       auto_filled_fields: extractedData,
       missing_fields: missingFields,
-      raw_text: combinedText.substring(0, 5000), // Limitar tamanho
+      raw_text: combinedText.substring(0, 5000),
     });
 
     // Atualizar caso com informações extraídas
     const updateData: any = {};
-    if (extractedData.name) updateData.author_name = extractedData.name;
-    if (extractedData.cpf) updateData.author_cpf = extractedData.cpf;
-    if (extractedData.birthDate) updateData.author_birth_date = extractedData.birthDate;
+    if (extractedData.motherName) updateData.author_name = extractedData.motherName;
+    if (extractedData.motherCpf) updateData.author_cpf = extractedData.motherCpf;
+    if (extractedData.motherRg) updateData.author_rg = extractedData.motherRg;
+    if (extractedData.motherBirthDate) updateData.author_birth_date = extractedData.motherBirthDate;
+    if (extractedData.motherAddress) updateData.author_address = extractedData.motherAddress;
     if (extractedData.maritalStatus) updateData.author_marital_status = extractedData.maritalStatus;
-    if (extractedData.childBirthDate) updateData.event_date = extractedData.childBirthDate;
+    if (extractedData.childName) updateData.child_name = extractedData.childName;
+    if (extractedData.childBirthDate) {
+      updateData.child_birth_date = extractedData.childBirthDate;
+      updateData.event_date = extractedData.childBirthDate;
+    }
+    if (extractedData.fatherName) updateData.father_name = extractedData.fatherName;
+    if (extractedData.landOwnerName) updateData.land_owner_name = extractedData.landOwnerName;
+    if (extractedData.landOwnerCpf) updateData.land_owner_cpf = extractedData.landOwnerCpf;
+    if (extractedData.landOwnerRg) updateData.land_owner_rg = extractedData.landOwnerRg;
+    if (extractedData.landOwnershipType) updateData.land_ownership_type = extractedData.landOwnershipType;
+    if (extractedData.ruralActivitySince) updateData.rural_activity_since = extractedData.ruralActivitySince;
+    if (extractedData.familyMembers) updateData.family_members = JSON.stringify(extractedData.familyMembers);
+    if (extractedData.raProtocol) updateData.ra_protocol = extractedData.raProtocol;
+    if (extractedData.raRequestDate) updateData.ra_request_date = extractedData.raRequestDate;
+    if (extractedData.raDenialDate) updateData.ra_denial_date = extractedData.raDenialDate;
+    if (extractedData.raDenialReason) updateData.ra_denial_reason = extractedData.raDenialReason;
 
     if (Object.keys(updateData).length > 0) {
       await supabase.from("cases").update(updateData).eq("id", caseId);

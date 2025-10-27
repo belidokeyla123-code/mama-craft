@@ -17,19 +17,32 @@ export interface CaseData {
   // Identificação da autora
   authorName: string;
   authorCpf: string;
+  authorRg?: string;
   authorBirthDate?: string;
   authorAddress?: string;
-  authorPhone?: string;
-  authorWhatsapp?: string;
   authorMaritalStatus?: string;
+  
+  // Dados da criança
+  childName?: string;
+  childBirthDate?: string;
+  fatherName?: string;
   
   // Evento
   eventType: "parto" | "adocao" | "guarda";
   eventDate: string;
-  dum?: string;
   
   // Perfil
   profile: "especial" | "urbana";
+  
+  // Proprietário da terra
+  landOwnerName?: string;
+  landOwnerCpf?: string;
+  landOwnerRg?: string;
+  landOwnershipType?: "propria" | "terceiro";
+  
+  // Atividade rural
+  ruralActivitySince?: string;
+  familyMembers?: string[];
   
   // RA
   hasRa: boolean;
@@ -37,6 +50,15 @@ export interface CaseData {
   raRequestDate?: string;
   raDenialDate?: string;
   raDenialReason?: string;
+  
+  // Exceções/Situações Especiais
+  specialNotes?: string;
+  hasSpecialSituation?: boolean;
+  exceptions?: Array<{
+    type: string;
+    description: string;
+    voiceTranscribed: boolean;
+  }>;
   
   // Referência
   salarioMinimoRef: number;
@@ -48,6 +70,9 @@ export interface CaseData {
   caseId?: string;
   validationScore?: number;
   isDocSufficient?: boolean;
+  extractedData?: any;
+  missingFields?: string[];
+  autoFilledFields?: string[];
 }
 
 const STEPS = [

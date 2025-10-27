@@ -3,8 +3,11 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { CaseData } from "@/pages/NewCase";
-import { User, Calendar, MapPin, Phone } from "lucide-react";
+import { User, Calendar, MapPin, Check, AlertTriangle } from "lucide-react";
 
 interface StepBasicInfoProps {
   data: CaseData;
@@ -12,45 +15,83 @@ interface StepBasicInfoProps {
 }
 
 export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
+  const autoFilledFields = data.autoFilledFields || [];
+
+  const FieldBadge = ({ fieldName }: { fieldName: string }) => {
+    if (autoFilledFields.includes(fieldName)) {
+      return (
+        <Badge variant="outline" className="ml-2 text-green-600 border-green-600">
+          <Check className="h-3 w-3 mr-1" /> Auto-preenchido
+        </Badge>
+      );
+    }
+    if (data.missingFields?.includes(fieldName)) {
+      return (
+        <Badge variant="outline" className="ml-2 text-red-600 border-red-600">
+          <AlertTriangle className="h-3 w-3 mr-1" /> Preencher
+        </Badge>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold mb-2">Informações Básicas</h2>
         <p className="text-muted-foreground">
-          Preencha os dados da autora e do evento
+          Revise e complete os dados extraídos dos documentos
         </p>
       </div>
 
-      {/* Identificação da Autora */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
+      {/* SEÇÃO 1: IDENTIFICAÇÃO DA AUTORA (MÃE) */}
+      <Card className="p-6">
+        <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <User className="h-5 w-5 text-primary" />
-          Identificação da Autora
+          Identificação da Autora (Mãe)
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="authorName">
-              Nome Completo <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center">
+              <Label htmlFor="authorName">
+                Nome Completo <span className="text-destructive">*</span>
+              </Label>
+              <FieldBadge fieldName="motherName" />
+            </div>
             <Input
               id="authorName"
               value={data.authorName}
               onChange={(e) => updateData({ authorName: e.target.value })}
               placeholder="Maria da Silva"
+              className={autoFilledFields.includes('motherName') ? 'border-green-500' : ''}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="authorCpf">
-              CPF <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center">
+              <Label htmlFor="authorCpf">
+                CPF <span className="text-destructive">*</span>
+              </Label>
+              <FieldBadge fieldName="motherCpf" />
+            </div>
             <Input
               id="authorCpf"
               value={data.authorCpf}
               onChange={(e) => updateData({ authorCpf: e.target.value })}
               placeholder="000.000.000-00"
               maxLength={14}
+              className={autoFilledFields.includes('motherCpf') ? 'border-green-500' : ''}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="authorRg">RG</Label>
+            <Input
+              id="authorRg"
+              value={data.authorRg || ""}
+              onChange={(e) => updateData({ authorRg: e.target.value })}
+              placeholder="12.345.678-9"
             />
           </div>
 
@@ -65,20 +106,29 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="authorMaritalStatus">Estado Civil</Label>
-            <Input
-              id="authorMaritalStatus"
+            <Label htmlFor="authorMaritalStatus">Estado Civil *</Label>
+            <Select
               value={data.authorMaritalStatus || ""}
-              onChange={(e) => updateData({ authorMaritalStatus: e.target.value })}
-              placeholder="Solteira"
-            />
+              onValueChange={(value) => updateData({ authorMaritalStatus: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="solteira">Solteira</SelectItem>
+                <SelectItem value="casada">Casada</SelectItem>
+                <SelectItem value="uniao_estavel">União Estável</SelectItem>
+                <SelectItem value="divorciada">Divorciada</SelectItem>
+                <SelectItem value="viuva">Viúva</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 mt-4">
           <Label htmlFor="authorAddress" className="flex items-center gap-2">
             <MapPin className="h-4 w-4" />
-            Endereço
+            Endereço Completo
           </Label>
           <Textarea
             id="authorAddress"
@@ -88,106 +138,64 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             rows={2}
           />
         </div>
+      </Card>
 
+      {/* SEÇÃO 2: DADOS DA CRIANÇA */}
+      <Card className="p-6">
+        <h3 className="text-xl font-semibold mb-4">Dados da Criança</h3>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="authorPhone" className="flex items-center gap-2">
-              <Phone className="h-4 w-4" />
-              Telefone
-            </Label>
+            <div className="flex items-center">
+              <Label htmlFor="childName">Nome do Filho/Filha *</Label>
+              <FieldBadge fieldName="childName" />
+            </div>
             <Input
-              id="authorPhone"
-              value={data.authorPhone || ""}
-              onChange={(e) => updateData({ authorPhone: e.target.value })}
-              placeholder="(00) 0000-0000"
+              id="childName"
+              value={data.childName || ""}
+              onChange={(e) => updateData({ childName: e.target.value })}
+              placeholder="João da Silva"
+              className={autoFilledFields.includes('childName') ? 'border-green-500' : ''}
             />
           </div>
-
+          
           <div className="space-y-2">
-            <Label htmlFor="authorWhatsapp">WhatsApp</Label>
+            <div className="flex items-center">
+              <Label htmlFor="childBirthDate">Data de Nascimento *</Label>
+              <FieldBadge fieldName="childBirthDate" />
+            </div>
             <Input
-              id="authorWhatsapp"
-              value={data.authorWhatsapp || ""}
-              onChange={(e) => updateData({ authorWhatsapp: e.target.value })}
-              placeholder="(00) 00000-0000"
+              id="childBirthDate"
+              type="date"
+              value={data.childBirthDate || data.eventDate}
+              onChange={(e) => {
+                updateData({ 
+                  childBirthDate: e.target.value,
+                  eventDate: e.target.value 
+                });
+              }}
+              className={autoFilledFields.includes('childBirthDate') ? 'border-green-500' : ''}
+            />
+            <p className="text-xs text-muted-foreground">
+              Esta é a "Data do Evento"
+            </p>
+          </div>
+          
+          <div className="space-y-2 col-span-2">
+            <Label htmlFor="fatherName">Nome do Pai</Label>
+            <Input
+              id="fatherName"
+              value={data.fatherName || ""}
+              onChange={(e) => updateData({ fatherName: e.target.value })}
+              placeholder="José da Silva"
             />
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Evento */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-primary" />
-          Evento (Parto/Adoção/Guarda)
-        </h3>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>
-              Tipo de Evento <span className="text-destructive">*</span>
-            </Label>
-            <RadioGroup
-              value={data.eventType}
-              onValueChange={(value: "parto" | "adocao" | "guarda") =>
-                updateData({ eventType: value })
-              }
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="parto" id="parto" />
-                <Label htmlFor="parto" className="font-normal cursor-pointer">
-                  Parto
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="adocao" id="adocao" />
-                <Label htmlFor="adocao" className="font-normal cursor-pointer">
-                  Adoção
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="guarda" id="guarda" />
-                <Label htmlFor="guarda" className="font-normal cursor-pointer">
-                  Guarda
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="eventDate">
-                Data do Evento <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="eventDate"
-                type="date"
-                value={data.eventDate}
-                onChange={(e) => updateData({ eventDate: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="dum">
-                DUM (Data da Última Menstruação)
-              </Label>
-              <Input
-                id="dum"
-                type="date"
-                value={data.dum || ""}
-                onChange={(e) => updateData({ dum: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Opcional - para validação do período gestacional
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Perfil */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Perfil da Segurada</h3>
+      {/* SEÇÃO 3: PERFIL DA SEGURADA */}
+      <Card className="p-6">
+        <h3 className="text-xl font-semibold mb-4">Perfil da Segurada</h3>
         <RadioGroup
           value={data.profile}
           onValueChange={(value: "especial" | "urbana") =>
@@ -207,72 +215,175 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             </Label>
           </div>
         </RadioGroup>
-      </div>
+      </Card>
 
-      {/* Requerimento Administrativo */}
-      <div className="space-y-4">
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="hasRa"
-            checked={data.hasRa}
-            onCheckedChange={(checked) =>
-              updateData({ hasRa: checked as boolean })
-            }
-          />
-          <Label htmlFor="hasRa" className="font-semibold cursor-pointer">
-            Possui Requerimento Administrativo (RA)?
-          </Label>
-        </div>
-
-        {data.hasRa && (
-          <div className="ml-6 space-y-4 p-4 bg-muted/50 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="raProtocol">Número do Protocolo</Label>
-                <Input
-                  id="raProtocol"
-                  value={data.raProtocol || ""}
-                  onChange={(e) => updateData({ raProtocol: e.target.value })}
-                  placeholder="NB 000.000.000-0"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="raRequestDate">Data do Requerimento</Label>
-                <Input
-                  id="raRequestDate"
-                  type="date"
-                  value={data.raRequestDate || ""}
-                  onChange={(e) => updateData({ raRequestDate: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="raDenialDate">Data do Indeferimento</Label>
-                <Input
-                  id="raDenialDate"
-                  type="date"
-                  value={data.raDenialDate || ""}
-                  onChange={(e) => updateData({ raDenialDate: e.target.value })}
-                />
-              </div>
+      {/* SEÇÃO 4: PROPRIETÁRIO DA TERRA (apenas se especial) */}
+      {data.profile === "especial" && (
+        <Card className="p-6">
+          <h3 className="text-xl font-semibold mb-4">Proprietário da Terra</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <Label>Tipo de Propriedade *</Label>
+              <RadioGroup
+                value={data.landOwnershipType || ""}
+                onValueChange={(value: "propria" | "terceiro") =>
+                  updateData({ landOwnershipType: value })
+                }
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="propria" id="propria" />
+                  <Label htmlFor="propria" className="font-normal cursor-pointer">
+                    Terra Própria
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="terceiro" id="terceiro" />
+                  <Label htmlFor="terceiro" className="font-normal cursor-pointer">
+                    Terra de Terceiro
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
+            
+            {data.landOwnershipType === 'terceiro' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="space-y-2">
+                  <Label htmlFor="landOwnerName">Nome do Proprietário *</Label>
+                  <Input
+                    id="landOwnerName"
+                    value={data.landOwnerName || ""}
+                    onChange={(e) => updateData({ landOwnerName: e.target.value })}
+                    placeholder="Nome do proprietário"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="landOwnerCpf">CPF do Proprietário</Label>
+                  <Input
+                    id="landOwnerCpf"
+                    value={data.landOwnerCpf || ""}
+                    onChange={(e) => updateData({ landOwnerCpf: e.target.value })}
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="landOwnerRg">RG do Proprietário</Label>
+                  <Input
+                    id="landOwnerRg"
+                    value={data.landOwnerRg || ""}
+                    onChange={(e) => updateData({ landOwnerRg: e.target.value })}
+                    placeholder="12.345.678-9"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
+      {/* SEÇÃO 5: ATIVIDADE RURAL (apenas se especial) */}
+      {data.profile === "especial" && (
+        <Card className="p-6">
+          <h3 className="text-xl font-semibold mb-4">Atividade Rural</h3>
+          
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="raDenialReason">Motivo do Indeferimento</Label>
+              <Label htmlFor="ruralActivitySince">Desde quando desenvolve atividade rural? *</Label>
+              <Input
+                id="ruralActivitySince"
+                type="date"
+                value={data.ruralActivitySince || ""}
+                onChange={(e) => updateData({ ruralActivitySince: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Ou digite "desde nascimento" se aplicável
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="familyMembers">Quem mora com ela?</Label>
               <Textarea
-                id="raDenialReason"
-                value={data.raDenialReason || ""}
-                onChange={(e) => updateData({ raDenialReason: e.target.value })}
-                placeholder="Ex: ausência de início de prova material"
-                rows={3}
+                id="familyMembers"
+                value={data.familyMembers?.join(', ') || ""}
+                onChange={(e) => updateData({ 
+                  familyMembers: e.target.value.split(',').map(m => m.trim()) 
+                })}
+                placeholder="Ex: Esposo, 2 filhos menores, sogra..."
+                rows={2}
               />
             </div>
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
-      {/* Salário Mínimo de Referência */}
+      {/* SEÇÃO 6: REQUERIMENTO ADMINISTRATIVO */}
+      <Card className="p-6">
+        <h3 className="text-xl font-semibold mb-4">Requerimento Administrativo</h3>
+        
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="hasRa"
+              checked={data.hasRa}
+              onCheckedChange={(checked) =>
+                updateData({ hasRa: checked as boolean })
+              }
+            />
+            <Label htmlFor="hasRa" className="cursor-pointer">
+              Possui Requerimento Administrativo?
+            </Label>
+          </div>
+
+          {data.hasRa && (
+            <div className="ml-6 space-y-4 p-4 bg-muted/50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="raProtocol">Número do Protocolo (NB) *</Label>
+                  <Input
+                    id="raProtocol"
+                    value={data.raProtocol || ""}
+                    onChange={(e) => updateData({ raProtocol: e.target.value })}
+                    placeholder="NB 000.000.000-0"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="raRequestDate">Data do Requerimento *</Label>
+                  <Input
+                    id="raRequestDate"
+                    type="date"
+                    value={data.raRequestDate || ""}
+                    onChange={(e) => updateData({ raRequestDate: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="raDenialDate">Data do Indeferimento *</Label>
+                  <Input
+                    id="raDenialDate"
+                    type="date"
+                    value={data.raDenialDate || ""}
+                    onChange={(e) => updateData({ raDenialDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="raDenialReason">Motivo do Indeferimento *</Label>
+                <Textarea
+                  id="raDenialReason"
+                  value={data.raDenialReason || ""}
+                  onChange={(e) => updateData({ raDenialReason: e.target.value })}
+                  placeholder="Copie o motivo exato do processo administrativo..."
+                  rows={4}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* SEÇÃO 7: SALÁRIO MÍNIMO DE REFERÊNCIA */}
       <div className="space-y-2">
         <Label htmlFor="salarioMinimoRef">
           Salário Mínimo de Referência (R$)
