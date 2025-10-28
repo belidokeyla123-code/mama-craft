@@ -21,6 +21,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // 1. Buscar dados do caso
     const { data: caseData } = await supabase
       .from('cases')
       .select('*')
@@ -28,6 +29,28 @@ serve(async (req) => {
       .single();
     
     console.log('[JURISPRUDENCE] Caso carregado:', caseData?.profile, caseData?.event_type);
+    
+    // 2. Buscar análise jurídica completa
+    const { data: analysisData } = await supabase
+      .from('case_analysis')
+      .select('*')
+      .eq('case_id', caseId)
+      .order('analyzed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    console.log('[JURISPRUDENCE] Análise encontrada:', !!analysisData);
+    
+    // 3. Buscar documentos e extrações
+    const { data: documents } = await supabase
+      .from('documents')
+      .select(`
+        *,
+        extractions(*)
+      `)
+      .eq('case_id', caseId);
+    
+    console.log('[JURISPRUDENCE] Documentos encontrados:', documents?.length || 0);
     
     // Gerar chave de cache baseada no perfil e tipo de evento
     const cacheKey = `${caseData.profile}_${caseData.event_type}`;
@@ -57,23 +80,138 @@ serve(async (req) => {
     
     console.log('[JURISPRUDENCE] Cache MISS - Chamando IA...');
 
-    // Prompt ultra-simplificado para resposta rápida
-    const prompt = `Perfil: ${caseData.profile === 'especial' ? 'Rural' : 'Urbana'}. Evento: ${caseData.event_type}. Tem RA: ${caseData.has_ra ? 'Sim' : 'Não'}.
+    // Construir contexto rico e específico do caso
+    const draftPayload = analysisData?.draft_payload as any;
+    
+    const situacoesEspecificas = [];
+    
+    // Detectar situações específicas
+    if (draftPayload?.carencia?.cumprida === false) {
+      situacoesEspecificas.push(`Carência NÃO cumprida (faltam ${draftPayload.carencia.meses_faltantes} meses)`);
+    }
+    
+    if (draftPayload?.cnis_analysis?.periodos_urbanos?.length === 0 && 
+        draftPayload?.cnis_analysis?.periodos_rurais?.length === 0) {
+      situacoesEspecificas.push('CNIS VAZIO - reforça atividade rural exclusiva');
+    }
+    
+    if (caseData.child_death_date) {
+      situacoesEspecificas.push('FILHO FALECIDO - situação especial de salário maternidade post-mortem');
+    }
+    
+    if (draftPayload?.rmi?.situacao_especial) {
+      situacoesEspecificas.push('Situação especial detectada na análise de RMI');
+    }
+    
+    if (caseData.has_ra) {
+      situacoesEspecificas.push(`Requerimento Administrativo: ${caseData.ra_denial_reason || 'indeferido'}`);
+    }
 
-JSON com 2 de cada:
+    // Prompt enriquecido com análise completa
+    const prompt = `# BUSCA DE JURISPRUDÊNCIA ESPECÍFICA - SALÁRIO MATERNIDADE
+
+## DADOS DO CASO
+- Perfil: ${caseData.profile === 'especial' ? 'SEGURADA ESPECIAL RURAL' : 'SEGURADA URBANA'}
+- Evento: ${caseData.event_type || 'Nascimento'}
+- Data do evento: ${caseData.event_date || 'não informada'}
+- Nome da autora: ${caseData.author_name || 'não informado'}
+- Nome do filho: ${caseData.child_name || 'não informado'}
+
+## ANÁLISE JURÍDICA COMPLETA
+${analysisData ? `
+- Qualidade de segurada: ${draftPayload?.qualidade_segurada?.comprovado ? 'COMPROVADA' : 'NÃO COMPROVADA'} (${draftPayload?.qualidade_segurada?.detalhes || ''})
+- Carência: ${draftPayload?.carencia?.cumprida ? 'CUMPRIDA' : `NÃO CUMPRIDA - faltam ${draftPayload?.carencia?.meses_faltantes || 0} meses`}
+- RMI calculada: R$ ${draftPayload?.rmi?.valor?.toFixed(2) || '0.00'}
+- Valor da causa: R$ ${draftPayload?.valor_causa?.toFixed(2) || '0.00'}
+- Probabilidade de êxito: ${draftPayload?.probabilidade_exito?.score || 0}% (${draftPayload?.probabilidade_exito?.nivel || 'média'})
+` : '⚠️ Análise jurídica não disponível'}
+
+## SITUAÇÕES ESPECÍFICAS IDENTIFICADAS
+${situacoesEspecificas.length > 0 ? situacoesEspecificas.map(s => `- ${s}`).join('\n') : '- Nenhuma situação especial identificada'}
+
+## PONTOS FORTES DO CASO
+${draftPayload?.probabilidade_exito?.pontos_fortes?.length > 0 
+  ? draftPayload.probabilidade_exito.pontos_fortes.map((p: string) => `- ${p}`).join('\n')
+  : '- Não identificados'}
+
+## PONTOS FRACOS DO CASO
+${draftPayload?.probabilidade_exito?.pontos_fracos?.length > 0 
+  ? draftPayload.probabilidade_exito.pontos_fracos.map((p: string) => `- ${p}`).join('\n')
+  : '- Não identificados'}
+
+## RECOMENDAÇÕES DA ANÁLISE
+${draftPayload?.recomendacoes?.length > 0 
+  ? draftPayload.recomendacoes.map((r: string) => `- ${r}`).join('\n')
+  : '- Não há recomendações'}
+
+## DOCUMENTOS JUNTADOS
+${documents && documents.length > 0 
+  ? documents.map(d => `- ${d.document_type} (${d.file_name})`).join('\n')
+  : '- Nenhum documento juntado'}
+
+---
+
+# INSTRUÇÃO
+Com base na ANÁLISE JURÍDICA COMPLETA e nas SITUAÇÕES ESPECÍFICAS acima, busque jurisprudências, súmulas e doutrinas ALTAMENTE RELEVANTES e ESPECÍFICAS para este caso.
+
+**IMPORTANTE**: 
+- Não busque jurisprudências genéricas de salário maternidade
+- Foque nas SITUAÇÕES ESPECÍFICAS identificadas (ex: carência não cumprida, CNIS vazio, filho falecido, etc)
+- Se o CNIS for vazio, busque jurisprudências que REFORÇAM isso como prova de atividade rural
+- Se a carência não foi cumprida, busque precedentes sobre reconhecimento de atividade rural
+- Se houver situações especiais (filho falecido, etc), busque jurisprudências ESPECÍFICAS disso
+
+Retorne JSON com 3-5 de cada tipo:
 {
-  "jurisprudencias": [{"tipo":"","tribunal":"","numero_processo":"","tese_fixada":"","relevancia":0,"por_que_relevante":""}],
-  "sumulas": [{"tribunal":"","numero":"","tipo":"","texto_completo":"","relevancia":0,"como_aplicar":""}],
-  "doutrinas": [{"autor":"","obra":"","citacao_literal":"","relevancia":0,"por_que_citar":""}],
+  "jurisprudencias": [
+    {
+      "tipo": "acórdão/decisão monocrática/etc",
+      "tribunal": "TRF1/TRF2/STJ/etc",
+      "numero_processo": "número completo",
+      "relator": "nome do relator",
+      "data_julgamento": "DD/MM/AAAA",
+      "tese_fixada": "tese principal fixada no julgado",
+      "ementa_completa": "ementa completa do julgado",
+      "trecho_chave": "trecho específico aplicável ao caso",
+      "link": "link oficial se disponível",
+      "relevancia": 0-100,
+      "por_que_relevante": "explicação de como se aplica ESPECIFICAMENTE a este caso"
+    }
+  ],
+  "sumulas": [
+    {
+      "tribunal": "STF/STJ/TNU/etc",
+      "numero": "número da súmula",
+      "tipo": "vinculante/simples",
+      "texto_completo": "texto completo da súmula",
+      "texto_resumido": "resumo aplicável",
+      "link": "link oficial",
+      "relevancia": 0-100,
+      "como_aplicar": "como aplicar especificamente neste caso"
+    }
+  ],
+  "doutrinas": [
+    {
+      "autor": "nome do autor",
+      "obra": "nome da obra",
+      "editora": "editora",
+      "ano": 2024,
+      "pagina": "p. XXX",
+      "citacao_literal": "citação direta da obra",
+      "contexto": "contexto da citação",
+      "relevancia": 0-100,
+      "por_que_citar": "por que citar neste caso específico"
+    }
+  ],
   "teses_juridicas_aplicaveis": []
 }`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       
-    // Chamar IA para busca jurisprudências - SUPER RÁPIDO
-    console.log('[SEARCH-JURIS] Chamando IA...');
+    // Chamar IA para busca jurisprudências com contexto completo
+    console.log('[SEARCH-JURIS] Chamando IA com análise completa...');
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos timeout (mais tempo por causa do prompt maior)
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -83,8 +221,14 @@ JSON com 2 de cada:
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash-lite',
-          messages: [{ role: 'user', content: prompt }],
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'Você é um especialista em pesquisa jurisprudencial de direito previdenciário com 20 anos de experiência. Busque jurisprudências ESPECÍFICAS e RELEVANTES para cada caso, não genéricas.' 
+            },
+            { role: 'user', content: prompt }
+          ],
           response_format: { type: "json_object" }
         }),
         signal: controller.signal,
