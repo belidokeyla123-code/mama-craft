@@ -8,6 +8,161 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Schema dinâmico por tipo de documento
+function getSchemaForDocType(docType: string) {
+  const schemas: Record<string, any> = {
+    certidao_nascimento: {
+      type: 'object',
+      properties: {
+        childName: { type: 'string', description: 'Nome completo da criança (no topo da certidão)' },
+        childBirthDate: { type: 'string', description: 'Data de nascimento da criança (formato YYYY-MM-DD)' },
+        motherName: { type: 'string', description: 'Nome completo da mãe (seção FILIAÇÃO MATERNA)' },
+        fatherName: { type: 'string', description: 'Nome completo do pai (seção FILIAÇÃO PATERNA)' },
+        registryNumber: { type: 'string', description: 'Número da matrícula/registro' },
+        registryDate: { type: 'string', description: 'Data do registro (formato YYYY-MM-DD)' },
+        birthCity: { type: 'string', description: 'Cidade onde nasceu' }
+      },
+      required: ['childName', 'childBirthDate', 'motherName']
+    },
+    processo_administrativo: {
+      type: 'object',
+      properties: {
+        raProtocol: { type: 'string', description: 'Número do protocolo/NB do processo administrativo' },
+        raRequestDate: { type: 'string', description: 'Data do requerimento administrativo (formato YYYY-MM-DD)' },
+        raDenialDate: { type: 'string', description: 'Data do indeferimento (formato YYYY-MM-DD)' },
+        raDenialReason: { type: 'string', description: 'Motivo completo e literal do indeferimento' },
+        benefitType: { type: 'string', description: 'Tipo do benefício solicitado (ex: Salário-Maternidade)' }
+      },
+      required: ['raProtocol']
+    },
+    autodeclaracao_rural: {
+      type: 'object',
+      properties: {
+        ruralPeriods: {
+          type: 'array',
+          description: 'Períodos de trabalho rural',
+          items: {
+            type: 'object',
+            properties: {
+              startDate: { type: 'string', description: 'Data início (YYYY-MM-DD)' },
+              endDate: { type: 'string', description: 'Data fim (YYYY-MM-DD)' },
+              location: { type: 'string', description: 'Local/município' },
+              activities: { type: 'string', description: 'Atividades exercidas' },
+              withWhom: { type: 'string', description: 'Com quem trabalhou' }
+            }
+          }
+        },
+        familyMembersDetailed: {
+          type: 'array',
+          description: 'Membros do grupo familiar',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              cpf: { type: 'string' },
+              birthDate: { type: 'string' },
+              relationship: { type: 'string' }
+            }
+          }
+        },
+        landOwnerName: { type: 'string', description: 'Nome do proprietário da terra' },
+        landOwnerCpf: { type: 'string', description: 'CPF do proprietário (apenas números)' }
+      }
+    },
+    documento_terra: {
+      type: 'object',
+      properties: {
+        landOwnerName: { type: 'string', description: 'Nome completo do proprietário da terra' },
+        landOwnerCpf: { type: 'string', description: 'CPF do proprietário (apenas números)' },
+        landOwnerRg: { type: 'string', description: 'RG completo com órgão expedidor' },
+        landArea: { type: 'string', description: 'Área total do imóvel em hectares' },
+        landLocation: { type: 'string', description: 'Localização/endereço do imóvel' },
+        registryNumber: { type: 'string', description: 'Número da matrícula/registro' }
+      },
+      required: ['landOwnerName']
+    },
+    identificacao: {
+      type: 'object',
+      properties: {
+        fullName: { type: 'string', description: 'Nome completo da pessoa' },
+        cpf: { type: 'string', description: 'CPF (apenas números, sem pontos/traços)' },
+        rg: { type: 'string', description: 'RG completo com órgão expedidor' },
+        birthDate: { type: 'string', description: 'Data de nascimento (formato YYYY-MM-DD)' },
+        motherName: { type: 'string', description: 'Nome completo da mãe (filiação)' },
+        fatherName: { type: 'string', description: 'Nome completo do pai (filiação)' }
+      },
+      required: ['fullName']
+    },
+    comprovante_residencia: {
+      type: 'object',
+      properties: {
+        holderName: { type: 'string', description: 'Nome do titular da conta' },
+        address: { type: 'string', description: 'Endereço completo' },
+        city: { type: 'string', description: 'Cidade' },
+        state: { type: 'string', description: 'Estado (UF)' },
+        zipCode: { type: 'string', description: 'CEP' },
+        referenceDate: { type: 'string', description: 'Data de referência do comprovante (YYYY-MM-DD)' }
+      }
+    },
+    cnis: {
+      type: 'object',
+      properties: {
+        fullName: { type: 'string', description: 'Nome completo do segurado' },
+        cpf: { type: 'string', description: 'CPF (apenas números)' },
+        contributionRecords: {
+          type: 'array',
+          description: 'Registros de vínculos/contribuições',
+          items: {
+            type: 'object',
+            properties: {
+              employer: { type: 'string' },
+              startDate: { type: 'string' },
+              endDate: { type: 'string' },
+              cnpj: { type: 'string' }
+            }
+          }
+        }
+      }
+    },
+    historico_escolar: {
+      type: 'object',
+      properties: {
+        studentName: { type: 'string', description: 'Nome completo do aluno' },
+        schoolName: { type: 'string', description: 'Nome da instituição de ensino' },
+        period: { type: 'string', description: 'Período/ano letivo' },
+        grades: { type: 'string', description: 'Série/ano cursado' }
+      }
+    },
+    declaracao_saude_ubs: {
+      type: 'object',
+      properties: {
+        patientName: { type: 'string', description: 'Nome do paciente' },
+        healthUnit: { type: 'string', description: 'Nome da UBS/Posto de Saúde' },
+        declarationDate: { type: 'string', description: 'Data da declaração (YYYY-MM-DD)' },
+        content: { type: 'string', description: 'Conteúdo da declaração' }
+      }
+    },
+    procuracao: {
+      type: 'object',
+      properties: {
+        granterName: { type: 'string', description: 'Nome do outorgante (quem dá o poder)' },
+        granterCpf: { type: 'string', description: 'CPF do outorgante' },
+        attorneyName: { type: 'string', description: 'Nome do outorgado (procurador/advogado)' },
+        attorneyCpf: { type: 'string', description: 'CPF do outorgado' },
+        oabNumber: { type: 'string', description: 'Número da OAB do advogado' },
+        powers: { type: 'string', description: 'Poderes outorgados' },
+        signatureDate: { type: 'string', description: 'Data da assinatura (YYYY-MM-DD)' }
+      }
+    }
+  };
+
+  return schemas[docType] || {
+    type: 'object',
+    description: 'Dados extraídos do documento',
+    additionalProperties: true
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -104,7 +259,7 @@ serve(async (req) => {
               properties: {
                 documentType: { type: 'string', description: 'Tipo do documento' },
                 extractionConfidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                extractedData: { type: 'object', description: 'Dados extraídos' }
+                extractedData: getSchemaForDocType(docType)
               },
               required: ['documentType', 'extractionConfidence', 'extractedData']
             }
