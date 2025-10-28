@@ -1012,6 +1012,14 @@ export type Database = {
         | "COMPROV_RESID"
         | "FOTOS"
         | "OUTROS"
+        | "procuracao"
+        | "certidao_nascimento"
+        | "identificacao"
+        | "comprovante_residencia"
+        | "autodeclaracao_rural"
+        | "documento_terra"
+        | "processo_administrativo"
+        | "outro"
       event_type: "parto" | "adocao" | "guarda"
       fase_processual:
         | "distribuida"
@@ -1178,6 +1186,14 @@ export const Constants = {
         "COMPROV_RESID",
         "FOTOS",
         "OUTROS",
+        "procuracao",
+        "certidao_nascimento",
+        "identificacao",
+        "comprovante_residencia",
+        "autodeclaracao_rural",
+        "documento_terra",
+        "processo_administrativo",
+        "outro",
       ],
       event_type: ["parto", "adocao", "guarda"],
       fase_processual: [
