@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Upload, Loader2, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { mapDocumentTypeToEnum, sanitizeFileName } from "@/lib/documentTypeMapper";
 
 interface DocumentUploadInlineProps {
   caseId: string;
@@ -26,23 +27,30 @@ export const DocumentUploadInline = ({
     setUploading(true);
     try {
       for (const file of files) {
+        // Sanitizar nome do arquivo
+        const sanitizedName = sanitizeFileName(file.name);
+        const timestamp = Date.now();
+        const fileName = `${caseId}/${timestamp}_${sanitizedName}`;
+        
         // Upload para storage
-        const fileName = `${caseId}/${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from('case-documents')
           .upload(fileName, file);
 
         if (uploadError) throw uploadError;
 
+        // Mapear tipo de documento para enum válido
+        const mappedDocType = mapDocumentTypeToEnum(suggestedDocType || 'outro');
+
         // Registrar documento no banco
         const { error: insertError } = await supabase
           .from('documents')
           .insert([{
             case_id: caseId,
-            file_name: file.name,
+            file_name: sanitizedName,
             file_path: fileName,
-            document_type: (suggestedDocType || 'OUTROS') as any,
-            mime_type: file.type,
+            document_type: mappedDocType as any,
+            mime_type: file.type || 'application/octet-stream',
             file_size: file.size
           }]);
 
@@ -63,7 +71,13 @@ export const DocumentUploadInline = ({
         toast.success(`${files.length} documento(s) enviado(s) e processado(s)!`);
       }
 
-      onUploadComplete?.();
+      // Aguardar processamento antes de chamar callback
+      if (onUploadComplete) {
+        setTimeout(() => {
+          onUploadComplete();
+          toast.success("Dados atualizados! Verifique as outras abas.");
+        }, 5000);
+      }
     } catch (error: any) {
       console.error('Erro no upload:', error);
       toast.error(error.message || 'Erro ao enviar documentos');

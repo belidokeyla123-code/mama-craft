@@ -153,13 +153,28 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                     <Badge variant="destructive">{doc.importance}</Badge>
                   </div>
                   
-                  {(doc.importance === 'critical' || doc.importance === 'high') && data.caseId && (
-                    <DocumentUploadInline 
-                      caseId={data.caseId}
-                      suggestedDocType={doc.doc_type}
-                      onUploadComplete={handleValidate}
-                    />
-                  )}
+      {(doc.importance === 'critical' || doc.importance === 'high') && data.caseId && (
+        <DocumentUploadInline 
+          caseId={data.caseId}
+          suggestedDocType={doc.doc_type}
+          onUploadComplete={async () => {
+            // Revalidar documentos
+            await handleValidate();
+            
+            // Buscar dados atualizados do caso
+            const { data: updatedCase } = await supabase
+              .from('cases')
+              .select('*')
+              .eq('id', data.caseId)
+              .single();
+            
+            if (updatedCase) {
+              // Atualizar dados no formulário principal
+              updateData(updatedCase);
+            }
+          }}
+        />
+      )}
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">{doc.reason}</p>
                 {doc.impact && (

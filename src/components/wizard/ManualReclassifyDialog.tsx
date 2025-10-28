@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -46,9 +46,20 @@ export const ManualReclassifyDialog = ({
   onOpenChange,
   onSuccess,
 }: ManualReclassifyDialogProps) => {
+  // Inicializar com valores atuais se o documento já for "outro"
   const [selectedType, setSelectedType] = useState<string>("");
   const [customName, setCustomName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Resetar estados quando o dialog abre com novo documento
+  useEffect(() => {
+    if (open && document) {
+      const isOther = document.document_type?.toLowerCase() === 'outro' || 
+                     document.document_type?.toLowerCase() === 'outros';
+      setSelectedType(isOther ? 'outro' : '');
+      setCustomName(isOther ? document.file_name : '');
+    }
+  }, [open, document]);
 
   const handleSave = async () => {
     if (!document) return;

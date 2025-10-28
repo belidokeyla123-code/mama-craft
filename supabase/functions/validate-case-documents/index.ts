@@ -69,7 +69,7 @@ Valide se a documentação é suficiente para protocolar a ação. Retorne um JS
   ],
   "missing_docs": [
     {
-      "doc_type": "Tipo do documento",
+      "doc_type": "Tipo do documento (USE ENUM VÁLIDO)",
       "reason": "Por que é importante (explicação detalhada)",
       "importance": "critical" | "high" | "medium",
       "impact": "Como a falta disso impacta na ação"
@@ -78,15 +78,29 @@ Valide se a documentação é suficiente para protocolar a ação. Retorne um JS
   "recommendations": ["Recomendação 1", "Recomendação 2"]
 }
 
+⚠️ **IMPORTANTE - VALORES DO ENUM para "doc_type"**:
+Use APENAS estes valores exatos (NÃO use nomes descritivos):
+- "identificacao" (NÃO "RG da autora", "CPF", etc)
+- "certidao_nascimento" (NÃO "Certidão de Nascimento da criança")
+- "autodeclaracao_rural" (NÃO "Autodeclaração Rural")
+- "documento_terra" (NÃO "Documento da Terra", "ITR")
+- "processo_administrativo" (NÃO "Requerimento Administrativo")
+- "comprovante_residencia"
+- "procuracao"
+- "cnis"
+- "ficha_atendimento"
+- "carteira_pescador"
+- "outro"
+
 ⚠️ **REGRA DE IMPORTÂNCIA**:
 Use "critical" (não "high") para documentos ESSENCIAIS sem os quais a ação não pode ser protocolada:
-- Certidão de nascimento da criança (critical - comprova o fato gerador)
-- RG/CPF da autora (critical - identificação)
+- certidao_nascimento (critical - comprova o fato gerador)
+- identificacao (critical - RG/CPF da autora)
 - Comprovantes de atividade rural (critical - para segurada especial)
-- Autodeclaração rural (critical - caracteriza a segurada especial)
-- **DOCUMENTOS DE PROPRIEDADE/POSSE DA TERRA** (critical - comprova local de trabalho)
-- **CNIS** (critical - histórico contributivo)
-- Requerimento administrativo/Indeferimento (critical - comprova negativa do INSS)
+- autodeclaracao_rural (critical - caracteriza a segurada especial)
+- documento_terra (critical - comprova local de trabalho)
+- cnis (critical - histórico contributivo)
+- processo_administrativo (critical - comprova negativa do INSS)
 
 Use "high" apenas para documentos importantes mas não impeditivos.
 Use "medium" para documentos complementares.`;

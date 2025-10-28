@@ -774,6 +774,20 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                           >
                             <span className="text-muted-foreground">{doc.file_name}</span>
                             <div className="flex items-center gap-1">
+                              {/* NOVO: Botão de editar se for "OUTRO" */}
+                              {(doc.document_type?.toUpperCase() === 'OUTRO' || 
+                                doc.document_type?.toUpperCase() === 'OUTROS') && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setReclassifyDoc(doc)}
+                                  title="Editar classificação"
+                                  className="h-7 w-7 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
+                              
                               <Button
                                 variant="ghost"
                                 size="sm"
