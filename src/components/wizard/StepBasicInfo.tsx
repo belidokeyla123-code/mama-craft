@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { PasteDataInline } from "./PasteDataInline";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
+import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
 interface StepBasicInfoProps {
   data: CaseData;
@@ -40,6 +41,12 @@ const calcularTempo = (inicio: string, fim: string) => {
 export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const autoFilledFields = data.autoFilledFields || [];
   const missingFields = data.missingFields || [];
+
+  // Sistema de orquestração para disparar pipeline completo
+  const { triggerFullPipeline } = useCaseOrchestration({ 
+    caseId: data.caseId || '', 
+    enabled: true 
+  });
 
   // Invalidar caches quando campos críticos mudarem
   useCacheInvalidation({
@@ -226,7 +233,11 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
       if (error) throw error;
 
-      toast.success("Documentos re-processados com sucesso!");
+      toast.success("Documentos re-processados!");
+      
+      // 🆕 DISPARAR PIPELINE COMPLETO
+      await triggerFullPipeline('Re-processamento de documentos');
+      
       window.location.reload(); // Recarregar para pegar novos dados
     } catch (error) {
       console.error("Erro ao re-processar documentos:", error);

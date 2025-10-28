@@ -196,44 +196,48 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           <h3 className="text-lg font-semibold mb-4">Checklist Documental</h3>
           <div className="space-y-2">
             {checklist.map((item: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-3 p-3 border rounded">
+              <div key={idx} className="flex items-center justify-between gap-3 p-3 border rounded">
+                <div className="flex items-center gap-3 flex-1">
                   {item.document ? (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-600">OK</span>
-                      <Button size="sm" variant="ghost" onClick={async () => {
-                        try {
-                          await supabase.from('documents').delete().eq('id', item.document.id);
-                          sonnerToast.success("Documento excluído");
-                          handleValidate();
-                        } catch { sonnerToast.error("Erro"); }
-                      }} className="h-6 w-6 p-0">
-                        <XCircle className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ) : <XCircle className="h-4 w-4 text-destructive" />}
-                <span className="flex-1">{item.item}</span>
-                <Badge variant={item.importance === 'critical' ? 'destructive' : 'secondary'}>
-                  {item.importance}
-                </Badge>
+                    <CheckCircle className="h-5 w-5 text-success flex-shrink-0" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">{item.item}</p>
+                    {item.document && (
+                      <p className="text-xs text-muted-foreground">
+                        {item.document.file_name}
+                      </p>
+                    )}
+                  </div>
+                  <Badge variant={item.document ? "outline" : "destructive"} className={item.document ? "text-success border-success" : ""}>
+                    {item.document ? "OK" : "Faltante"}
+                  </Badge>
+                  <Badge variant={item.importance === 'critical' ? 'destructive' : 'secondary'}>
+                    {item.importance}
+                  </Badge>
+                </div>
                 
-                {/* Botão de excluir SE documento existe E status não é ok */}
-                {item.document_id && item.status !== 'ok' && (
+                {/* Botão de exclusão se documento presente */}
+                {item.document && (
                   <Button
+                    size="sm"
                     variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteDocument(item.document_id)}
-                    title="Excluir documento"
+                    onClick={() => handleDeleteDocument(item.document.id)}
+                    className="flex-shrink-0"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
                 
-                {/* Debug: Mostrar se document_id está presente */}
-                {process.env.NODE_ENV === 'development' && (
-                  <span className="text-xs text-muted-foreground">
-                    {item.document_id ? '✓ ID' : '✗ No ID'}
-                  </span>
+                {/* Botão de upload se documento faltante */}
+                {!item.document && (item.importance === 'critical' || item.importance === 'high') && data.caseId && (
+                  <DocumentUploadInline 
+                    caseId={data.caseId}
+                    suggestedDocType={item.item}
+                    onUploadComplete={handleValidate}
+                  />
                 )}
               </div>
             ))}

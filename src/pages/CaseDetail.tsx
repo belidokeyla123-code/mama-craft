@@ -303,7 +303,7 @@ export default function CaseDetail() {
                       {currentStep > step.id ? (
                         <Check className="h-5 w-5" />
                       ) : (
-                        <span className="font-semibold">{step.id + 1}</span>
+                        <span className="text-base font-semibold">{step.id + 1}</span>
                       )}
                     </button>
                     {index < STEPS.length - 1 && (
@@ -324,7 +324,7 @@ export default function CaseDetail() {
                   <button
                     key={step.id}
                     onClick={() => setCurrentStep(step.id)}
-                    className={`text-sm hover:text-primary transition-colors whitespace-nowrap ${
+                    className={`text-base hover:text-primary transition-colors whitespace-nowrap ${
                       currentStep >= step.id
                         ? "text-foreground font-medium"
                         : "text-muted-foreground"

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ManualReclassifyDialog } from "./ManualReclassifyDialog";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
+import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
 interface Document {
   id: string;
@@ -41,6 +42,12 @@ interface StepDocumentsManagerProps {
 export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: StepDocumentsManagerProps) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Sistema de orquestração para disparar pipeline completo
+  const { triggerFullPipeline } = useCaseOrchestration({ 
+    caseId: caseId || '', 
+    enabled: true 
+  });
 
   // Invalidar caches quando documentos mudarem
   useCacheInvalidation({
@@ -128,6 +135,9 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
       // Recarregar lista
       await loadDocuments();
+      
+      // 🆕 DISPARAR PIPELINE COMPLETO
+      await triggerFullPipeline('Documento removido');
       
       // Notificar componente pai
       if (onDocumentsChange) {
@@ -380,6 +390,9 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       // Recarregar lista imediatamente
       await loadDocuments();
       
+      // 🆕 DISPARAR PIPELINE COMPLETO após upload
+      await triggerFullPipeline('Novos documentos adicionados');
+      
       // Polling para verificar status na fila
       const pollInterval = setInterval(async () => {
         const { data: queue } = await supabase
@@ -453,6 +466,9 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
       await loadDocuments();
       if (onDocumentsChange) onDocumentsChange();
+      
+      // 🆕 DISPARAR PIPELINE COMPLETO após reclassificação
+      await triggerFullPipeline('Documentos reclassificados');
 
     } catch (error: any) {
       console.error("Erro ao reclassificar:", error);

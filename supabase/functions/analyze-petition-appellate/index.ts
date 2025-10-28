@@ -79,7 +79,7 @@ IMPORTANTE:
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s otimizado
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s otimizado
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -89,7 +89,7 @@ IMPORTANTE:
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'google/gemini-2.5-flash-lite',
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: "json_object" }
         }),
@@ -100,7 +100,7 @@ IMPORTANTE:
 
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ 
-          error: 'Rate limit atingido.',
+          error: 'Rate limit: Muitas requisições. Aguarde e tente novamente.',
           code: 'RATE_LIMIT'
         }), {
           status: 429,
@@ -110,7 +110,7 @@ IMPORTANTE:
 
       if (aiResponse.status === 402) {
         return new Response(JSON.stringify({ 
-          error: 'Créditos Lovable AI esgotados.',
+          error: 'Sem créditos: Adicione créditos em Settings -> Workspace -> Usage.',
           code: 'NO_CREDITS'
         }), {
           status: 402,
@@ -120,7 +120,7 @@ IMPORTANTE:
 
       if (!aiResponse.ok) {
         const errorText = await aiResponse.text();
-        console.error('AI API error:', aiResponse.status, errorText);
+        console.error('[APPELLATE-MODULE] AI API error:', aiResponse.status, errorText);
         throw new Error(`AI API error: ${aiResponse.status}`);
       }
 

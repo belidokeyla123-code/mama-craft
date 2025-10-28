@@ -10,59 +10,39 @@ interface CacheInvalidationOptions {
 
 export const useCacheInvalidation = ({ caseId, triggerType, watchFields = [] }: CacheInvalidationOptions) => {
   useEffect(() => {
-    const invalidateAndRequeue = async () => {
+    const invalidateCaches = async () => {
       if (!caseId) return;
       
+      console.log(`[CACHE-INVALIDATION] Tipo: ${triggerType}`);
+      
       try {
-        console.log(`[CACHE] Invalidando caches - ${triggerType}`);
+        // Deletar análise antiga
+        await supabase
+          .from('case_analysis')
+          .delete()
+          .eq('case_id', caseId);
         
-        // Deletar análises e jurisprudências antigas
-        await Promise.all([
-          supabase.from('case_analysis').delete().eq('case_id', caseId),
-          supabase.from('jurisprudence_results').delete().eq('case_id', caseId),
-          supabase.from('teses_juridicas').delete().eq('case_id', caseId),
-        ]);
+        // Deletar jurisprudência antiga
+        await supabase
+          .from('jurisprudence_results')
+          .delete()
+          .eq('case_id', caseId);
         
-        // Re-adicionar à fila para análise completa
-        const { data: existingQueue } = await supabase
-          .from('processing_queue')
-          .select('id')
-          .eq('case_id', caseId)
-          .maybeSingle();
+        // Deletar teses antigas
+        await supabase
+          .from('teses_juridicas')
+          .delete()
+          .eq('case_id', caseId);
         
-        if (existingQueue) {
-          await supabase
-            .from('processing_queue')
-            .update({
-              status: 'queued',
-              validation_status: 'queued',
-              analysis_status: 'queued',
-              jurisprudence_status: 'queued',
-              updated_at: new Date().toISOString()
-            })
-            .eq('case_id', caseId);
-        } else {
-          await supabase
-            .from('processing_queue')
-            .insert({
-              case_id: caseId,
-              status: 'queued',
-              validation_status: 'queued',
-              analysis_status: 'queued',
-              jurisprudence_status: 'queued',
-            });
-        }
-        
-        console.log(`[CACHE] ✅ Invalidação concluída - ${triggerType}`);
+        console.log('[CACHE-INVALIDATION] Caches deletados');
       } catch (error) {
-        console.error('[CACHE] Erro ao invalidar:', error);
+        console.error('[CACHE-INVALIDATION] Erro:', error);
       }
     };
-    
-    // Só invalidar se watchFields mudarem (não no mount inicial)
-    if (watchFields.length > 0 && watchFields.some(field => field !== undefined && field !== null)) {
-      const timer = setTimeout(invalidateAndRequeue, 2000); // debounce 2s
-      return () => clearTimeout(timer);
+
+    // Invalidar sempre que watchFields mudarem
+    if (watchFields.length > 0) {
+      invalidateCaches();
     }
-  }, watchFields);
+  }, [caseId, ...watchFields]);
 };
