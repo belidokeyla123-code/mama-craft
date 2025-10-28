@@ -22,13 +22,39 @@ export async function extractDataFromBatch(
    ⚠️ Este é o documento PRIORITÁRIO para dados de endereço e contato!
 
 🔹 **CERTIDÃO DE NASCIMENTO** (CRÍTICO!)
-   LEIA A SEÇÃO "DADOS DA MÃE" E "DADOS DO PAI" COM ATENÇÃO:
-   ✓ Nome COMPLETO da criança (campo principal na certidão)
-   ✓ Data de nascimento da criança DD/MM/AAAA (CAMPO CRÍTICO!)
-   ✓ Local de nascimento (cidade e UF)
-   ✓ Nome COMPLETO da mãe (na seção "DADOS DA MÃE")
-   ✓ Data de nascimento da mãe (se constar na certidão)
-   ✓ Nome COMPLETO do pai (na seção "DADOS DO PAI")
+   
+   ⚠️⚠️⚠️ ATENÇÃO MÁXIMA: NÃO CONFUNDA MÃE COM CRIANÇA! ⚠️⚠️⚠️
+   
+   A certidão de nascimento tem 3 PESSOAS DIFERENTES:
+   
+   1️⃣ **CRIANÇA** (a pessoa que NASCEU):
+      → Nome da criança: aparece no TOPO da certidão
+      → Campo: "Nome do Registrado", "Nome Completo", "Nascido(a)"
+      → Data de nascimento da CRIANÇA
+      → É a PESSOA PRINCIPAL do documento!
+   
+   2️⃣ **MÃE** (quem DEU À LUZ):
+      → Na seção "DADOS DA MÃE" ou "FILIAÇÃO MATERNA"
+      → É DIFERENTE do nome da criança!
+      → Campo: "Nome da Mãe", "Filiação Materna"
+   
+   3️⃣ **PAI**:
+      → Na seção "DADOS DO PAI" ou "FILIAÇÃO PATERNA"
+      → Campo: "Nome do Pai", "Filiação Paterna"
+   
+   🚨 REGRA ABSOLUTA:
+   - Se o documento diz "MÃE:" ou "FILIAÇÃO MATERNA:" → É o nome da MÃE
+   - Se o documento diz "NOME:", "REGISTRADO:" no início → É o nome da CRIANÇA
+   - NUNCA coloque o nome da mãe no campo childName!
+   - NUNCA coloque o nome da criança no campo motherName!
+   
+   Extrair:
+   - Nome completo da criança (requerente/beneficiário) - ATENÇÃO: NÃO é o nome da mãe!
+   - Data de nascimento da CRIANÇA DD/MM/AAAA (CAMPO CRÍTICO!)
+   - Nome da mãe (seção DADOS DA MÃE) - DIFERENTE do nome da criança!
+   - CPF da mãe (se disponível)
+   - Naturalidade (cidade/estado de nascimento da CRIANÇA)
+   - Cartório onde foi registrado
 
 🔹 **CPF / RG / CNH / IDENTIDADE**
    ✓ Nome completo EXATAMENTE como aparece
@@ -408,21 +434,27 @@ Agora extraia TODOS os dados de saúde listados acima:`;
           parameters: {
             type: "object",
             properties: {
-              // Dados da mãe/autora
-              motherName: { type: "string", description: "Nome COMPLETO da mãe/autora" },
-              motherCpf: { type: "string", description: "CPF da mãe sem formatação" },
-              motherRg: { type: "string", description: "RG da mãe com órgão expedidor" },
-              motherBirthDate: { type: "string", description: "Data nascimento da mãe YYYY-MM-DD" },
-              motherAddress: { type: "string", description: "Endereço COMPLETO da mãe" },
+            // Dados da mãe/autora
+              motherName: { 
+                type: "string", 
+                description: "Nome COMPLETO da MÃE/AUTORA (quem deu à luz). Exemplo: 'Maria da Silva Santos'. NA CERTIDÃO DE NASCIMENTO: procure em 'DADOS DA MÃE' ou 'FILIAÇÃO MATERNA'. NUNCA coloque o nome da criança aqui!" 
+              },
+              motherCpf: { type: "string", description: "CPF da mãe (apenas números, sem formatação)" },
+              motherRg: { type: "string", description: "RG da mãe com órgão expedidor (ex: '12.345.678-9 SSP/MG')" },
+              motherBirthDate: { type: "string", description: "Data de nascimento da mãe (formato: YYYY-MM-DD)" },
+              motherAddress: { type: "string", description: "Endereço COMPLETO da mãe (Rua + Nº + Bairro + Cidade + UF + CEP)" },
               motherPhone: { type: "string", description: "Telefone ou celular da mãe" },
               motherWhatsapp: { type: "string", description: "WhatsApp da mãe" },
               maritalStatus: { type: "string", description: "Estado civil" },
               
               // Dados da criança
-              childName: { type: "string", description: "Nome COMPLETO da criança" },
-              childBirthDate: { type: "string", description: "Data nascimento criança YYYY-MM-DD" },
-              childBirthPlace: { type: "string", description: "Local de nascimento da criança" },
-              fatherName: { type: "string", description: "Nome COMPLETO do pai" },
+              childName: { 
+                type: "string", 
+                description: "Nome COMPLETO da CRIANÇA (quem nasceu, pessoa registrada). Exemplo: 'João Pedro Silva'. NA CERTIDÃO DE NASCIMENTO: aparece no TOPO do documento, campo 'NOME DO REGISTRADO' ou 'NASCIDO(A)'. ATENÇÃO: NÃO é o nome da mãe! Deve ser DIFERENTE do motherName!" 
+              },
+              childBirthDate: { type: "string", description: "Data de nascimento da CRIANÇA (formato: YYYY-MM-DD)" },
+              childBirthPlace: { type: "string", description: "Local de nascimento da criança (cidade + UF)" },
+              fatherName: { type: "string", description: "Nome COMPLETO do pai (seção DADOS DO PAI ou FILIAÇÃO PATERNA)" },
               
               // Proprietário da terra
               landOwnerName: { type: "string", description: "Nome do proprietário da terra" },
@@ -574,6 +606,19 @@ Agora extraia TODOS os dados de saúde listados acima:`;
                 type: "array",
                 items: { type: "string" },
                 description: "Observações importantes"
+              },
+              
+              // Confiança na extração
+              extractionConfidence: {
+                type: "object",
+                properties: {
+                  childNameConfidence: { 
+                    type: "string", 
+                    enum: ["high", "medium", "low"],
+                    description: "Nível de confiança na extração do nome da criança. Use 'low' se houver dúvida entre nome da mãe e da criança, ou se a certidão não deixar claro qual é o nome do registrado. Use 'high' apenas quando tiver certeza ABSOLUTA que childName é DIFERENTE de motherName." 
+                  }
+                },
+                description: "Nível de confiança em campos críticos (use para sinalizar quando houver ambiguidade ou risco de confusão)"
               }
             },
             required: [],

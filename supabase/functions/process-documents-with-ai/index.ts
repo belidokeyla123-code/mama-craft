@@ -395,6 +395,38 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     if (extractedData.motherWhatsapp) updateData.author_whatsapp = extractedData.motherWhatsapp.replace(/\D/g, '');
     if (extractedData.maritalStatus) updateData.author_marital_status = extractedData.maritalStatus;
     
+    // ============================================================
+    // VALIDAÇÃO CRÍTICA: Nome da mãe ≠ Nome da criança
+    // ============================================================
+    if (extractedData.childName && extractedData.motherName) {
+      if (extractedData.childName === extractedData.motherName) {
+        console.error('[VALIDAÇÃO CRÍTICA] ❌ ERRO: childName === motherName!');
+        console.error(`[VALIDAÇÃO] Nome extraído: "${extractedData.childName}"`);
+        console.error('[VALIDAÇÃO] Isso é um erro! A criança e a mãe não podem ter o mesmo nome!');
+        console.error('[VALIDAÇÃO] Resetando childName para null - reprocessamento necessário');
+        
+        // Resetar childName para forçar revisão manual
+        extractedData.childName = null;
+        
+        // Adicionar aviso nas observações
+        if (!extractedData.observations) extractedData.observations = [];
+        extractedData.observations.push(
+          '⚠️ ERRO CRÍTICO: IA confundiu nome da mãe com nome da criança. REVISAR CERTIDÃO DE NASCIMENTO MANUALMENTE!'
+        );
+      } else {
+        console.log('[VALIDAÇÃO] ✅ childName ≠ motherName - OK');
+        console.log(`[VALIDAÇÃO] Mãe: "${extractedData.motherName}"`);
+        console.log(`[VALIDAÇÃO] Criança: "${extractedData.childName}"`);
+      }
+    }
+
+    // Validar confiança na extração
+    if (extractedData.extractionConfidence?.childNameConfidence === 'low') {
+      console.warn('[VALIDAÇÃO] ⚠️ IA com baixa confiança em childName - marcar para revisão');
+      if (!extractedData.observations) extractedData.observations = [];
+      extractedData.observations.push('⚠️ Nome da criança extraído com baixa confiança - revisar manualmente');
+    }
+    
     // Dados da criança
     if (extractedData.childName) updateData.child_name = extractedData.childName;
     if (extractedData.childBirthDate) {
