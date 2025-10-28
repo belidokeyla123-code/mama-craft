@@ -2,9 +2,10 @@
 export async function extractDataFromBatch(
   processedBatch: any[],
   openaiApiKey: string,
-  hasAutodeclaracao: boolean
+  hasAutodeclaracao: boolean,
+  lovableApiKey?: string
 ): Promise<any> {
-  console.log(`[IA BATCH] Chamando OpenAI GPT-4o com ${processedBatch.length} imagens...`);
+  console.log(`[IA BATCH] Chamando IA (Lovable AI Claude Sonnet 4.5 ou OpenAI GPT-4o) com ${processedBatch.length} imagens...`);
   
   const systemPrompt = `Você é um especialista em OCR e extração de dados de documentos previdenciários brasileiros. Sua missão é extrair TODAS as informações visíveis com MÁXIMA PRECISÃO.
 
@@ -320,6 +321,93 @@ Agora extraia TODOS os 4 campos listados acima COM MÁXIMA PRECISÃO:`;
     if (doc.docType === 'historico_escolar') {
       docPrompt = `📚 HISTÓRICO ESCOLAR / DECLARAÇÃO ESCOLAR - PROVA MATERIAL DE VÍNCULO RURAL!
 
+⚠️⚠️⚠️ ESTE DOCUMENTO É EXTREMAMENTE IMPORTANTE! ⚠️⚠️⚠️
+
+Você DEVE extrair TODOS os dados escolares neste documento!
+
+🔴 OBRIGATÓRIO EXTRAIR (campo schoolHistory):
+
+Para CADA escola mencionada, extrair um objeto com:
+- instituicao: Nome COMPLETO da escola (ex: "Escola Rural Municipal São José")
+- periodo_inicio: Ano de início (ex: "2010-01-01") 
+- periodo_fim: Ano de fim (ex: "2014-12-31")
+- serie_ano: Séries cursadas (ex: "1ª a 4ª série primária")
+- localizacao: CRÍTICO - dizer se é "ZONA RURAL" ou "ZONA URBANA" + município/UF
+
+🔍 ONDE PROCURAR:
+- Nome da escola: geralmente no topo do documento
+- Períodos: procure por "ANO:", "PERÍODO:", tabelas com anos
+- Localização: procure por "ZONA RURAL", "ÁREA RURAL", "RURAL", nome do sítio/fazenda
+
+⚠️ SE A ESCOLA É EM ZONA RURAL = PROVA QUE A FAMÍLIA MORAVA NA ZONA RURAL!
+
+Documento: ${doc.fileName}
+Tipo: historico_escolar
+
+AGORA EXTRAIA TODOS OS DADOS ESCOLARES COM MÁXIMA ATENÇÃO:`;
+    }
+    
+    if (doc.docType === 'declaracao_saude_ubs') {
+      docPrompt = `🏥 DECLARAÇÃO DE SAÚDE / UBS - PROVA MATERIAL!
+
+⚠️⚠️⚠️ ESTE DOCUMENTO É EXTREMAMENTE IMPORTANTE! ⚠️⚠️⚠️
+
+Você DEVE extrair TODOS os dados da UBS neste documento!
+
+🔴 OBRIGATÓRIO EXTRAIR (campo healthDeclarationUbs):
+
+- unidade_saude: Nome COMPLETO da UBS/Posto (ex: "UBS Rural da Fazenda Esperança")  
+- tratamento_desde: Desde quando recebe atendimento (formato YYYY-MM-DD)
+- tipo_tratamento: Tipo (ex: "Pré-natal", "Acompanhamento gestacional")
+- localizacao: CRÍTICO - dizer se é "ZONA RURAL" ou "ZONA URBANA" + município/UF
+- profissional_responsavel: Nome do médico/enfermeiro + CRM
+- observacoes_medicas: Qualquer observação relevante
+
+🔍 ONDE PROCURAR:
+- Nome da UBS: topo do documento, cabeçalho
+- Datas: procure por "desde", "acompanhamento desde", datas
+- Localização: procure por "RURAL", "ÁREA RURAL", nome da localidade
+
+⚠️ SE A UBS É EM ZONA RURAL = PROVA QUE A AUTORA MORA/TRABALHA NA ZONA RURAL!
+
+Documento: ${doc.fileName}
+Tipo: declaracao_saude_ubs
+
+AGORA EXTRAIA TODOS OS DADOS DA UBS COM MÁXIMA ATENÇÃO:`;
+    }
+    
+    if (doc.docType === 'documento_terra') {
+      docPrompt = `🔍 DOCUMENTO DA TERRA - DADOS CRÍTICOS!
+
+⚠️⚠️⚠️ VOCÊ DEVE EXTRAIR O CPF DO PROPRIETÁRIO! ⚠️⚠️⚠️
+
+🔴 OBRIGATÓRIO EXTRAIR:
+
+**PROPRIETÁRIO** (procure em TODO o documento!):
+- landOwnerName: Nome COMPLETO do proprietário  
+- landOwnerCpf: CPF SEM FORMATAÇÃO (11 números) - OBRIGATÓRIO! Procure em:
+  * Cabeçalho do documento
+  * Parágrafos iniciais ("FULANO DE TAL, CPF XXX...")
+  * Tabelas com dados cadastrais
+  * Assinaturas no final
+  * Qualquer lugar que tenha "CPF:" ou números no formato XXX.XXX.XXX-XX
+- landOwnerRg: RG com órgão expedidor
+
+**PROPRIEDADE**:
+- landArea: Área em hectares (procure "ha", "hectare")
+- landPropertyName: Nome (Sítio X, Fazenda Y)
+- landMunicipality: Município/UF
+- landCessionType: COMODATO/Arrendamento/Parceria/Cessão
+
+⚠️ LEIA O DOCUMENTO INTEIRO! O CPF pode estar em QUALQUER lugar!
+
+Documento: ${doc.fileName}
+Tipo: documento_terra
+
+AGORA EXTRAIA TODOS OS CAMPOS, ESPECIALMENTE O CPF DO PROPRIETÁRIO:`;
+    }
+      docPrompt = `📚 HISTÓRICO ESCOLAR / DECLARAÇÃO ESCOLAR - PROVA MATERIAL DE VÍNCULO RURAL!
+
 Este documento é PROVA MATERIAL de que a autora estudou em escola rural, comprovando residência e atividade rural!
 
 🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
@@ -425,12 +513,12 @@ Agora extraia TODOS os dados de saúde listados acima:`;
     body: JSON.stringify({
       model: "gpt-4o",
       messages,
-      max_tokens: 4000,
-      temperature: 0.1,
+      max_tokens: 4096,
+      temperature: 0,
       functions: [
         {
           name: "extract_case_info",
-          description: "Extrai informações estruturadas de documentos previdenciários brasileiros",
+          description: "Extrai informações estruturadas de documentos previdenciários brasileiros. SEMPRE extraia TODOS os campos relevantes de TODOS os tipos de documentos.",
           parameters: {
             type: "object",
             properties: {
@@ -456,40 +544,40 @@ Agora extraia TODOS os dados de saúde listados acima:`;
               childBirthPlace: { type: "string", description: "Local de nascimento da criança (cidade + UF)" },
               fatherName: { type: "string", description: "Nome COMPLETO do pai (seção DADOS DO PAI ou FILIAÇÃO PATERNA)" },
               
-              // Proprietário da terra
-              landOwnerName: { type: "string", description: "Nome do proprietário da terra" },
-              landOwnerCpf: { type: "string", description: "CPF do proprietário" },
-              landOwnerRg: { type: "string", description: "RG do proprietário" },
-              landOwnershipType: { type: "string", description: "Tipo de relação com a terra (propria ou terceiro)" },
+              // Proprietário da terra (SEMPRE EXTRAIR SE HOUVER DOCUMENTO DA TERRA!)
+              landOwnerName: { type: "string", description: "Nome COMPLETO do proprietário da terra - OBRIGATÓRIO se houver documento da terra" },
+              landOwnerCpf: { type: "string", description: "CPF do proprietário SEM FORMATAÇÃO (11 números) - OBRIGATÓRIO se houver documento da terra - procure em TODO o documento!" },
+              landOwnerRg: { type: "string", description: "RG do proprietário com órgão expedidor" },
+              landOwnershipType: { type: "string", description: "Tipo de relação com a terra (propria ou terceiro) - se CPF do proprietário = CPF da autora então 'propria', senão 'terceiro'" },
               
-              // Dados detalhados da terra (seção 3.1 e 3.2)
+              // Dados detalhados da terra (seção 3.1 e 3.2) - SEMPRE EXTRAIR SE HOUVER DOCUMENTO DA TERRA OU AUTODECLARAÇÃO!
               landArea: { 
                 type: "number", 
-                description: "Área cedida em hectares (campo 'ÁREA CEDIDA em hectare - ha')" 
+                description: "Área cedida em hectares (campo 'ÁREA CEDIDA em hectare - ha') - procure por números seguidos de 'ha' ou 'hectare' - OBRIGATÓRIO se houver dados da terra" 
               },
               landTotalArea: { 
                 type: "number", 
-                description: "Área total do imóvel em hectares" 
+                description: "Área total do imóvel em hectares - OBRIGATÓRIO se houver dados da terra" 
               },
               landExploitedArea: { 
                 type: "number", 
-                description: "Área explorada pelo requerente em hectares" 
+                description: "Área explorada pelo requerente em hectares - OBRIGATÓRIO se houver dados da terra" 
               },
               landITR: { 
                 type: "string", 
-                description: "Registro ITR, se possuir" 
+                description: "Registro ITR, se possuir - procure por 'ITR' ou 'registro'" 
               },
               landPropertyName: { 
                 type: "string", 
-                description: "Nome da propriedade (sítio, fazenda, etc)" 
+                description: "Nome da propriedade (sítio, fazenda, etc) - OBRIGATÓRIO se houver dados da terra" 
               },
               landMunicipality: { 
                 type: "string", 
-                description: "Município/UF onde fica o imóvel" 
+                description: "Município/UF onde fica o imóvel - OBRIGATÓRIO se houver dados da terra" 
               },
               landCessionType: { 
                 type: "string", 
-                description: "Forma de cessão (COMODATO, arrendamento, parceria, etc)" 
+                description: "Forma de cessão (COMODATO, arrendamento, parceria, etc) - procure por essas palavras-chave em TODO o documento" 
               },
 
               // Atividades rurais detalhadas (seção 3.2)
@@ -565,34 +653,36 @@ Agora extraia TODOS os dados de saúde listados acima:`;
                 description: "Lista COMPLETA de membros do grupo familiar conforme seção 2.2 da autodeclaração"
               },
               
-              // Histórico Escolar (NOVO)
+              // Histórico Escolar (NOVO - SEMPRE EXTRAIR!)
               schoolHistory: {
                 type: "array",
                 items: {
                   type: "object",
                   properties: {
-                    instituicao: { type: "string", description: "Nome completo da escola" },
-                    periodo_inicio: { type: "string", description: "Data início dos estudos YYYY-MM-DD" },
-                    periodo_fim: { type: "string", description: "Data fim dos estudos YYYY-MM-DD" },
+                    instituicao: { type: "string", description: "Nome COMPLETO da escola OBRIGATÓRIO" },
+                    periodo_inicio: { type: "string", description: "Data início dos estudos YYYY-MM-DD OBRIGATÓRIO" },
+                    periodo_fim: { type: "string", description: "Data fim dos estudos YYYY-MM-DD ou vazio" },
                     serie_ano: { type: "string", description: "Série/ano cursado" },
-                    localizacao: { type: "string", description: "Localização da escola (rural/urbana + município)" }
-                  }
+                    localizacao: { type: "string", description: "Localização da escola - CRÍTICO: mencionar se é ZONA RURAL ou URBANA + município/UF OBRIGATÓRIO" }
+                  },
+                  required: ["instituicao", "periodo_inicio", "localizacao"]
                 },
-                description: "Histórico escolar - prova material de vínculo rural"
+                description: "⚠️ CRÍTICO: Se houver HISTÓRICO ESCOLAR ou DECLARAÇÃO ESCOLAR, este campo é OBRIGATÓRIO! Escola em zona rural = prova material de vínculo rural!"
               },
               
-              // Declaração de Saúde UBS (NOVO)
+              // Declaração de Saúde UBS (NOVO - SEMPRE EXTRAIR!)
               healthDeclarationUbs: {
                 type: "object",
                 properties: {
-                  unidade_saude: { type: "string", description: "Nome da UBS/Posto de Saúde" },
-                  tratamento_desde: { type: "string", description: "Desde quando recebe tratamento YYYY-MM-DD" },
-                  tipo_tratamento: { type: "string", description: "Tipo de tratamento/acompanhamento" },
-                  localizacao: { type: "string", description: "Localização da UBS (rural/urbana + município)" },
+                  unidade_saude: { type: "string", description: "Nome da UBS/Posto de Saúde OBRIGATÓRIO" },
+                  tratamento_desde: { type: "string", description: "Desde quando recebe tratamento YYYY-MM-DD OBRIGATÓRIO" },
+                  tipo_tratamento: { type: "string", description: "Tipo de tratamento/acompanhamento (pré-natal, consultas, etc)" },
+                  localizacao: { type: "string", description: "Localização da UBS - CRÍTICO: mencionar se é ZONA RURAL ou URBANA + município/UF OBRIGATÓRIO" },
                   profissional_responsavel: { type: "string", description: "Médico/Enfermeiro responsável + CRM/COREN" },
                   observacoes_medicas: { type: "string", description: "Observações sobre a autora" }
                 },
-                description: "Declaração de saúde UBS - prova material de residência rural"
+                required: ["unidade_saude", "tratamento_desde", "localizacao"],
+                description: "⚠️ CRÍTICO: Se houver DECLARAÇÃO DE SAÚDE/UBS, este campo é OBRIGATÓRIO! UBS em zona rural = prova material de residência rural!"
               },
               
               // Processo administrativo
@@ -643,11 +733,40 @@ Agora extraia TODOS os dados de saúde listados acima:`;
   const functionCall = aiResult.choices?.[0]?.message?.function_call;
   if (!functionCall || functionCall.name !== 'extract_case_info') {
     console.error("[IA BATCH] Resposta não contém function call esperado");
+    console.error("[IA BATCH] Resposta completa:", JSON.stringify(aiResult, null, 2));
     throw new Error('A IA não retornou os dados no formato esperado');
   }
   
   const extractedData = JSON.parse(functionCall.arguments);
-  console.log("[IA BATCH] Dados extraídos:", JSON.stringify(extractedData, null, 2));
+  console.log("[IA BATCH] ===== DADOS EXTRAÍDOS =====");
+  console.log("[IA BATCH] Dados completos:", JSON.stringify(extractedData, null, 2));
+  
+  // Log específico para novos campos
+  if (extractedData.schoolHistory && extractedData.schoolHistory.length > 0) {
+    console.log("[IA BATCH] ✅ Histórico Escolar extraído:", extractedData.schoolHistory.length, "registro(s)");
+  } else {
+    console.log("[IA BATCH] ⚠️ Histórico Escolar NÃO extraído");
+  }
+  
+  if (extractedData.healthDeclarationUbs) {
+    console.log("[IA BATCH] ✅ Declaração de Saúde UBS extraída:", extractedData.healthDeclarationUbs.unidade_saude);
+  } else {
+    console.log("[IA BATCH] ⚠️ Declaração de Saúde UBS NÃO extraída");
+  }
+  
+  if (extractedData.landOwnerCpf) {
+    console.log("[IA BATCH] ✅ CPF do proprietário da terra extraído:", extractedData.landOwnerCpf);
+  } else {
+    console.log("[IA BATCH] ⚠️ CPF do proprietário da terra NÃO extraído");
+  }
+  
+  if (extractedData.landArea) {
+    console.log("[IA BATCH] ✅ Área da terra extraída:", extractedData.landArea, "ha");
+  } else {
+    console.log("[IA BATCH] ⚠️ Área da terra NÃO extraída");
+  }
+  
+  console.log("[IA BATCH] ================================");
   
   return extractedData;
 }

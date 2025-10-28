@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractDataFromBatch } from "./extractDataFromBatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,6 +195,7 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -297,8 +299,8 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     
     console.log(`[BATCH ${batchIndex + 1}/${batches.length}] ✓ ${processedBatch.length} documentos prontos para IA`);
     
-    // Chamar OpenAI com este batch
-    const batchExtractedData = await extractDataFromBatch(processedBatch, openaiApiKey, hasAutodeclaracao);
+    // Chamar IA com este batch (usando Lovable AI com Claude Sonnet 4.5)
+    const batchExtractedData = await extractDataFromBatch(processedBatch, openaiApiKey, hasAutodeclaracao, lovableApiKey);
     
     // Mesclar dados extraídos (priorizar não-nulos)
     for (const [key, value] of Object.entries(batchExtractedData)) {
@@ -570,158 +572,4 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     console.error("[ERRO FATAL] Erro no processamento em background:", error);
     throw error;
   }
-}
-
-// Função auxiliar para extrair dados de um batch via OpenAI
-async function extractDataFromBatch(
-  processedBatch: any[],
-  openaiApiKey: string,
-  hasAutodeclaracao: boolean
-): Promise<any> {
-  console.log(`[IA BATCH] Chamando OpenAI GPT-4o com ${processedBatch.length} imagens...`);
-  
-  const systemPrompt = `Você é um especialista em OCR e extração de dados de documentos previdenciários brasileiros. Extraia TODAS as informações visíveis dos documentos fornecidos.`;
-
-  const messages: any[] = [
-    {
-      role: "system",
-      content: systemPrompt
-    }
-  ];
-
-  // Adicionar cada documento como mensagem com imagem
-  for (const doc of processedBatch) {
-    let docPrompt = `Documento: ${doc.fileName}\nTipo classificado: ${doc.docType}\n\nExtraia TODAS as informações visíveis:`;
-    
-    if (doc.docType === 'autodeclaracao_rural') {
-      docPrompt = `⚠️ AUTODECLARAÇÃO RURAL DETECTADA!\n\nEste é o documento MAIS IMPORTANTE para períodos rurais!\nVocê DEVE extrair os períodos rurais deste documento!\n\nDocumento: ${doc.fileName}`;
-    }
-    
-    messages.push({
-      role: "user",
-      content: [
-        {
-          type: "text",
-          text: docPrompt
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:${doc.mimeType};base64,${doc.base64Content}`,
-            detail: "high"
-          }
-        }
-      ]
-    });
-  }
-
-  const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openaiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages,
-      max_tokens: 4000,
-      temperature: 0.1,
-      functions: [
-        {
-          name: "extract_case_info",
-          description: "Extrai informações estruturadas de documentos previdenciários brasileiros",
-          parameters: {
-            type: "object",
-            properties: {
-              motherName: { type: "string", description: "Nome COMPLETO da mãe/autora" },
-              motherCpf: { type: "string", description: "CPF da mãe sem formatação" },
-              motherRg: { type: "string", description: "RG da mãe com órgão expedidor" },
-              motherBirthDate: { type: "string", description: "Data nascimento da mãe YYYY-MM-DD" },
-              motherAddress: { type: "string", description: "Endereço COMPLETO da mãe" },
-              motherPhone: { type: "string", description: "Telefone ou celular da mãe" },
-              motherWhatsapp: { type: "string", description: "WhatsApp da mãe" },
-              maritalStatus: { type: "string", description: "Estado civil" },
-              childName: { type: "string", description: "Nome COMPLETO da criança" },
-              childBirthDate: { type: "string", description: "Data nascimento criança YYYY-MM-DD" },
-              childBirthPlace: { type: "string", description: "Local de nascimento da criança" },
-              fatherName: { type: "string", description: "Nome COMPLETO do pai" },
-              landOwnerName: { type: "string", description: "Nome do proprietário da terra" },
-              landOwnerCpf: { type: "string", description: "CPF do proprietário" },
-              landOwnerRg: { type: "string", description: "RG do proprietário" },
-              landOwnershipType: { type: "string", description: "Tipo de relação com a terra" },
-              ruralPeriods: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    startDate: { type: "string", description: "Data início YYYY-MM-DD" },
-                    endDate: { type: "string", description: "Data fim YYYY-MM-DD" },
-                    location: { type: "string", description: "Local COMPLETO" },
-                    withWhom: { type: "string", description: "Com quem morava" },
-                    activities: { type: "string", description: "Atividades desenvolvidas" }
-                  },
-                  required: ["startDate", "location"]
-                },
-                description: "TODOS os períodos de atividade rural"
-              },
-              urbanPeriods: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    startDate: { type: "string" },
-                    endDate: { type: "string" },
-                    details: { type: "string" }
-                  }
-                }
-              },
-              familyMembers: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    relationship: { type: "string" }
-                  }
-                }
-              },
-              raProtocol: { type: "string", description: "Número do protocolo/NB" },
-              raRequestDate: { type: "string", description: "Data do requerimento YYYY-MM-DD" },
-              raDenialDate: { type: "string", description: "Data do indeferimento YYYY-MM-DD" },
-              raDenialReason: { type: "string", description: "Motivo COMPLETO do indeferimento" },
-              observations: {
-                type: "array",
-                items: { type: "string" },
-                description: "Observações importantes"
-              }
-            },
-            required: [],
-          },
-        },
-      ],
-      function_call: { name: "extract_case_info" },
-    }),
-  });
-
-  if (!aiResponse.ok) {
-    const errorText = await aiResponse.text();
-    console.error("[IA BATCH] Erro na resposta da API OpenAI:", aiResponse.status);
-    console.error("[IA BATCH] Detalhes do erro:", errorText);
-    throw new Error(`Erro na API OpenAI: ${aiResponse.status}`);
-  }
-
-  const aiResult = await aiResponse.json();
-  console.log("[IA BATCH] Resposta recebida com sucesso");
-
-  // Extrair dados do function call
-  const functionCall = aiResult.choices?.[0]?.message?.function_call;
-  if (!functionCall || functionCall.name !== 'extract_case_info') {
-    console.error("[IA BATCH] Resposta não contém function call esperado");
-    throw new Error('A IA não retornou os dados no formato esperado');
-  }
-  
-  const extractedData = JSON.parse(functionCall.arguments);
-  console.log("[IA BATCH] Dados extraídos:", JSON.stringify(extractedData, null, 2));
-  
-  return extractedData;
 }
