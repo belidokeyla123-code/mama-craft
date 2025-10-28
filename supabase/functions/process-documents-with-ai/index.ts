@@ -130,12 +130,15 @@ const classifyDocument = (fileName: string): string => {
   }
   
   // 6. DECLARAÇÃO DE SAÚDE UBS: UBS, saúde, posto
-  if (name.includes('ubs') || 
-      name.match(/unidade.*b[aá]sica/i) || 
-      name.match(/posto.*sa[uú]de/i) || 
-      name.match(/declara[cç][aã]o.*sa[uú]de/i) ||
-      name.match(/sa[uú]de.*declara/i)) {
-    console.log(`[CLASSIFY] ✅ DECLARAÇÃO DE SAÚDE UBS detectada`);
+  if (
+    name.match(/decl.*sa[úu]de/i) || 
+    name.match(/ubs/i) ||
+    name.match(/posto.*sa[úu]de/i) ||
+    name.match(/unidade.*b[áa]sica/i) ||
+    name.match(/atestado.*m[ée]dico/i) ||
+    name.match(/pr[ée][-]?natal/i)
+  ) {
+    console.log(`[CLASSIFY] ✅ DECLARAÇÃO DE SAÚDE UBS detectada: "${fileName}"`);
     return 'declaracao_saude_ubs';
   }
   
@@ -146,18 +149,34 @@ const classifyDocument = (fileName: string): string => {
   }
   
   // 8. DOCUMENTO DA TERRA: TER~, TERRA, DOC~, ITR, CCIR
-  if (name.match(/ter[0-9~]/i) || name.match(/terra/i) || name.match(/doc[0-9~]/i) || 
-      name.match(/\bitr\b/i) || name.match(/ccir/i) || name.match(/propriedade/i) ||
-      name.match(/comodato/i) || name.match(/fazenda/i) || name.match(/sitio/i) || 
-      name.match(/escritura/i) || name.match(/matricula/i)) {
-    console.log(`[CLASSIFY] ✅ DOCUMENTO DA TERRA detectado`);
+  if (
+    name.match(/itr/i) || 
+    name.match(/escrit.*terra/i) ||
+    name.match(/matr[íi]cula.*im[óo]vel/i) ||
+    name.match(/comodat/i) ||
+    name.match(/cess[ãa]o.*terra/i) ||
+    name.match(/contrato.*rural/i) ||
+    name.match(/ter[0-9~]/i) || name.match(/terra/i) || name.match(/doc[0-9~]/i) || 
+    name.match(/ccir/i) || name.match(/propriedade/i) ||
+    name.match(/fazenda/i) || name.match(/sitio/i) || 
+    name.match(/escritura/i) || name.match(/matricula/i)
+  ) {
+    console.log(`[CLASSIFY] ✅ DOCUMENTO DA TERRA detectado: "${fileName}"`);
     return 'documento_terra';
   }
   
   // 9. PROCESSO ADMINISTRATIVO: PRO~1, IND~, INDEFER, ADM
-  if (name.match(/indeferim/i) || name.match(/ind[0-9~]/i) || name.match(/admini/i) ||
-      (name.match(/proces/i) && name.match(/adm/i))) {
-    console.log(`[CLASSIFY] ✅ PROCESSO ADMINISTRATIVO detectado`);
+  if (
+    name.match(/indefer/i) || 
+    name.match(/processo.*adm/i) ||
+    name.match(/despacho/i) ||
+    name.match(/decis[ãa]o.*inss/i) ||
+    name.match(/negativa/i) ||
+    name.match(/requeri.*adm/i) ||
+    name.match(/ind[0-9~]/i) || 
+    name.match(/admini/i)
+  ) {
+    console.log(`[CLASSIFY] ✅ PROCESSO ADMINISTRATIVO/INDEFERIMENTO detectado: "${fileName}"`);
     return 'processo_administrativo';
   }
   

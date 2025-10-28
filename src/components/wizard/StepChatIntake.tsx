@@ -942,6 +942,35 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         </p>
       </div>
 
+      {/* Cole Prints com Ctrl+V */}
+      <PasteDataInline
+        extractionType="processo_administrativo"
+        onDataExtracted={(extractedData) => {
+          console.log('[CHAT] Dados extraídos via Ctrl+V:', extractedData);
+          
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `✅ Dados extraídos via Ctrl+V com sucesso!`
+          }]);
+          
+          const updates: any = {};
+          if (extractedData.raProtocol) updates.raProtocol = extractedData.raProtocol;
+          if (extractedData.childName) updates.childName = extractedData.childName;
+          if (extractedData.childBirthDate) updates.childBirthDate = extractedData.childBirthDate;
+          if (extractedData.motherName) updates.motherName = extractedData.motherName;
+          if (extractedData.motherCpf) updates.motherCpf = extractedData.motherCpf;
+          if (extractedData.landOwnerCpf) updates.landOwnerCpf = extractedData.landOwnerCpf;
+          if (extractedData.landOwnerRg) updates.landOwnerRg = extractedData.landOwnerRg;
+          if (extractedData.landOwnerName) updates.landOwnerName = extractedData.landOwnerName;
+          
+          if (Object.keys(updates).length > 0) {
+            updateData(updates);
+            toast({ title: `${Object.keys(updates).length} campo(s) atualizado(s)` });
+          }
+        }}
+        placeholder="Cole texto OU pressione Ctrl+V para colar imagem (print de tela)..."
+      />
+
       <Card className="p-4">
         <ScrollArea className="h-96 pr-4">
           <div className="space-y-4">
