@@ -141,6 +141,20 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
         setHasCache(true);
         setDocsChanged(false);
         toast.success("Análise jurídica concluída!");
+        
+        // Auto-disparar busca de jurisprudência
+        setTimeout(async () => {
+          try {
+            toast.info('Buscando jurisprudências automaticamente...');
+            await supabase.functions.invoke('search-jurisprudence', {
+              body: { caseId: data.caseId }
+            });
+            toast.success('Jurisprudências carregadas! Vá para a aba Jurisprudência');
+          } catch (error) {
+            console.error('Erro na busca automática de jurisprudência:', error);
+            toast.info('Vá para a aba Jurisprudência para buscar manualmente');
+          }
+        }, 3000);
       } else {
         toast.warning("Análise executada mas resultado não encontrado.");
       }
@@ -186,11 +200,6 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
             "Analisar Caso"
           )}
         </Button>
-        {hasCache && !docsChanged && (
-          <Badge variant="secondary" className="px-3 py-2">
-            Cache ativo - análise salva
-          </Badge>
-        )}
         {docsChanged && (
           <Badge variant="destructive" className="px-3 py-2">
             Novos documentos - reanálise recomendada

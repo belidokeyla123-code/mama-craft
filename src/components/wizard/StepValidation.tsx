@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 
@@ -80,6 +81,23 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           ? "Documentação suficiente para prosseguir" 
           : "Adicione mais documentos",
       });
+
+      // Auto-disparar análise se documentos suficientes
+      if (result.is_sufficient) {
+        sonnerToast.info('Documentos suficientes! Iniciando análise jurídica...');
+        
+        setTimeout(async () => {
+          try {
+            await supabase.functions.invoke('analyze-case-legal', {
+              body: { caseId: data.caseId }
+            });
+            sonnerToast.success('Análise jurídica completada automaticamente!');
+          } catch (error) {
+            console.error('Erro na análise automática:', error);
+            sonnerToast.info('Vá para a aba Análise para completar');
+          }
+        }, 2000);
+      }
     } catch (error: any) {
       console.error('Erro na validação:', error);
       toast({

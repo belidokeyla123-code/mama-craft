@@ -286,50 +286,54 @@ export default function CaseDetail() {
         {/* Progress Bar */}
         <Card className="p-6 mb-6">
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              {STEPS.map((step, index) => (
-                <div key={step.id} className="flex items-center">
-                  <button
-                    onClick={() => setCurrentStep(step.id)}
-                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
-                      currentStep > step.id
-                        ? "bg-success border-success text-success-foreground cursor-pointer hover:opacity-80"
-                        : currentStep === step.id
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "bg-background border-border text-muted-foreground cursor-pointer hover:border-primary"
-                    }`}
-                  >
-                    {currentStep > step.id ? (
-                      <Check className="h-5 w-5" />
-                    ) : (
-                      <span>{step.id}</span>
-                    )}
-                  </button>
-                  {index < STEPS.length - 1 && (
-                    <div
-                      className={`w-16 h-0.5 mx-2 ${
-                        currentStep > step.id ? "bg-success" : "bg-border"
+            <div className="overflow-x-auto pb-4">
+              <div className="flex items-center min-w-max">
+                {STEPS.map((step, index) => (
+                  <div key={step.id} className="flex items-center">
+                    <button
+                      onClick={() => setCurrentStep(step.id)}
+                      className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all flex-shrink-0 ${
+                        currentStep > step.id
+                          ? "bg-success border-success text-success-foreground cursor-pointer hover:opacity-80"
+                          : currentStep === step.id
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "bg-background border-border text-muted-foreground cursor-pointer hover:border-primary"
                       }`}
-                    />
-                  )}
-                </div>
-              ))}
+                    >
+                      {currentStep > step.id ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <span>{step.id}</span>
+                      )}
+                    </button>
+                    {index < STEPS.length - 1 && (
+                      <div
+                        className={`w-16 h-0.5 mx-2 flex-shrink-0 ${
+                          currentStep > step.id ? "bg-success" : "bg-border"
+                        }`}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <Progress value={progress} className="h-2" />
-            <div className="flex justify-between">
-              {STEPS.map((step) => (
-                <button
-                  key={step.id}
-                  onClick={() => setCurrentStep(step.id)}
-                  className={`text-sm hover:text-primary transition-colors ${
-                    currentStep >= step.id
-                      ? "text-foreground font-medium"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {step.name}
-                </button>
-              ))}
+            <div className="flex justify-between overflow-x-auto">
+              <div className="flex gap-4 min-w-max">
+                {STEPS.map((step) => (
+                  <button
+                    key={step.id}
+                    onClick={() => setCurrentStep(step.id)}
+                    className={`text-sm hover:text-primary transition-colors whitespace-nowrap ${
+                      currentStep >= step.id
+                        ? "text-foreground font-medium"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {step.name}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </Card>

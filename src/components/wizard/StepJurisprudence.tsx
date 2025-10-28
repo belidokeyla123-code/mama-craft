@@ -82,12 +82,14 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
   // Salvar seleções automaticamente (debounced)
   useEffect(() => {
     const timer = setTimeout(async () => {
-      if (data.caseId && selectedIds.size > 0 && hasCache) {
+      if (data.caseId && selectedIds.size > 0) {
         try {
+          console.log('[JURISPRUDENCE] Salvando seleções:', Array.from(selectedIds));
           await supabase
             .from('jurisprudence_results')
             .update({ selected_ids: Array.from(selectedIds) })
             .eq('case_id', data.caseId);
+          console.log('[JURISPRUDENCE] Seleções salvas com sucesso');
         } catch (error) {
           console.error('Erro ao salvar seleções:', error);
         }
@@ -95,7 +97,7 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
     }, 2000);
     
     return () => clearTimeout(timer);
-  }, [selectedIds, data.caseId, hasCache]);
+  }, [selectedIds, data.caseId]);
 
   const loadCachedResults = async () => {
     if (!data.caseId) return;
@@ -430,11 +432,6 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
         <Badge variant="outline" className="px-3 py-2">
           {selectedIds.size} selecionadas
         </Badge>
-        {hasCache && (
-          <Badge variant="secondary" className="px-3 py-2">
-            Cache ativo - resultados salvos
-          </Badge>
-        )}
       </div>
 
       {loading ? (
@@ -452,7 +449,7 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
         </Card>
       ) : (jurisprudencias.length > 0 || sumulas.length > 0 || doutrinas.length > 0 || teses.length > 0) ? (
         <Tabs defaultValue="jurisprudencias" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="jurisprudencias">
               Jurisprudências ({jurisprudencias.length})
             </TabsTrigger>
@@ -461,9 +458,6 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
             </TabsTrigger>
             <TabsTrigger value="doutrinas">
               Doutrinas ({doutrinas.length})
-            </TabsTrigger>
-            <TabsTrigger value="teses">
-              Teses Jurídicas ({teses.length})
             </TabsTrigger>
             <TabsTrigger value="precedentes">
               Precedentes (0)
@@ -502,18 +496,6 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
             ) : (
               <Card className="p-8 text-center text-muted-foreground">
                 Nenhuma doutrina encontrada
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="teses" className="space-y-4 mt-6">
-            {teses.length > 0 ? (
-              teses.map((tese, index) => (
-                <TeseCard key={index} tese={tese} />
-              ))
-            ) : (
-              <Card className="p-8 text-center text-muted-foreground">
-                Nenhuma tese jurídica encontrada
               </Card>
             )}
           </TabsContent>
