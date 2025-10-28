@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic, X } from "lucide-react";
+import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic, X, RefreshCw } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
@@ -252,14 +252,28 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
       console.log(`[UPLOAD] ✓ Pasta "${clientFolderName}" criada com ${documents.length} documento(s)`);
 
-      // Chamar edge function para extrair informações
-      console.log('[CHAT] Chamando edge function para processar documentos...');
+      // ✅ CORREÇÃO CRÍTICA: Buscar TODOS os documentos do caso para processamento completo
+      console.log('[CHAT] 🔍 Buscando TODOS os documentos do caso para processamento completo...');
+      const { data: allDocuments, error: allDocsError } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('case_id', caseId);
+
+      if (allDocsError) {
+        console.error('[CHAT] ❌ Erro ao buscar todos os documentos:', allDocsError);
+        throw allDocsError;
+      }
+
+      console.log(`[CHAT] 📋 Total de documentos no caso: ${allDocuments.length} (incluindo ${documents.length} novos)`);
+
+      // Chamar edge function para extrair informações de TODOS os documentos
+      console.log('[CHAT] 🤖 Chamando IA para processar TODOS os documentos do caso...');
       const { data: extractionResult, error: extractionError } = await supabase.functions.invoke(
         "process-documents-with-ai",
         {
           body: {
             caseId,
-            documentIds: documents.map(d => d.id),
+            documentIds: allDocuments.map(d => d.id), // ✅ TODOS os documentos
           },
         }
       );
@@ -353,8 +367,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       console.log("Dados extraídos:", extractedData);
       console.log("Campos faltantes:", missingFields);
 
+      // ✅ VERIFICAR CAMPOS CRÍTICOS FALTANTES
+      const criticalMissing = [];
+      if (!extractedData.childName) criticalMissing.push('Nome da criança');
+      if (!extractedData.childBirthDate) criticalMissing.push('Data de nascimento da criança');
+      if (!extractedData.motherName) criticalMissing.push('Nome da mãe');
+      if (!extractedData.motherCpf) criticalMissing.push('CPF da mãe');
+
       let assistantMessage = `✅ **Documentos processados com sucesso!**\n\n`;
-      assistantMessage += `📄 **${extractionResult.documentsProcessed || uploadedFiles.length} documento(s) analisado(s)**\n\n`;
+      assistantMessage += `📄 **${allDocuments?.length || uploadedFiles.length} documento(s) analisado(s) (total no caso)**\n\n`;
       
       if (Object.keys(extractedData).length > 0) {
         assistantMessage += "**📋 Informações extraídas dos documentos:**\n\n";
@@ -421,6 +442,19 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           assistantMessage += `• ${fieldLabels[field] || field}\n`;
         });
         assistantMessage += "\n";
+      }
+      
+      // ✅ MENSAGEM INTELIGENTE SE CAMPOS CRÍTICOS FALTAM
+      if (criticalMissing.length > 0) {
+        assistantMessage += `\n⚠️ **ATENÇÃO! Não consegui extrair alguns dados importantes:**\n\n`;
+        criticalMissing.forEach(f => assistantMessage += `• ${f}\n`);
+        assistantMessage += `\n**Possíveis causas:**\n`;
+        assistantMessage += `1. O documento necessário (certidão de nascimento, RG/CPF) não foi enviado ainda\n`;
+        assistantMessage += `2. O documento foi enviado mas a qualidade da imagem está baixa\n`;
+        assistantMessage += `3. O documento precisa ser reprocessado\n\n`;
+        assistantMessage += `**Solução:**\n`;
+        assistantMessage += `→ Clique no botão "🔄 Reprocessar Documentos" abaixo para tentar novamente\n`;
+        assistantMessage += `→ Ou envie/reenvie os documentos necessários\n\n`;
       }
       
       assistantMessage += "\n✨ **Esses dados já foram preenchidos automaticamente no formulário!**\n";
@@ -576,6 +610,146 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       setMessages(prev => [...prev, {
         role: "assistant",
         content: "❌ Ocorreu um erro ao processar os documentos. Por favor, tente novamente ou preencha as informações manualmente.",
+      }]);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ✅ FUNÇÃO PARA REPROCESSAR TODOS OS DOCUMENTOS
+  const handleReprocessAllDocuments = async () => {
+    if (!data.caseId) {
+      toast({
+        title: "❌ Erro",
+        description: "Caso não encontrado. Crie um caso primeiro.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: "🔄 Reprocessando TODOS os documentos com IA... Aguarde alguns segundos."
+    }]);
+
+    try {
+      // Buscar todos os documentos do caso
+      const { data: allDocs, error: docsError } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('case_id', data.caseId);
+
+      if (docsError) throw docsError;
+
+      if (!allDocs || allDocs.length === 0) {
+        toast({
+          title: "⚠️ Aviso",
+          description: "Nenhum documento encontrado para reprocessar.",
+          variant: "destructive"
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      console.log(`[REPROCESS] Reprocessando ${allDocs.length} documentos...`);
+
+      // Processar novamente TODOS os documentos
+      const { data: extractionResult, error: extractionError } = await supabase.functions.invoke(
+        "process-documents-with-ai",
+        {
+          body: {
+            caseId: data.caseId,
+            documentIds: allDocs.map(d => d.id)
+          }
+        }
+      );
+
+      if (extractionError) throw extractionError;
+
+      // Aguardar processamento em background
+      await new Promise(resolve => setTimeout(resolve, 8000));
+
+      // Buscar dados extraídos
+      const { data: extractions, error: extractionsError } = await supabase
+        .from('extractions')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('extracted_at', { ascending: false })
+        .limit(1);
+
+      if (extractionsError) throw extractionsError;
+
+      if (extractions && extractions.length > 0) {
+        const latestExtraction = extractions[0];
+        const extractedData: any = latestExtraction.auto_filled_fields || latestExtraction.entities || {};
+        const missingFields = latestExtraction.missing_fields || [];
+
+        console.log('[REPROCESS] Dados reprocessados:', extractedData);
+
+        updateData({
+          ...extractedData as any,
+          caseId: data.caseId
+        });
+
+        toast({
+          title: "✅ Reprocessamento concluído!",
+          description: `${allDocs.length} documento(s) reprocessado(s).`
+        });
+
+        // Verificar campos críticos
+        const criticalMissing = [];
+        if (!(extractedData as any).childName) criticalMissing.push('Nome da criança');
+        if (!(extractedData as any).childBirthDate) criticalMissing.push('Data de nascimento da criança');
+
+        let messageContent = `✅ **Reprocessamento concluído!**\n\n`;
+        messageContent += `📋 **${allDocs.length} documento(s) reprocessado(s)**\n\n`;
+        
+        if (Object.keys(extractedData).length > 0) {
+          messageContent += "**Dados atualizados:**\n";
+          Object.entries(extractedData)
+            .filter(([_, value]) => value && value !== '')
+            .slice(0, 10)
+            .forEach(([key, value]) => {
+              messageContent += `• ${key}: ${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}\n`;
+            });
+          messageContent += "\n";
+        }
+
+        if (criticalMissing.length > 0) {
+          messageContent += `⚠️ **Ainda faltando:** ${criticalMissing.join(', ')}\n\n`;
+          messageContent += `Se o problema persistir, tente reenviar os documentos necessários (certidão de nascimento, RG/CPF).`;
+        } else {
+          messageContent += '✅ Todos os campos críticos foram preenchidos!';
+        }
+
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: messageContent
+        }]);
+
+        // Disparar pipeline completo
+        if (triggerFullPipeline) {
+          console.log('[REPROCESS] Disparando pipeline completo...');
+          try {
+            await triggerFullPipeline('Documentos reprocessados');
+            console.log('[REPROCESS] ✅ Pipeline disparado');
+          } catch (pipelineError) {
+            console.error('[REPROCESS] Erro ao disparar pipeline:', pipelineError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[REPROCESS] Erro:', error);
+      toast({
+        title: "❌ Erro ao reprocessar",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive"
+      });
+      
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "❌ Ocorreu um erro ao reprocessar os documentos. Por favor, tente novamente."
       }]);
     } finally {
       setIsProcessing(false);
@@ -882,6 +1056,20 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         >
           <Send className="h-4 w-4" />
         </Button>
+
+        {/* ✅ BOTÃO DE REPROCESSAR DOCUMENTOS */}
+        {data.caseId && (
+          <Button 
+            onClick={handleReprocessAllDocuments}
+            disabled={isProcessing}
+            variant="secondary"
+            className="gap-2 flex-shrink-0"
+            title="Reprocessar todos os documentos do caso com IA"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Reprocessar
+          </Button>
+        )}
       </div>
 
       <div className="flex justify-between">

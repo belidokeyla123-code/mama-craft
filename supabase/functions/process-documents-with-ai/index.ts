@@ -100,7 +100,9 @@ const classifyDocument = (fileName: string): string => {
   
   // 2. CERTIDÃO DE NASCIMENTO: CER~, CERT, NASC, CERTID
   if (name.match(/cer[0-9~]/i) || name.match(/cert/i) || name.match(/nasc/i)) {
-    console.log(`[CLASSIFY] ✅ CERTIDÃO DE NASCIMENTO detectada`);
+    console.log(`[CLASSIFY] ✅ CERTIDÃO DE NASCIMENTO detectada: "${fileName}"`);
+    console.log(`[CLASSIFY] → Este documento contém dados DA CRIANÇA (nome + data nascimento)`);
+    console.log(`[CLASSIFY] → ATENÇÃO: Nome da mãe está na seção "FILIAÇÃO MATERNA"`);
     return 'certidao_nascimento';
   }
   

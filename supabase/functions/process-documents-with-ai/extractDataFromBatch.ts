@@ -795,5 +795,41 @@ Agora extraia TODOS os dados de saúde listados acima:`;
   
   console.log("[IA BATCH] ================================");
   
+  // ✅ VALIDAÇÃO PÓS-EXTRAÇÃO
+  console.log('[VALIDAÇÃO] Verificando campos críticos...');
+
+  const criticalFields = {
+    motherName: extractedData.motherName,
+    motherCpf: extractedData.motherCpf,
+    childName: extractedData.childName,
+    childBirthDate: extractedData.childBirthDate,
+  };
+
+  const missingCritical = Object.entries(criticalFields)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+
+  if (missingCritical.length > 0) {
+    console.log(`[VALIDAÇÃO] ⚠️ CAMPOS CRÍTICOS FALTANDO: ${missingCritical.join(', ')}`);
+    
+    // Verificar se certidão de nascimento foi processada
+    const hasCertidao = processedBatch.some(doc => 
+      doc.docType === 'certidao_nascimento'
+    );
+    
+    if (!hasCertidao && (missingCritical.includes('childName') || missingCritical.includes('childBirthDate'))) {
+      console.log('[VALIDAÇÃO] ❌ CERTIDÃO DE NASCIMENTO NÃO FOI PROCESSADA!');
+      console.log('[VALIDAÇÃO] → Sugestão: Reenviar certidão ou reprocessar documentos');
+    }
+    
+    if (hasCertidao && (missingCritical.includes('childName') || missingCritical.includes('childBirthDate'))) {
+      console.log('[VALIDAÇÃO] ⚠️ Certidão foi processada MAS dados da criança não extraídos!');
+      console.log('[VALIDAÇÃO] → Possíveis causas: qualidade da imagem, formato incomum');
+      console.log('[VALIDAÇÃO] → Sugestão: Reprocessar com imagem melhor');
+    }
+  } else {
+    console.log('[VALIDAÇÃO] ✅ Todos os campos críticos foram preenchidos!');
+  }
+  
   return extractedData;
 }
