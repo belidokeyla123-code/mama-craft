@@ -43,18 +43,25 @@ serve(async (req) => {
       throw new Error(`Erro ao baixar: ${downloadError?.message}`);
     }
 
-    // 3. Converter para base64 (método seguro para arquivos grandes)
+    // 3. Converter para base64 (usando método Web API seguro)
     const arrayBuffer = await fileData.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    const chunkSize = 8192; // Processar em chunks de 8KB
+    
+    // Método 1: Usar Blob para arquivos grandes
+    const blob = new Blob([arrayBuffer], { type: doc.mime_type });
+    const buffer = await blob.arrayBuffer();
+    
+    // Converter em chunks pequenos para evitar stack overflow
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000; // 32KB chunks
+    let base64 = '';
     
     for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.slice(i, Math.min(i + chunkSize, bytes.length));
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
+      const chunk = bytes.slice(i, i + chunkSize);
+      // Usar Array.from para criar array seguro
+      const charCodes = Array.from(chunk);
+      base64 += btoa(String.fromCharCode(...charCodes));
     }
     
-    const base64 = btoa(binary);
     const base64Image = `data:${doc.mime_type};base64,${base64}`;
 
     console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida (${(base64.length / 1024).toFixed(1)} KB)`);
@@ -137,14 +144,13 @@ serve(async (req) => {
     const extracted = JSON.parse(toolCall.function.arguments);
     console.log(`[ANALYZE-SINGLE] 📋 Dados extraídos:`, JSON.stringify(extracted, null, 2));
 
-    // 8. Salvar extração individual
+    // 8. Salvar extração individual (sem campo confidence que não existe)
     const { error: saveError } = await supabase
       .from('extractions')
       .upsert({
         case_id: caseId,
         document_id: documentId,
         entities: extracted.extractedData || {},
-        confidence: extracted.extractionConfidence || 'medium',
         extracted_at: new Date().toISOString()
       });
 
