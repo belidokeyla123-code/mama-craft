@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 
 const corsHeaders = {
@@ -43,17 +44,11 @@ serve(async (req) => {
       throw new Error(`Erro ao baixar: ${downloadError?.message}`);
     }
 
-    // 3. Converter para base64 (método seguro sem spread operator)
+    // 3. Converter para base64 usando biblioteca padrão do Deno (solução correta!)
     const arrayBuffer = await fileData.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
     
-    // Converter byte por byte para evitar stack overflow
-    let binaryString = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binaryString += String.fromCharCode(bytes[i]);
-    }
-    
-    const base64 = btoa(binaryString);
+    // Usar encode do Deno que é otimizado para arquivos grandes
+    const base64 = base64Encode(arrayBuffer);
     const base64Image = `data:${doc.mime_type};base64,${base64}`;
 
     console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida (${(base64.length / 1024).toFixed(1)} KB)`);
