@@ -351,6 +351,7 @@ export type Database = {
           event_date: string
           event_type: Database["public"]["Enums"]["event_type"]
           family_members: Json | null
+          father_cpf: string | null
           father_name: string | null
           has_ra: boolean | null
           has_special_situation: boolean | null
@@ -367,6 +368,7 @@ export type Database = {
           land_ownership_type: string | null
           land_property_name: string | null
           land_total_area: number | null
+          mother_cpf: string | null
           profile: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date: string | null
           ra_denial_reason: string | null
@@ -404,6 +406,7 @@ export type Database = {
           event_date: string
           event_type?: Database["public"]["Enums"]["event_type"]
           family_members?: Json | null
+          father_cpf?: string | null
           father_name?: string | null
           has_ra?: boolean | null
           has_special_situation?: boolean | null
@@ -420,6 +423,7 @@ export type Database = {
           land_ownership_type?: string | null
           land_property_name?: string | null
           land_total_area?: number | null
+          mother_cpf?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
@@ -457,6 +461,7 @@ export type Database = {
           event_date?: string
           event_type?: Database["public"]["Enums"]["event_type"]
           family_members?: Json | null
+          father_cpf?: string | null
           father_name?: string | null
           has_ra?: boolean | null
           has_special_situation?: boolean | null
@@ -473,6 +478,7 @@ export type Database = {
           land_ownership_type?: string | null
           land_property_name?: string | null
           land_total_area?: number | null
+          mother_cpf?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null

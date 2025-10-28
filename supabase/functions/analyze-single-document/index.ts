@@ -17,7 +17,9 @@ function getSchemaForDocType(docType: string) {
         childName: { type: 'string', description: 'Nome completo da criança (no topo da certidão)' },
         childBirthDate: { type: 'string', description: 'Data de nascimento da criança (formato YYYY-MM-DD)' },
         motherName: { type: 'string', description: 'Nome completo da mãe (seção FILIAÇÃO MATERNA)' },
+        motherCpf: { type: 'string', description: 'CPF da mãe (apenas números, sem pontos/traços)' },
         fatherName: { type: 'string', description: 'Nome completo do pai (seção FILIAÇÃO PATERNA)' },
+        fatherCpf: { type: 'string', description: 'CPF do pai (apenas números, sem pontos/traços)' },
         registryNumber: { type: 'string', description: 'Número da matrícula/registro' },
         registryDate: { type: 'string', description: 'Data do registro (formato YYYY-MM-DD)' },
         birthCity: { type: 'string', description: 'Cidade onde nasceu' }
@@ -269,7 +271,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
+        model: 'google/gemini-2.5-flash',
         max_completion_tokens: 2048,
         messages: [
           {
@@ -312,16 +314,37 @@ serve(async (req) => {
     const aiResult = await aiResponse.json();
     console.log(`[ANALYZE-SINGLE] ✅ IA respondeu`);
 
-    // 7. Extrair dados da resposta
+    // 7. Extrair dados da resposta com parsing defensivo
     const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall?.function?.arguments) {
       throw new Error('IA não retornou dados estruturados');
     }
 
-    const extracted = JSON.parse(toolCall.function.arguments);
-    console.log(`[ANALYZE-SINGLE] 📋 Dados extraídos:`, JSON.stringify(extracted, null, 2));
-    console.log(`[ANALYZE-SINGLE] 🔍 childName extraído:`, extracted.extractedData?.childName);
-    console.log(`[ANALYZE-SINGLE] 🔍 motherName extraído:`, extracted.extractedData?.motherName);
+    let extracted;
+    try {
+      // Tentar parsear JSON diretamente
+      const rawJson = toolCall.function.arguments;
+      console.log(`[ANALYZE-SINGLE] 🔍 JSON bruto (primeiros 200 chars):`, rawJson.substring(0, 200));
+      
+      // Sanitizar: remover texto após fechamento do JSON principal
+      let cleanJson = rawJson.trim();
+      const lastBrace = cleanJson.lastIndexOf('}');
+      if (lastBrace !== -1 && lastBrace < cleanJson.length - 1) {
+        console.log(`[ANALYZE-SINGLE] ⚠️ JSON tinha texto extra após }, removendo...`);
+        cleanJson = cleanJson.substring(0, lastBrace + 1);
+      }
+      
+      extracted = JSON.parse(cleanJson);
+      console.log(`[ANALYZE-SINGLE] 📋 Dados extraídos:`, JSON.stringify(extracted, null, 2));
+      console.log(`[ANALYZE-SINGLE] 🔍 childName:`, extracted.extractedData?.childName);
+      console.log(`[ANALYZE-SINGLE] 🔍 motherName:`, extracted.extractedData?.motherName);
+      console.log(`[ANALYZE-SINGLE] 🔍 motherCpf:`, extracted.extractedData?.motherCpf);
+      console.log(`[ANALYZE-SINGLE] 🔍 fatherCpf:`, extracted.extractedData?.fatherCpf);
+    } catch (parseError: any) {
+      console.error(`[ANALYZE-SINGLE] ❌ Erro ao parsear JSON:`, parseError.message);
+      console.error(`[ANALYZE-SINGLE] 📄 JSON completo que falhou:`, toolCall.function.arguments);
+      throw new Error(`Falha ao parsear resposta da IA: ${parseError.message}`);
+    }
 
     // 8. Salvar extração individual (sem campo confidence que não existe)
     const { error: saveError } = await supabase
@@ -340,18 +363,33 @@ serve(async (req) => {
     // 9. Atualizar campos do caso se for certidão
     if (docType === 'certidao_nascimento' && extracted.extractedData) {
       const updates: any = {};
+      
       if (extracted.extractedData.childName) {
         updates.child_name = extracted.extractedData.childName;
-        console.log(`[ANALYZE-SINGLE] ✅ childName encontrado: ${extracted.extractedData.childName}`);
-      } else {
-        console.log(`[ANALYZE-SINGLE] ⚠️ childName NÃO encontrado no extractedData!`);
+        console.log(`[ANALYZE-SINGLE] ✅ childName: ${extracted.extractedData.childName}`);
       }
-      if (extracted.extractedData.childBirthDate) updates.child_birth_date = extracted.extractedData.childBirthDate;
+      
+      if (extracted.extractedData.childBirthDate) {
+        updates.child_birth_date = extracted.extractedData.childBirthDate;
+      }
+      
       if (extracted.extractedData.motherName) {
         updates.author_name = extracted.extractedData.motherName;
-        console.log(`[ANALYZE-SINGLE] ✅ motherName encontrado: ${extracted.extractedData.motherName}`);
-      } else {
-        console.log(`[ANALYZE-SINGLE] ⚠️ motherName NÃO encontrado no extractedData!`);
+        console.log(`[ANALYZE-SINGLE] ✅ motherName: ${extracted.extractedData.motherName}`);
+      }
+      
+      if (extracted.extractedData.motherCpf) {
+        updates.mother_cpf = extracted.extractedData.motherCpf;
+        console.log(`[ANALYZE-SINGLE] ✅ motherCpf: ${extracted.extractedData.motherCpf}`);
+      }
+      
+      if (extracted.extractedData.fatherName) {
+        updates.father_name = extracted.extractedData.fatherName;
+      }
+      
+      if (extracted.extractedData.fatherCpf) {
+        updates.father_cpf = extracted.extractedData.fatherCpf;
+        console.log(`[ANALYZE-SINGLE] ✅ fatherCpf: ${extracted.extractedData.fatherCpf}`);
       }
 
       if (Object.keys(updates).length > 0) {
@@ -363,13 +401,9 @@ serve(async (req) => {
         if (updateError) {
           console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar caso:`, updateError);
         } else {
-          console.log(`[ANALYZE-SINGLE] 📝 Caso atualizado com sucesso:`, updates);
+          console.log(`[ANALYZE-SINGLE] 📝 Caso atualizado:`, updates);
         }
-      } else {
-        console.log(`[ANALYZE-SINGLE] ⚠️ Nenhum campo para atualizar!`);
       }
-    } else {
-      console.log(`[ANALYZE-SINGLE] ℹ️ Não é certidão ou extractedData vazio - docType: ${docType}`);
     }
 
     return new Response(
@@ -423,9 +457,14 @@ function buildPromptForDocType(docType: string, fileName: string): string {
 1. childName: Nome da CRIANÇA (topo do documento)
 2. childBirthDate: Data nascimento (formato YYYY-MM-DD)
 3. motherName: Nome da MÃE (seção "FILIAÇÃO MATERNA" - DIFERENTE da criança!)
-4. fatherName: Nome do PAI (seção "FILIAÇÃO PATERNA")
+4. motherCpf: CPF da MÃE (apenas números, sem pontos/traços - procurar na seção da mãe)
+5. fatherName: Nome do PAI (seção "FILIAÇÃO PATERNA")
+6. fatherCpf: CPF do PAI (apenas números, sem pontos/traços - procurar na seção do pai)
 
-**REGRA: childName ≠ motherName**`;
+**REGRAS CRÍTICAS:**
+- childName ≠ motherName (não confundir!)
+- CPFs devem estar no formato numérico puro (ex: "12345678900")
+- Se CPF não estiver visível, deixar em branco (não inventar)`;
   }
   
   if (docType === 'processo_administrativo') {
