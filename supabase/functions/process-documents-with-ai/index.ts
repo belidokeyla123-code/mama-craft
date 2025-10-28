@@ -84,76 +84,76 @@ serve(async (req) => {
   }
 });
 
-// Classificar documento por nome
+// Classificar documento por nome COM SUPORTE A NOMES TRUNCADOS DO WINDOWS
 const classifyDocument = (fileName: string): string => {
-  const name = fileName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const name = fileName.toLowerCase();
+  console.log(`[CLASSIFY] Analisando: "${fileName}"`);
   
-  console.log(`[CLASSIFY] Analisando: "${fileName}" -> normalizado: "${name}"`);
+  // ORDEM DE PRIORIDADE: do mais específico ao mais genérico
   
-  // Ordem de prioridade na detecção (do mais específico ao mais genérico)
-  
-  // 1. Procuração (PROC, PROCUR)
-  if (name.includes('proc') && (name.includes('procur') || name.length < 15)) {
-    console.log(`[CLASSIFY] ✅ Identificado como PROCURAÇÃO`);
+  // 1. PROCURAÇÃO: PRO~, PROC, PROCUR
+  if (name.match(/pro[0-9~]/i) || name.match(/procur/i)) {
+    console.log(`[CLASSIFY] ✅ PROCURAÇÃO detectada`);
     return 'procuracao';
   }
   
-  // 2. Certidão de Nascimento (CERT, NASC, CERTID)
-  if (name.includes('cert') || name.includes('nasc') || name.includes('certid')) {
-    console.log(`[CLASSIFY] ✅ Identificado como CERTIDÃO DE NASCIMENTO`);
+  // 2. CERTIDÃO DE NASCIMENTO: CER~, CERT, NASC, CERTID
+  if (name.match(/cer[0-9~]/i) || name.match(/cert/i) || name.match(/nasc/i)) {
+    console.log(`[CLASSIFY] ✅ CERTIDÃO DE NASCIMENTO detectada`);
     return 'certidao_nascimento';
   }
   
-  // 3. RG/CPF/Identidade (RG, CPF, IDENTIDADE, CARTEIRA, RNM)
-  if (name.includes('rg') || name.includes('cpf') || name.includes('identidade') || 
-      name.includes('carteira') || name.includes('rnm')) {
-    console.log(`[CLASSIFY] ✅ Identificado como IDENTIFICAÇÃO (RG/CPF)`);
+  // 3. RG/CPF/IDENTIDADE: ide~, rg, cpf
+  if (name.match(/ide[0-9~]/i) || name.match(/\brg\b/i) || name.match(/\bcpf\b/i) || 
+      name.match(/identid/i) || name.match(/carteira/i)) {
+    console.log(`[CLASSIFY] ✅ IDENTIFICAÇÃO (RG/CPF) detectada`);
     return 'identificacao';
   }
   
-  // 4. Autodeclaração Rural (AUTODEC, DECLARA, AUT)
-  if (name.includes('autodec') || name.includes('auto') || name.includes('dec')) {
-    console.log(`[CLASSIFY] ✅ Identificado como AUTODECLARAÇÃO RURAL`);
+  // 4. AUTODECLARAÇÃO RURAL: AUT~, AUTO, DEC~
+  if (name.match(/aut[0-9~]/i) || name.match(/autodec/i) || name.match(/dec[0-9~]/i)) {
+    console.log(`[CLASSIFY] ✅ AUTODECLARAÇÃO RURAL detectada`);
     return 'autodeclaracao_rural';
   }
   
-  // 5. CNIS / Histórico (CNIS, HISTOR, HIST)
-  if (name.includes('cnis') || name.includes('histor') || name.includes('hist')) {
-    console.log(`[CLASSIFY] ✅ Identificado como CNIS`);
+  // 5. CNIS: CNI~, CNIS, HIS~, HIST
+  if (name.match(/cni[0-9~]/i) || name.match(/cnis/i) || name.match(/his[0-9~]/i) || name.match(/histor/i)) {
+    console.log(`[CLASSIFY] ✅ CNIS detectado`);
     return 'cnis';
   }
   
-  // 6. Documento da Terra (TERRA, PROPRIEDADE, COMODATO, ITR, CCIR, DOC + TERRA)
-  if (name.includes('terra') || name.includes('propriedade') || name.includes('comodato') ||
-      name.includes('itr') || name.includes('ccir') || name.includes('fazenda') ||
-      name.includes('sitio') || name.includes('escritura') || name.includes('matricula') ||
-      (name.includes('doc') && name.length < 20)) {
-    console.log(`[CLASSIFY] ✅ Identificado como DOCUMENTO DA TERRA`);
+  // 6. DOCUMENTO DA TERRA: TER~, TERRA, DOC~, ITR, CCIR
+  if (name.match(/ter[0-9~]/i) || name.match(/terra/i) || name.match(/doc[0-9~]/i) || 
+      name.match(/\bitr\b/i) || name.match(/ccir/i) || name.match(/propriedade/i) ||
+      name.match(/comodato/i) || name.match(/fazenda/i) || name.match(/sitio/i) || 
+      name.match(/escritura/i) || name.match(/matricula/i)) {
+    console.log(`[CLASSIFY] ✅ DOCUMENTO DA TERRA detectado`);
     return 'documento_terra';
   }
   
-  // 7. Processo Administrativo / RA / Indeferimento (PROCES + ADM, INDEFER, ADM)
-  if ((name.includes('proces') && name.includes('adm')) || name.includes('ind') ||
-      name.includes('indefer') || name.includes('admini')) {
-    console.log(`[CLASSIFY] ✅ Identificado como PROCESSO ADMINISTRATIVO`);
+  // 7. PROCESSO ADMINISTRATIVO: PRO~1 (outro PRO), IND~, INDEFER, ADM
+  if (name.match(/indeferim/i) || name.match(/ind[0-9~]/i) || name.match(/admini/i) ||
+      (name.match(/proces/i) && name.match(/adm/i))) {
+    console.log(`[CLASSIFY] ✅ PROCESSO ADMINISTRATIVO detectado`);
     return 'processo_administrativo';
   }
   
-  // 8. Comprovante de Endereço (COMPR, ENDERECO, RESIDENCIA, CONTA)
-  if (name.includes('compr') || name.includes('endereco') || name.includes('residencia') || name.includes('conta')) {
-    console.log(`[CLASSIFY] ✅ Identificado como COMPROVANTE DE ENDEREÇO`);
+  // 8. COMPROVANTE DE ENDEREÇO: COM~, COMPR, END~, RESID
+  if (name.match(/com[0-9~]/i) || name.match(/compr/i) || name.match(/end[0-9~]/i) || 
+      name.match(/endereco/i) || name.match(/residencia/i) || name.match(/\bconta\b/i)) {
+    console.log(`[CLASSIFY] ✅ COMPROVANTE DE ENDEREÇO detectado`);
     return 'comprovante_endereco';
   }
   
-  // 9. Ficha de Atendimento (FICHA, ATEND)
-  if (name.includes('ficha') || name.includes('atend')) {
-    console.log(`[CLASSIFY] ✅ Identificado como FICHA DE ATENDIMENTO`);
+  // 9. FICHA DE ATENDIMENTO: FIC~, FICHA, ATE~, ATEND
+  if (name.match(/fic[0-9~]/i) || name.match(/ficha/i) || name.match(/ate[0-9~]/i) || name.match(/atend/i)) {
+    console.log(`[CLASSIFY] ✅ FICHA DE ATENDIMENTO detectada`);
     return 'ficha_atendimento';
   }
   
-  // 10. Carteira de Pescador (PESCA, PESCADOR)
-  if (name.includes('pesca') || name.includes('pescador')) {
-    console.log(`[CLASSIFY] ✅ Identificado como CARTEIRA DE PESCADOR`);
+  // 10. CARTEIRA DE PESCADOR: PES~, PESCA
+  if (name.match(/pes[0-9~]/i) || name.match(/pesca/i)) {
+    console.log(`[CLASSIFY] ✅ CARTEIRA DE PESCADOR detectada`);
     return 'carteira_pescador';
   }
   
@@ -447,6 +447,50 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     if (extractedData.raRequestDate) updateData.ra_request_date = extractedData.raRequestDate;
     if (extractedData.raDenialDate) updateData.ra_denial_date = extractedData.raDenialDate;
     if (extractedData.raDenialReason) updateData.ra_denial_reason = extractedData.raDenialReason;
+    
+    // FASE 4: VALIDAÇÃO INTELIGENTE PÓS-EXTRAÇÃO
+    console.log('[VALIDAÇÃO] Iniciando validação inteligente...');
+    const validationIssues: string[] = [];
+    
+    // Verificar reconhecimento do proprietário da terra
+    const hasLandDoc = documents.some(d => classifyDocument(d.file_name) === 'documento_terra');
+    if (hasLandDoc) {
+      if (!updateData.land_ownership_type) {
+        validationIssues.push('⚠️ Documento da terra enviado mas tipo de propriedade não identificado');
+        console.warn('[VALIDAÇÃO] Tipo de propriedade não detectado');
+      }
+      if (!updateData.land_owner_name && updateData.land_ownership_type === 'terceiro') {
+        validationIssues.push('⚠️ Terra de terceiro mas nome do proprietário não extraído');
+        console.warn('[VALIDAÇÃO] Nome do proprietário faltando');
+      }
+    }
+    
+    // Verificar RA/Processo Administrativo
+    const hasRADoc = documents.some(d => classifyDocument(d.file_name) === 'processo_administrativo');
+    if (hasRADoc) {
+      updateData.has_ra = true;
+      if (!extractedData.raProtocol) {
+        validationIssues.push('⚠️ Processo administrativo enviado mas protocolo não extraído');
+        console.warn('[VALIDAÇÃO] Protocolo RA não extraído');
+      }
+      if (!extractedData.raRequestDate) {
+        validationIssues.push('⚠️ Data do requerimento não extraída');
+        console.warn('[VALIDAÇÃO] Data do requerimento faltando');
+      }
+      if (!extractedData.raDenialReason) {
+        validationIssues.push('⚠️ Motivo do indeferimento não extraído');
+        console.warn('[VALIDAÇÃO] Motivo indeferimento faltando');
+      }
+    }
+    
+    // Log de validação
+    if (validationIssues.length > 0) {
+      console.warn('[VALIDAÇÃO] Problemas detectados:', validationIssues);
+      if (!extractedData.observations) extractedData.observations = [];
+      extractedData.observations.push(...validationIssues);
+    } else {
+      console.log('[VALIDAÇÃO] ✅ Todos os dados críticos extraídos com sucesso');
+    }
     
     if (extractedData.observations && extractedData.observations.length > 0) {
       updateData.special_notes = extractedData.observations.join('; ');

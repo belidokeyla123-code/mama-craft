@@ -91,23 +91,50 @@ export async function extractDataFromBatch(
    ✓ Tipo de propriedade/relação
 
 🔹 **CNIS - CADASTRO NACIONAL DE INFORMAÇÕES SOCIAIS** (ANÁLISE CRÍTICA!)
-   Este documento é ESSENCIAL. Analise com MÁXIMA ATENÇÃO:
-   ✓ Listar TODOS os períodos urbanos (vínculos empregatícios):
-     → Nome do empregador
-     → Data início e fim (YYYY-MM-DD)
-   ✓ Listar TODOS os períodos rurais reconhecidos:
-     → Descrição e datas
-   ✓ Benefícios anteriores (especialmente salário-maternidade)
-   ✓ Se CNIS vazio → marcar "cnis_vazio": true (PONTO FORTE!)
+   Este documento é ESSENCIAL para comprovar vínculos. Analise PÁGINA POR PÁGINA:
+   
+   **IMPORTANTE: CNIS pode ter múltiplas páginas! Leia TODAS até o final!**
+   
+   ✓ VÍNCULOS URBANOS (Tabela "Relação de Vínculos"):
+     → Nome COMPLETO de cada empregador
+     → Data início (YYYY-MM-DD) e fim (YYYY-MM-DD) de CADA vínculo
+     → Tipo de vínculo (CLT, contrato, etc)
+   
+   ✓ VÍNCULOS RURAIS (se houver seção específica):
+     → Descrição do período rural
+     → Datas de início e fim
+   
+   ✓ BENEFÍCIOS ANTERIORES:
+     → Procure por "Salário-Maternidade" na seção de benefícios
+     → Anote número do benefício (NB) e datas
+   
+   ✓ OBSERVAÇÃO CRÍTICA:
+     → Se o CNIS não apresentar NENHUM vínculo ou benefício → marcar "cnis_vazio": true
+     → CNIS vazio É PONTO FORTE para comprovar atividade exclusivamente rural!
 
-🔹 **PROCESSO INSS / INDEFERIMENTO / NB** (CRÍTICO!)
-   ✓ Número COMPLETO do protocolo/NB (ex: "NB 123.456.789-0")
-   ✓ Data do requerimento DD/MM/AAAA
-   ✓ Data do indeferimento DD/MM/AAAA
-   ✓ Motivo COMPLETO do indeferimento:
-      → Copie PALAVRA POR PALAVRA todo o texto do motivo
-      → Inclua fundamentação jurídica, artigos de lei, etc
-      → NÃO resuma, copie LITERALMENTE tudo
+🔹 **PROCESSO INSS / INDEFERIMENTO / REQUERIMENTO ADMINISTRATIVO (RA)** (CRÍTICO!)
+   
+   **Este documento contém informações ESSENCIAIS para a ação judicial:**
+   
+   ✓ NÚMERO DO PROTOCOLO/NB (OBRIGATÓRIO):
+     → Formato: "NB 187.654.321-0" ou "Protocolo: 123456789"
+     → Localizar na primeira página ou no cabeçalho
+     → NÃO OMITIR este campo!
+   
+   ✓ DATA DO REQUERIMENTO (OBRIGATÓRIA):
+     → Data em que a segurada PEDIU o benefício
+     → Converter para formato YYYY-MM-DD
+   
+   ✓ DATA DO INDEFERIMENTO (OBRIGATÓRIA):
+     → Data da decisão de negativa do INSS
+     → Converter para formato YYYY-MM-DD
+   
+   ✓ MOTIVO DO INDEFERIMENTO (LITERAL E COMPLETO!):
+     → Copie PALAVRA POR PALAVRA TODO o texto do indeferimento
+     → Incluir: fundamentação jurídica, artigos de lei citados, análise técnica
+     → NÃO resuma, NÃO parafraseie, copie LITERALMENTE
+     → Exemplo: "Não comprovada a qualidade de segurado especial conforme Lei 8.213/91 art. 39..."
+     → Se houver múltiplas páginas de fundamentação, copie TUDO!
 
 ═══════════════════════════════════════════════════════════════
 ⚠️ REGRAS ABSOLUTAS - SIGA RIGOROSAMENTE!

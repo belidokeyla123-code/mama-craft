@@ -418,6 +418,44 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     }
   };
 
+  const handleReclassify = async () => {
+    if (!caseId || documents.length === 0) {
+      toast({
+        title: "Sem documentos",
+        description: "Adicione documentos antes de reclassificar.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsReprocessing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reclassify-documents', {
+        body: { caseId }
+      });
+      
+      if (error) throw error;
+
+      toast({
+        title: "✅ Reclassificação concluída",
+        description: data.message || `${data.reclassified} documento(s) reclassificado(s)`,
+      });
+
+      await loadDocuments();
+      if (onDocumentsChange) onDocumentsChange();
+
+    } catch (error: any) {
+      console.error("Erro ao reclassificar:", error);
+      toast({
+        title: "Erro ao reclassificar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsReprocessing(false);
+    }
+  };
+
   const handleReprocess = async () => {
     if (!caseId || documents.length === 0) {
       toast({
@@ -441,7 +479,6 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         description: "Processamento será iniciado em breve. Você pode navegar livremente.",
       });
 
-      // Polling para verificar conclusão
       const pollInterval = setInterval(async () => {
         const { data: queue } = await supabase
           .from('processing_queue')
@@ -606,10 +643,30 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             </div>
             <div className="flex gap-2">
               <Button
+                onClick={handleReclassify}
+                disabled={isReprocessing}
+                variant="outline"
+                className="gap-2"
+                title="Corrigir classificação dos documentos"
+              >
+                {isReprocessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Reclassificando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Reclassificar
+                  </>
+                )}
+              </Button>
+              <Button
                 onClick={handleReprocess}
                 disabled={isReprocessing}
                 variant="outline"
                 className="gap-2"
+                title="Reprocessar documentos com IA"
               >
                 {isReprocessing ? (
                   <>
