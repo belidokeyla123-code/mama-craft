@@ -129,76 +129,78 @@ serve(async (req) => {
             }
           }
 
-          // 3. Processar análise legal se pendente
+          // 3. PARALELIZAR análise legal + jurisprudência
+          const parallelTasks = [];
+
           if (queueEntry.analysis_status === 'queued') {
-            console.log(`[WORKER] Analisando caso ${caseId}`);
+            console.log(`[WORKER] Analisando caso ${caseId} (paralelo)`);
             
             await supabase
               .from('processing_queue')
               .update({ analysis_status: 'processing' })
               .eq('id', queueEntry.id);
 
-            try {
-              await supabase.functions.invoke('analyze-case-legal', {
+            parallelTasks.push(
+              supabase.functions.invoke('analyze-case-legal', {
                 body: { caseId }
-              });
-              
-              await supabase
-                .from('processing_queue')
-                .update({ 
-                  analysis_status: 'completed',
-                  analysis_completed_at: new Date().toISOString()
-                })
-                .eq('id', queueEntry.id);
-              
-              tasks.push({ task: 'analysis', success: true });
-            } catch (err) {
-              await supabase
-                .from('processing_queue')
-                .update({ 
-                  analysis_status: 'failed',
-                  error_message: err instanceof Error ? err.message : 'Erro na análise'
-                })
-                .eq('id', queueEntry.id);
-              
-              tasks.push({ task: 'analysis', success: false });
-            }
+              }).then(async () => {
+                await supabase
+                  .from('processing_queue')
+                  .update({ 
+                    analysis_status: 'completed',
+                    analysis_completed_at: new Date().toISOString()
+                  })
+                  .eq('id', queueEntry.id);
+                tasks.push({ task: 'analysis', success: true });
+              }).catch(async (err) => {
+                await supabase
+                  .from('processing_queue')
+                  .update({ 
+                    analysis_status: 'failed',
+                    error_message: err instanceof Error ? err.message : 'Erro na análise'
+                  })
+                  .eq('id', queueEntry.id);
+                tasks.push({ task: 'analysis', success: false });
+              })
+            );
           }
 
-          // 4. Processar busca de jurisprudência se pendente
           if (queueEntry.jurisprudence_status === 'queued') {
-            console.log(`[WORKER] Buscando jurisprudências para caso ${caseId}`);
+            console.log(`[WORKER] Buscando jurisprudências para caso ${caseId} (paralelo)`);
             
             await supabase
               .from('processing_queue')
               .update({ jurisprudence_status: 'processing' })
               .eq('id', queueEntry.id);
 
-            try {
-              await supabase.functions.invoke('search-jurisprudence', {
+            parallelTasks.push(
+              supabase.functions.invoke('search-jurisprudence', {
                 body: { caseId }
-              });
-              
-              await supabase
-                .from('processing_queue')
-                .update({ 
-                  jurisprudence_status: 'completed',
-                  jurisprudence_completed_at: new Date().toISOString()
-                })
-                .eq('id', queueEntry.id);
-              
-              tasks.push({ task: 'jurisprudence', success: true });
-            } catch (err) {
-              await supabase
-                .from('processing_queue')
-                .update({ 
-                  jurisprudence_status: 'failed',
-                  error_message: err instanceof Error ? err.message : 'Erro na busca'
-                })
-                .eq('id', queueEntry.id);
-              
-              tasks.push({ task: 'jurisprudence', success: false });
-            }
+              }).then(async () => {
+                await supabase
+                  .from('processing_queue')
+                  .update({ 
+                    jurisprudence_status: 'completed',
+                    jurisprudence_completed_at: new Date().toISOString()
+                  })
+                  .eq('id', queueEntry.id);
+                tasks.push({ task: 'jurisprudence', success: true });
+              }).catch(async (err) => {
+                await supabase
+                  .from('processing_queue')
+                  .update({ 
+                    jurisprudence_status: 'failed',
+                    error_message: err instanceof Error ? err.message : 'Erro na busca'
+                  })
+                  .eq('id', queueEntry.id);
+                tasks.push({ task: 'jurisprudence', success: false });
+              })
+            );
+          }
+
+          // Executar em paralelo
+          if (parallelTasks.length > 0) {
+            await Promise.all(parallelTasks);
           }
 
           console.log(`[WORKER] ✅ Caso ${caseId} processado:`, tasks);

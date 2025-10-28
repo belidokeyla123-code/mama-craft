@@ -14,19 +14,18 @@ import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
 import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
-import { StepInstrucaoConcentrada } from "@/components/wizard/StepInstrucaoConcentrada";
+
 import type { CaseData } from "./NewCase";
 
 const STEPS = [
   { id: 0, name: "Chat Inteligente" },
   { id: 1, name: "Informações Básicas" },
   { id: 2, name: "Documentos" },
-  { id: 3, name: "Instrução Concentrada" },
-  { id: 4, name: "Validação" },
-  { id: 5, name: "Análise" },
-  { id: 6, name: "Jurisprudência" },
-  { id: 7, name: "Tese Jurídica" },
-  { id: 8, name: "Minuta" },
+  { id: 3, name: "Validação" },
+  { id: 4, name: "Análise" },
+  { id: 5, name: "Jurisprudência" },
+  { id: 6, name: "Tese Jurídica" },
+  { id: 7, name: "Minuta" },
 ];
 
 export default function CaseDetail() {
@@ -224,16 +223,14 @@ export default function CaseDetail() {
           />
         ) : null;
       case 3:
-        return <StepInstrucaoConcentrada data={caseData} updateData={updateCaseData} />;
-      case 4:
         return <StepValidation data={caseData} updateData={updateCaseData} />;
-      case 5:
+      case 4:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
-      case 6:
+      case 5:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
-      case 7:
+      case 6:
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
-      case 8:
+      case 7:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;

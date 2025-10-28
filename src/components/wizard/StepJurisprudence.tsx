@@ -407,7 +407,7 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
       <div>
         <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
           <Scale className="h-7 w-7 text-primary" />
-          Jurisprudências, Súmulas, Doutrinas e Teses Jurídicas
+          Jurisprudências, Súmulas e Doutrinas
         </h2>
         <p className="text-muted-foreground">
           Fontes jurídicas reais e relevantes para fundamentar a petição
@@ -446,7 +446,7 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
               <p className="text-sm text-muted-foreground">
                 Buscando jurisprudências, súmulas, doutrinas e teses aplicáveis
               </p>
-              <p className="text-xs text-muted-foreground">Isso pode levar até 45 segundos</p>
+              <p className="text-xs text-muted-foreground">Isso pode levar até 15 segundos</p>
             </div>
           </div>
         </Card>

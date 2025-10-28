@@ -59,153 +59,27 @@ serve(async (req) => {
 
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
-⚠️⚠️⚠️ AGORA VOCÊ VAI BUSCAR JURISPRUDÊNCIA ⚠️⚠️⚠️
+Busque jurisprudências, súmulas e doutrinas REAIS para:
 
-Você é um pesquisador jurídico especialista em Direito Previdenciário. Para este caso de salário-maternidade, retorne um JSON estruturado por TIPO de fonte jurídica.
-
-CASO:
+**CASO:**
 - Perfil: ${caseData.profile === 'especial' ? 'Segurada Especial Rural' : 'Segurada Urbana'}
 - Evento: ${caseData.event_type}
 - Tem RA: ${caseData.has_ra ? 'Sim' : 'Não'}
-- Situação especial: ${caseData.has_special_situation ? 'Sim' : 'Não'}
 
-⚠️ IMPORTANTE: Retorne fontes jurídicas REAIS e APLICÁVEIS ao caso. Não invente números de processos ou súmulas inexistentes.
-
-ESTRUTURA DO JSON:
+Retorne máx 3 de cada tipo. JSON:
 {
-  "jurisprudencias": [
-    {
-      "tipo": "acordao" | "sumula" | "tese",
-      "tribunal": "STF" | "STJ" | "TNU" | "TRF1" | "TRF2" | "TRF3" | "TRF4" | "TRF5" | "TRF6",
-      "numero_processo": "REsp 1234567/SP" ou "PEDILEF 0012345-67.2020.4.01.3800",
-      "relator": "Des. Nome do Relator",
-      "data_julgamento": "YYYY-MM-DD",
-      "tese_fixada": "Resumo objetivo da tese fixada neste julgado",
-      "ementa_completa": "PREVIDENCIÁRIO. SALÁRIO-MATERNIDADE. SEGURADA ESPECIAL RURAL... (texto completo da ementa)",
-      "trecho_chave": "Trecho mais relevante que se aplica diretamente ao caso",
-      "link": "https://jurisprudencia.trf4.jus.br/...",
-      "relevancia": 95,
-      "por_que_relevante": "Situação fática idêntica: segurada especial sem documentação própria"
-    }
-  ],
-  "sumulas": [
-    {
-      "tribunal": "STJ" | "STF" | "TNU",
-      "numero": "Súmula 149",
-      "tipo": "simples" | "vinculante",
-      "texto_completo": "A prova exclusivamente testemunhal não basta à comprovação da atividade rurícola, para efeito da obtenção de benefício previdenciário.",
-      "texto_resumido": "Prova testemunhal insuficiente sozinha",
-      "link": "https://www.stj.jus.br/docs_internet/revista/eletronica/stj-revista-sumulas-2011_15_capSumula149.pdf",
-      "relevancia": 90,
-      "como_aplicar": "Reforça necessidade de prova documental além de testemunhas"
-    }
-  ],
-  "doutrinas": [
-    {
-      "autor": "Carlos Alberto Pereira de Castro",
-      "obra": "Manual de Direito Previdenciário, 26ª ed.",
-      "editora": "Forense",
-      "ano": 2023,
-      "pagina": "p. 450-455",
-      "citacao_literal": "A segurada especial rural em regime de economia familiar pode utilizar documentos em nome do cônjuge ou filhos para comprovar sua atividade, desde que demonstrado o vínculo familiar e o exercício conjunto da atividade agrícola.",
-      "contexto": "Capítulo sobre Salário-Maternidade da Segurada Especial",
-      "relevancia": 75,
-      "por_que_citar": "Autoridade máxima em Direito Previdenciário brasileiro"
-    },
-    {
-      "autor": "Frederico Amado",
-      "obra": "Curso de Direito e Processo Previdenciário, 14ª ed.",
-      "editora": "JusPodivm",
-      "ano": 2023,
-      "pagina": "p. 320-325",
-      "citacao_literal": "O salário-maternidade da segurada especial independe de carência, sendo suficiente a comprovação do exercício da atividade rural nos 10 (dez) meses imediatamente anteriores ao parto, mesmo que não consecutivos.",
-      "contexto": "Parte sobre Benefícios por Incapacidade e Maternidade",
-      "relevancia": 80,
-      "por_que_citar": "Obra atualizada e amplamente citada em petições"
-    }
-  ],
-  "precedentes_vinculantes": [
-    {
-      "tipo": "IRDR" | "IAC" | "Recurso Repetitivo" | "Tema de Repercussão Geral",
-      "numero": "Tema 1234" ou "IRDR 5000123-45.2020.4.04.0000",
-      "tribunal": "STJ" | "STF" | "TRF4",
-      "tese_vinculante": "Texto exato da tese fixada pelo tribunal",
-      "aplicacao_obrigatoria": true,
-      "link": "https://...",
-      "relevancia": 100
-    }
-  ],
-  "teses_juridicas_aplicaveis": [
-    {
-      "titulo": "Documentação em nome de terceiros no núcleo familiar",
-      "descricao": "Mulheres em regime de economia familiar rural podem usar documentos em nome do cônjuge ou filhos como prova de atividade rural, desde que comprovem vínculo familiar e exercício conjunto da atividade",
-      "fundamentacao": [
-        "Súmula X do STJ",
-        "Jurisprudência consolidada do TRF4 (REsp 123456)",
-        "Doutrina de Carlos Alberto Pereira de Castro (Manual de Direito Previdenciário, p. 450)"
-      ],
-      "como_usar_na_peticao": "No capítulo DO DIREITO, argumentar que a ausência de documentos em nome próprio da segurada não é impeditiva, pois a jurisprudência do TRF4 e a doutrina majoritária reconhecem que mulheres em economia familiar podem utilizar documentos do núcleo familiar",
-      "relevancia": 95
-    },
-    {
-      "titulo": "Dispensa de carência para segurada especial",
-      "descricao": "Seguradas especiais rurais têm dispensa de carência para salário-maternidade, sendo exigida apenas comprovação de atividade rural nos 10 meses anteriores ao parto",
-      "fundamentacao": [
-        "Art. 39, parágrafo único, da Lei 8.213/91",
-        "Art. 93, §2º, do Decreto 3.048/99",
-        "Jurisprudência pacífica dos TRFs"
-      ],
-      "como_usar_na_peticao": "No capítulo DOS FATOS, mencionar que a autora não precisa comprovar 10 meses de carência contributiva, mas apenas o exercício efetivo da atividade rural no período gestacional",
-      "relevancia": 100
-    },
-    {
-      "titulo": "Prova material + testemunhal em conjunto",
-      "descricao": "Embora prova exclusivamente testemunhal seja insuficiente (Súmula 149 STJ), a combinação de prova material início de prova material com prova testemunhal é plenamente válida para comprovar atividade rural",
-      "fundamentacao": [
-        "Súmula 149 do STJ (interpretação a contrario sensu)",
-        "TNU: início de prova material + testemunhas = comprovação suficiente",
-        "Jurisprudência consolidada dos TRFs"
-      ],
-      "como_usar_na_peticao": "No capítulo DAS PROVAS, demonstrar que há início de prova material (declaração de sindicato, fotos, etc.) e que essa prova será corroborada por testemunhas, atendendo plenamente aos requisitos legais e jurisprudenciais",
-      "relevancia": 90
-    }
-  ]
-}
-
-INSTRUÇÕES CRÍTICAS:
-1. **Jurisprudências**: Busque DECISÕES REAIS de casos SIMILARES (segurada especial, salário-maternidade)
-   - Preferir TRF4 (maior volume de casos rurais)
-   - Citar número COMPLETO do processo
-   - Incluir ementa COMPLETA
-   - Retornar NO MÍNIMO 5 jurisprudências relevantes
-
-2. **Súmulas**: Busque SÚMULAS NUMERADAS REAIS dos tribunais superiores
-   - Súmula 149 do STJ (prova testemunhal)
-   - Outras súmulas aplicáveis a seguradas especiais
-   - Texto COMPLETO da súmula
-   - Retornar NO MÍNIMO 3 súmulas
-
-3. **Doutrinas**: Cite AUTORES REAIS e OBRAS EXISTENTES
-   - Carlos Alberto Pereira de Castro (Manual de Direito Previdenciário)
-   - Frederico Amado (Curso de Direito Previdenciário)
-   - Ivan Kertzman (Curso Prático de Direito Previdenciário)
-   - Citação LITERAL de trecho aplicável
-   - Retornar NO MÍNIMO 2 doutrinas
-
-4. **Precedentes Vinculantes**: Se houver Tema de Repercussão Geral ou IRDR aplicável, incluir
-
-5. **Teses Jurídicas**: São RACIOCÍNIOS JURÍDICOS que conectam as fontes ao caso
-   - NÃO são decisões judiciais
-   - São argumentações construídas COM BASE nas fontes
-   - Retornar NO MÍNIMO 3 teses aplicáveis ao caso
-
-ORDENE TUDO POR RELEVÂNCIA (score mais alto primeiro).`;
+  "jurisprudencias": [{"tipo":"","tribunal":"","numero_processo":"","tese_fixada":"","relevancia":0,"por_que_relevante":""}],
+  "sumulas": [{"tribunal":"","numero":"","tipo":"","texto_completo":"","relevancia":0,"como_aplicar":""}],
+  "doutrinas": [{"autor":"","obra":"","citacao_literal":"","relevancia":0,"por_que_citar":""}],
+  "teses_juridicas_aplicaveis": []
+}`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    
-    // Timeout de 45 segundos
+      
+    // Chamar IA para busca jurisprudências - OTIMIZADO
+    console.log('[SEARCH-JURIS] Chamando IA para busca rápida...');
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos timeout
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -215,7 +89,7 @@ ORDENE TUDO POR RELEVÂNCIA (score mais alto primeiro).`;
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'google/gemini-2.5-flash-lite',
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: "json_object" }
         }),

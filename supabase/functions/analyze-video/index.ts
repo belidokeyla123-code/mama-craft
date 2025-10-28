@@ -48,19 +48,11 @@ RETORNE JSON:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-pro',
         messages: [
           {
             role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:video/mp4;base64,${videoFile}`
-                }
-              }
-            ]
+            content: prompt
           }
         ],
         response_format: { type: "json_object" }
