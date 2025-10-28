@@ -13,6 +13,9 @@ interface TimelineChartProps {
 }
 
 export const TimelineChart = ({ events }: TimelineChartProps) => {
+  // Garantir que events seja sempre um array
+  const safeEvents = events || [];
+  
   const getTypeColor = (tipo: string) => {
     const colors: Record<string, string> = {
       urbano: "bg-blue-500",
@@ -45,23 +48,29 @@ export const TimelineChart = ({ events }: TimelineChartProps) => {
       <h3 className="text-lg font-semibold mb-4">Linha do Tempo de Contribuição</h3>
       
       <div className="space-y-4">
-        {events.map((event, index) => (
-          <div key={index} className="flex items-start gap-4">
-            <div className={`w-3 h-3 rounded-full ${getTypeColor(event.tipo)} flex-shrink-0 mt-1.5`}></div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium">{event.periodo}</span>
-                <Badge variant="secondary" className="text-xs">
-                  {getTypeLabel(event.tipo)}
-                </Badge>
-                {getStatusBadge(event.status)}
+        {safeEvents.length > 0 ? (
+          safeEvents.map((event, index) => (
+            <div key={index} className="flex items-start gap-4">
+              <div className={`w-3 h-3 rounded-full ${getTypeColor(event.tipo)} flex-shrink-0 mt-1.5`}></div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium">{event.periodo}</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {getTypeLabel(event.tipo)}
+                  </Badge>
+                  {getStatusBadge(event.status)}
+                </div>
+                {event.detalhes && (
+                  <p className="text-sm text-muted-foreground">{event.detalhes}</p>
+                )}
               </div>
-              {event.detalhes && (
-                <p className="text-sm text-muted-foreground">{event.detalhes}</p>
-              )}
             </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Nenhum evento na timeline disponível
+          </p>
+        )}
       </div>
 
       <div className="mt-6 pt-4 border-t">

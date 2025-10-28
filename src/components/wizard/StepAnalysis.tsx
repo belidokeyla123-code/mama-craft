@@ -234,9 +234,9 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                   Pontos Fortes
                 </h4>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  {analysis.probabilidade_exito.pontos_fortes.map((ponto, index) => (
+                  {analysis.probabilidade_exito.pontos_fortes?.map((ponto, index) => (
                     <li key={index}>{ponto}</li>
-                  ))}
+                  )) || <li>Nenhum ponto forte identificado</li>}
                 </ul>
               </div>
               <div>
@@ -245,9 +245,9 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                   Pontos Fracos
                 </h4>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  {analysis.probabilidade_exito.pontos_fracos.map((ponto, index) => (
+                  {analysis.probabilidade_exito.pontos_fracos?.map((ponto, index) => (
                     <li key={index}>{ponto}</li>
-                  ))}
+                  )) || <li>Nenhum ponto fraco identificado</li>}
                 </ul>
               </div>
             </div>
@@ -255,9 +255,9 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
             <div className="mt-4 p-4 bg-muted rounded-lg">
               <h4 className="font-semibold mb-2">Justificativa</h4>
               <ul className="list-disc list-inside space-y-1 text-sm">
-                {analysis.probabilidade_exito.justificativa.map((just, index) => (
+                {analysis.probabilidade_exito.justificativa?.map((just, index) => (
                   <li key={index}>{just}</li>
-                ))}
+                )) || <li>Sem justificativa disponível</li>}
               </ul>
             </div>
           </Card>
@@ -314,7 +314,7 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
           </Card>
 
           {/* Timeline de Contribuição */}
-          {analysis.timeline.length > 0 && (
+          {analysis.timeline && analysis.timeline.length > 0 && (
             <Card className="p-6">
               <h3 className="text-lg font-bold mb-4">Timeline de Contribuição</h3>
               <TimelineChart events={analysis.timeline} />
@@ -333,7 +333,7 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                   </Badge>
                 </div>
 
-                {analysis.cnis_analysis.beneficios_anteriores.length > 0 && (
+                {analysis.cnis_analysis.beneficios_anteriores && analysis.cnis_analysis.beneficios_anteriores.length > 0 && (
                   <div>
                     <p className="font-medium mb-2">Benefícios Anteriores</p>
                     <ul className="list-disc list-inside space-y-1 text-sm">
@@ -348,7 +348,7 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
           )}
 
           {/* Recomendações */}
-          {analysis.recomendacoes.length > 0 && (
+          {analysis.recomendacoes && analysis.recomendacoes.length > 0 && (
             <Card className="p-6 bg-blue-50 dark:bg-blue-950">
               <h3 className="text-lg font-bold mb-3">Recomendações</h3>
               <ul className="list-disc list-inside space-y-1 text-sm">
