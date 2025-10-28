@@ -43,9 +43,18 @@ serve(async (req) => {
       throw new Error(`Erro ao baixar: ${downloadError?.message}`);
     }
 
-    // 3. Converter para base64
+    // 3. Converter para base64 (método seguro para arquivos grandes)
     const arrayBuffer = await fileData.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    const chunkSize = 8192; // Processar em chunks de 8KB
+    
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.slice(i, Math.min(i + chunkSize, bytes.length));
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    
+    const base64 = btoa(binary);
     const base64Image = `data:${doc.mime_type};base64,${base64}`;
 
     console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida (${(base64.length / 1024).toFixed(1)} KB)`);
