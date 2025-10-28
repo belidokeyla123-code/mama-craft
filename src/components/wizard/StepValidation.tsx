@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentUploadInline } from "./DocumentUploadInline";
+import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 
 interface StepValidationProps {
   data: CaseData;
@@ -19,6 +20,13 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
   const { toast } = useToast();
+
+  // Invalidar caches quando revalidar manualmente
+  useCacheInvalidation({
+    caseId: data.caseId || '',
+    triggerType: 'validation',
+    watchFields: [isValidating],
+  });
 
   useEffect(() => {
     if (data.caseId && !validationResult) {
@@ -138,7 +146,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
             <p className="text-sm text-muted-foreground">
               Analisando {data.caseId ? 'seus documentos' : 'caso'} com IA...
             </p>
-            <p className="text-xs text-muted-foreground">Isso pode levar até 45 segundos</p>
+            <p className="text-xs text-muted-foreground">Isso pode levar até 20 segundos</p>
           </div>
         </div>
       </Card>
@@ -181,15 +189,23 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                   {item.importance}
                 </Badge>
                 
-                {/* Botão de excluir se o documento existe */}
-                {item.document_id && (
+                {/* Botão de excluir SE documento existe E status não é ok */}
+                {item.document_id && item.status !== 'ok' && (
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDeleteDocument(item.document_id)}
+                    title="Excluir documento"
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
+                )}
+                
+                {/* Debug: Mostrar se document_id está presente */}
+                {process.env.NODE_ENV === 'development' && (
+                  <span className="text-xs text-muted-foreground">
+                    {item.document_id ? '✓ ID' : '✗ No ID'}
+                  </span>
                 )}
               </div>
             ))}

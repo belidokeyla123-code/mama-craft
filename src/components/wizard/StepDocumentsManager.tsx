@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ManualReclassifyDialog } from "./ManualReclassifyDialog";
+import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 
 interface Document {
   id: string;
@@ -40,6 +41,13 @@ interface StepDocumentsManagerProps {
 export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: StepDocumentsManagerProps) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Invalidar caches quando documentos mudarem
+  useCacheInvalidation({
+    caseId: caseId || '',
+    triggerType: 'documents',
+    watchFields: [documents.length],
+  });
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);

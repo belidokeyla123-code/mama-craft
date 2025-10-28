@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { PasteDataInline } from "./PasteDataInline";
+import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 
 interface StepBasicInfoProps {
   data: CaseData;
@@ -39,6 +40,13 @@ const calcularTempo = (inicio: string, fim: string) => {
 export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const autoFilledFields = data.autoFilledFields || [];
   const missingFields = data.missingFields || [];
+
+  // Invalidar caches quando campos críticos mudarem
+  useCacheInvalidation({
+    caseId: data.caseId || '',
+    triggerType: 'basic_info',
+    watchFields: [data.profile, data.eventType, data.hasRa],
+  });
 
   const isAutoFilled = (fieldName: string) => {
     return autoFilledFields.includes(fieldName);

@@ -112,46 +112,67 @@ AGORA CONSTRUA 3-5 TESES JURÍDICAS PERSUASIVAS conectando essas fontes ao caso 
 
     console.log('[TESE] Chamando IA para gerar teses...');
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: "json_object" }
-      }),
-    });
+    // Timeout de 20 segundos
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('[TESE] Erro da IA:', aiResponse.status, errorText);
-      
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
-          status: 429,
+    try {
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [{ role: 'user', content: prompt }],
+          response_format: { type: "json_object" }
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error('[TESE] Erro da IA:', aiResponse.status, errorText);
+        
+        if (aiResponse.status === 429) {
+          return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+            status: 429,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        if (aiResponse.status === 402) {
+          return new Response(JSON.stringify({ error: 'Payment required' }), {
+            status: 402,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        throw new Error(`AI API error: ${aiResponse.status}`);
+      }
+
+      const result = await aiResponse.json();
+      const tesesData = JSON.parse(result.choices[0].message.content);
+
+      console.log('[TESE] Teses geradas com sucesso:', tesesData.teses?.length || 0);
+
+      return new Response(JSON.stringify(tesesData), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        return new Response(JSON.stringify({ 
+          error: 'Timeout: Geração de teses demorou muito. Tente novamente.',
+          code: 'TIMEOUT'
+        }), {
+          status: 408,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: 'Payment required' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw new Error(`AI API error: ${aiResponse.status}`);
+      throw fetchError;
     }
-
-    const result = await aiResponse.json();
-    const tesesData = JSON.parse(result.choices[0].message.content);
-
-    console.log('[TESE] Teses geradas com sucesso:', tesesData.teses?.length || 0);
-
-    return new Response(JSON.stringify(tesesData), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (error: any) {
     console.error('[TESE] Erro:', error);
