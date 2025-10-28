@@ -43,25 +43,17 @@ serve(async (req) => {
       throw new Error(`Erro ao baixar: ${downloadError?.message}`);
     }
 
-    // 3. Converter para base64 (usando método Web API seguro)
+    // 3. Converter para base64 (método seguro sem spread operator)
     const arrayBuffer = await fileData.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
     
-    // Método 1: Usar Blob para arquivos grandes
-    const blob = new Blob([arrayBuffer], { type: doc.mime_type });
-    const buffer = await blob.arrayBuffer();
-    
-    // Converter em chunks pequenos para evitar stack overflow
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000; // 32KB chunks
-    let base64 = '';
-    
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.slice(i, i + chunkSize);
-      // Usar Array.from para criar array seguro
-      const charCodes = Array.from(chunk);
-      base64 += btoa(String.fromCharCode(...charCodes));
+    // Converter byte por byte para evitar stack overflow
+    let binaryString = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binaryString += String.fromCharCode(bytes[i]);
     }
     
+    const base64 = btoa(binaryString);
     const base64Image = `data:${doc.mime_type};base64,${base64}`;
 
     console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida (${(base64.length / 1024).toFixed(1)} KB)`);
