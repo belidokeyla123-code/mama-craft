@@ -72,11 +72,17 @@ serve(async (req) => {
               .eq('case_id', caseId);
 
             if (documents && documents.length > 0) {
-              await supabase.functions.invoke('process-documents-with-ai', {
-                body: {
+              // Usar fetch direto ao invés de supabase.functions.invoke para evitar dependências de tipos
+              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/process-documents-with-ai`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
                   caseId: caseId,
                   documentIds: documents.map(d => d.id)
-                }
+                })
               });
               
               await new Promise(resolve => setTimeout(resolve, 3000));
@@ -103,8 +109,13 @@ serve(async (req) => {
               .eq('id', queueEntry.id);
 
             try {
-              await supabase.functions.invoke('validate-case-documents', {
-                body: { caseId }
+              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/validate-case-documents`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ caseId })
               });
               
               await supabase
@@ -141,8 +152,13 @@ serve(async (req) => {
               .eq('id', queueEntry.id);
 
             parallelTasks.push(
-              supabase.functions.invoke('analyze-case-legal', {
-                body: { caseId }
+              fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/analyze-case-legal`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ caseId })
               }).then(async () => {
                 await supabase
                   .from('processing_queue')
@@ -174,8 +190,13 @@ serve(async (req) => {
               .eq('id', queueEntry.id);
 
             parallelTasks.push(
-              supabase.functions.invoke('search-jurisprudence', {
-                body: { caseId }
+              fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/search-jurisprudence`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ caseId })
               }).then(async () => {
                 await supabase
                   .from('processing_queue')
