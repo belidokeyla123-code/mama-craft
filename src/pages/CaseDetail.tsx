@@ -286,13 +286,13 @@ export default function CaseDetail() {
         {/* Progress Bar */}
         <Card className="p-6 mb-6">
           <div className="space-y-4">
-            <div className="overflow-x-auto pb-4">
-              <div className="flex items-center min-w-max">
+            <div className="flex justify-center items-center pb-4">
+              <div className="flex items-center flex-wrap gap-y-4 justify-center">
                 {STEPS.map((step, index) => (
                   <div key={step.id} className="flex items-center">
                     <button
                       onClick={() => setCurrentStep(step.id)}
-                      className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all flex-shrink-0 ${
+                      className={`flex items-center justify-center w-9 h-9 rounded-full border-2 transition-all flex-shrink-0 ${
                         currentStep > step.id
                           ? "bg-success border-success text-success-foreground cursor-pointer hover:opacity-80"
                           : currentStep === step.id
@@ -301,14 +301,14 @@ export default function CaseDetail() {
                       }`}
                     >
                       {currentStep > step.id ? (
-                        <Check className="h-5 w-5" />
+                        <Check className="h-4 w-4" />
                       ) : (
-                        <span className="text-base font-semibold">{step.id + 1}</span>
+                        <span className="text-sm font-bold">{step.id + 1}</span>
                       )}
                     </button>
                     {index < STEPS.length - 1 && (
                       <div
-                        className={`w-16 h-0.5 mx-2 flex-shrink-0 ${
+                        className={`w-8 h-0.5 mx-1 flex-shrink-0 ${
                           currentStep > step.id ? "bg-success" : "bg-border"
                         }`}
                       />
@@ -317,14 +317,16 @@ export default function CaseDetail() {
                 ))}
               </div>
             </div>
+
             <Progress value={progress} className="h-2" />
-            <div className="flex justify-between overflow-x-auto">
-              <div className="flex gap-4 min-w-max">
+
+            <div className="flex justify-center items-center">
+              <div className="flex gap-2 flex-wrap justify-center">
                 {STEPS.map((step) => (
                   <button
                     key={step.id}
                     onClick={() => setCurrentStep(step.id)}
-                    className={`text-base hover:text-primary transition-colors whitespace-nowrap ${
+                    className={`text-sm hover:text-primary transition-colors whitespace-nowrap px-1 ${
                       currentStep >= step.id
                         ? "text-foreground font-medium"
                         : "text-muted-foreground"
