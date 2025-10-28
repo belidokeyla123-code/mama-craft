@@ -974,32 +974,9 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         </ScrollArea>
       </Card>
 
-      {uploadedFiles.length > 0 && (
-        <Alert className="py-2">
-          <FileText className="h-4 w-4" />
-          <AlertDescription>
-            <div className="flex items-center gap-2 flex-wrap">
-              <strong className="text-sm">{uploadedFiles.length} arquivo(s):</strong>
-              {uploadedFiles.map((file, idx) => (
-                <span key={idx} className="text-xs bg-secondary px-2 py-1 rounded flex items-center gap-1">
-                  {file.name}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveFile(idx)}
-                    className="h-4 w-4 p-0 hover:bg-destructive/10"
-                  >
-                    <X className="h-3 w-3 text-destructive" />
-                  </Button>
-                </span>
-              ))}
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Cole Prints com Ctrl+V - Versão Compacta */}
-      <div className="bg-muted/30 rounded-lg p-3 border border-dashed">
+      <div className="p-1.5">
         <PasteDataInline
           extractionType="processo_administrativo"
           onDataExtracted={(extractedData) => {

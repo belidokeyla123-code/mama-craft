@@ -84,11 +84,10 @@ export const PasteDataInline = ({
   };
 
   return (
-    <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-2 border-blue-200 dark:border-blue-800">
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300">
-          <Sparkles className="h-4 w-4" />
-          Opção 2: Colar Texto ou Imagem (Print) e Extrair com IA
+    <Card className="p-2 bg-blue-50 dark:bg-blue-950 border-2 border-blue-200 dark:border-blue-800">
+      <div className="space-y-1.5">
+        <div className="text-xs font-medium text-blue-700 dark:text-blue-300">
+          Ctrl+V para colar print ou texto
         </div>
         
         {imageBase64 ? (
@@ -104,7 +103,7 @@ export const PasteDataInline = ({
             <img 
               src={imageBase64} 
               alt="Preview" 
-              className="max-h-48 mx-auto rounded"
+              className="max-h-24 mx-auto rounded"
             />
             <p className="text-xs text-center mt-2 text-muted-foreground">
               Imagem colada - pronta para extrair
@@ -116,36 +115,30 @@ export const PasteDataInline = ({
             onChange={(e) => setText(e.target.value)}
             onPaste={handlePaste}
             placeholder={placeholder}
-            rows={6}
-            className="font-mono text-sm"
+            rows={2}
+            className="font-mono text-xs"
           />
         )}
         
         <Button 
           onClick={handleExtract} 
           disabled={loading || (!text.trim() && !imageBase64)}
-          className="w-full gap-2"
+          className="w-full gap-1"
           variant="outline"
+          size="sm"
         >
           {loading ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Extraindo dados...
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-xs">Extraindo...</span>
             </>
           ) : (
             <>
-              <Sparkles className="h-4 w-4" />
-              Extrair Dados com IA
+              <Sparkles className="h-3 w-3" />
+              <span className="text-xs">Extrair com IA</span>
             </>
           )}
         </Button>
-        
-        <div className="flex items-start gap-2 text-xs text-muted-foreground">
-          <ImageIcon className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500" />
-          <p>
-            Cole TEXTO copiado OU CTRL+V uma IMAGEM (print de tela). A IA vai analisar e extrair as informações automaticamente.
-          </p>
-        </div>
       </div>
     </Card>
   );
