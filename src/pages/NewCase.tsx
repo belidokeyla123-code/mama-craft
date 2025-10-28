@@ -10,6 +10,7 @@ import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
+import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
 import { toast } from "sonner";
 
@@ -142,7 +143,8 @@ const STEPS = [
   { id: 3, name: "Validação" },
   { id: 4, name: "Análise" },
   { id: 5, name: "Jurisprudência" },
-  { id: 6, name: "Minuta" },
+  { id: 6, name: "Teses" },
+  { id: 7, name: "Minuta" },
 ];
 
 const NewCase = () => {
@@ -226,6 +228,8 @@ const NewCase = () => {
       case 5:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
       case 6:
+        return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
+      case 7:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;
@@ -255,49 +259,44 @@ const NewCase = () => {
         {/* Progress Bar */}
         <Card className="p-6 mb-6">
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              {STEPS.map((step, index) => (
-                <div key={step.id} className="flex items-center">
-                  <div
+            {/* Grid de 8 colunas - números alinhados com labels */}
+            <div className="grid grid-cols-8 gap-1 pb-4">
+              {STEPS.map((step) => (
+                <div key={step.id} className="flex flex-col items-center gap-1">
+                  {/* Círculo numerado */}
+                  <button
+                    onClick={() => setCurrentStep(step.id)}
                     className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
                       currentStep > step.id
-                        ? "bg-success border-success text-success-foreground"
+                        ? "bg-success border-success text-success-foreground cursor-pointer hover:opacity-80"
                         : currentStep === step.id
                         ? "bg-primary border-primary text-primary-foreground"
-                        : "bg-background border-border text-muted-foreground"
+                        : "bg-background border-border text-muted-foreground cursor-pointer hover:border-primary"
                     }`}
                   >
                     {currentStep > step.id ? (
                       <Check className="h-5 w-5" />
                     ) : (
-                      <span>{step.id}</span>
+                      <span className="text-base font-bold">{step.id + 1}</span>
                     )}
-                  </div>
-                  {index < STEPS.length - 1 && (
-                    <div
-                      className={`w-16 h-0.5 mx-2 ${
-                        currentStep > step.id ? "bg-success" : "bg-border"
-                      }`}
-                    />
-                  )}
+                  </button>
+                  
+                  {/* Label alinhado embaixo */}
+                  <button
+                    onClick={() => setCurrentStep(step.id)}
+                    className={`text-xs hover:text-primary transition-colors text-center leading-none px-0.5 ${
+                      currentStep >= step.id
+                        ? "text-foreground font-medium"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {step.name}
+                  </button>
                 </div>
               ))}
             </div>
+
             <Progress value={progress} className="h-2" />
-            <div className="flex justify-between">
-              {STEPS.map((step) => (
-                <div
-                  key={step.id}
-                  className={`text-sm ${
-                    currentStep >= step.id
-                      ? "text-foreground font-medium"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {step.name}
-                </div>
-              ))}
-            </div>
           </div>
         </Card>
 
