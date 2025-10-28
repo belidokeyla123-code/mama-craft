@@ -287,9 +287,9 @@ export default function CaseDetail() {
         <Card className="p-6 mb-6">
           <div className="space-y-4">
             {/* Grid de 8 colunas - números alinhados com labels */}
-            <div className="grid grid-cols-8 gap-2 pb-4">
+            <div className="grid grid-cols-8 gap-1 pb-4">
               {STEPS.map((step) => (
-                <div key={step.id} className="flex flex-col items-center gap-2">
+                <div key={step.id} className="flex flex-col items-center gap-1">
                   {/* Círculo numerado */}
                   <button
                     onClick={() => setCurrentStep(step.id)}
@@ -311,7 +311,7 @@ export default function CaseDetail() {
                   {/* Label alinhado embaixo */}
                   <button
                     onClick={() => setCurrentStep(step.id)}
-                    className={`text-base hover:text-primary transition-colors text-center leading-tight ${
+                    className={`text-xs hover:text-primary transition-colors text-center leading-none px-0.5 ${
                       currentStep >= step.id
                         ? "text-foreground font-medium"
                         : "text-muted-foreground"
