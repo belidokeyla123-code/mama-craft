@@ -642,8 +642,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
       console.log(`[REPROCESS] Reprocessando ${allDocs.length} documentos em paralelo...`);
 
-      // PROCESSAMENTO PARALELO OTIMIZADO (máximo 5 por vez)
-      const CONCURRENT_LIMIT = 5;
+      // PROCESSAMENTO PARALELO OTIMIZADO (máximo 15 por vez - 3x mais rápido!)
+      const CONCURRENT_LIMIT = 15;
       const allExtractedData: any = {};
       let processedCount = 0;
 

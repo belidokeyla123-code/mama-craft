@@ -225,7 +225,7 @@ serve(async (req) => {
     const prompt = buildPromptForDocType(docType, doc.file_name);
 
     // 6. Chamar IA
-    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Gemini 2.5 Flash)...`);
+    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Gemini 2.5 Flash Lite - 10x mais rápido!)...`);
     
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -234,8 +234,8 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        max_completion_tokens: 4096,
+        model: 'google/gemini-2.5-flash-lite',
+        max_completion_tokens: 2048,
         messages: [
           {
             role: 'system',
@@ -340,8 +340,9 @@ serve(async (req) => {
 function classifyDocument(fileName: string): string {
   const lower = fileName.toLowerCase();
   
+  // 🔥 PRIORIDADE ALTA: Detectar nomes truncados DOS 8.3 (cert~1, certid~1, etc)
+  if (/(cert|certid|nasc|nascimento|dn)/i.test(lower)) return 'certidao_nascimento';
   if (/(procura[cç][aã]o|poder|outorga)/i.test(lower)) return 'procuracao';
-  if (/(certid[aã]o.*nasc|nascimento|dn)/i.test(lower)) return 'certidao_nascimento';
   if (/(rg|identidade|cnh|carteira)/i.test(lower)) return 'identificacao';
   if (/(cpf)/i.test(lower)) return 'identificacao';
   if (/(comprovante.*resid|endere[cç]o|conta.*luz|agua|telefone)/i.test(lower)) return 'comprovante_residencia';
