@@ -53,8 +53,8 @@ const classifyDocument = (fileName: string): string => {
   
   if (name.match(/com[0-9~]/i) || name.match(/compr/i) || name.match(/end[0-9~]/i) || 
       name.match(/endereco/i) || name.match(/residencia/i) || name.match(/\bconta\b/i)) {
-    console.log(`[CLASSIFY] ✅ COMPROVANTE DE ENDEREÇO detectado`);
-    return 'comprovante_endereco';
+    console.log(`[CLASSIFY] ✅ COMPROVANTE DE RESIDÊNCIA detectado`);
+    return 'comprovante_residencia';
   }
   
   if (name.match(/fic[0-9~]/i) || name.match(/ficha/i) || name.match(/ate[0-9~]/i) || name.match(/atend/i)) {

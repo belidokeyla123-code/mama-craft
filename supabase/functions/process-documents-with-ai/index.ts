@@ -138,11 +138,11 @@ const classifyDocument = (fileName: string): string => {
     return 'processo_administrativo';
   }
   
-  // 8. COMPROVANTE DE ENDEREÇO: COM~, COMPR, END~, RESID
+  // 8. COMPROVANTE DE RESIDÊNCIA: COM~, COMPR, END~, RESID
   if (name.match(/com[0-9~]/i) || name.match(/compr/i) || name.match(/end[0-9~]/i) || 
       name.match(/endereco/i) || name.match(/residencia/i) || name.match(/\bconta\b/i)) {
-    console.log(`[CLASSIFY] ✅ COMPROVANTE DE ENDEREÇO detectado`);
-    return 'comprovante_endereco';
+    console.log(`[CLASSIFY] ✅ COMPROVANTE DE RESIDÊNCIA detectado`);
+    return 'comprovante_residencia';
   }
   
   // 9. FICHA DE ATENDIMENTO: FIC~, FICHA, ATE~, ATEND

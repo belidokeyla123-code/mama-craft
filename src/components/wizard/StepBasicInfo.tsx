@@ -14,6 +14,7 @@ import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMi
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { DocumentUploadInline } from "./DocumentUploadInline";
 
 interface StepBasicInfoProps {
   data: CaseData;
@@ -639,14 +640,28 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             Dados da Terra / Propriedade Rural
           </h3>
           
-          {/* Alerta se dados da terra não foram extraídos */}
+          {/* Alerta se dados da terra não foram extraídos COM UPLOAD INLINE */}
           {(!data.landArea && !data.landPropertyName && !data.landMunicipality) && (
-            <Alert className="mb-4">
-              <AlertCircle className="h-4 w-4" />
+            <Alert className="mb-4 border-orange-500">
+              <AlertCircle className="h-4 w-4 text-orange-600" />
               <AlertTitle>Dados da terra não extraídos</AlertTitle>
-              <AlertDescription>
-                As informações da propriedade rural não foram extraídas automaticamente. 
-                Clique em "Re-processar Documentos" no topo da página ou preencha manualmente abaixo.
+              <AlertDescription className="space-y-3">
+                <p>As informações da propriedade rural não foram extraídas automaticamente dos documentos.</p>
+                <p className="text-sm font-medium">Você pode:</p>
+                <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                  <li>Preencher manualmente os campos abaixo, OU</li>
+                  <li>Adicionar novamente o documento da terra (ITR, matrícula, escritura, comodato) para extração automática:</li>
+                </ul>
+                {data.caseId && (
+                  <DocumentUploadInline 
+                    caseId={data.caseId}
+                    suggestedDocType="documento_terra"
+                    onUploadComplete={async () => {
+                      toast.success("Documento enviado! Aguarde processamento...");
+                      setTimeout(() => window.location.reload(), 3000);
+                    }}
+                  />
+                )}
               </AlertDescription>
             </Alert>
           )}
@@ -965,14 +980,28 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
           {data.hasRa && (
             <div className="ml-6 space-y-4 p-4 bg-muted/50 rounded-lg">
-              {/* Alerta se os dados não foram extraídos */}
+              {/* Alerta se os dados não foram extraídos COM UPLOAD INLINE */}
               {(!data.raProtocol || !data.raRequestDate || !data.raDenialDate || !data.raDenialReason) && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="border-orange-500">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Dados do RA não extraídos</AlertTitle>
-                  <AlertDescription>
-                    Os dados do Requerimento Administrativo não foram extraídos automaticamente. 
-                    Clique em "Re-processar Documentos" no topo da página ou preencha manualmente abaixo.
+                  <AlertDescription className="space-y-3">
+                    <p>Os dados do Requerimento Administrativo não foram extraídos automaticamente.</p>
+                    <p className="text-sm font-medium">Você pode:</p>
+                    <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                      <li>Preencher manualmente os campos abaixo, OU</li>
+                      <li>Adicionar novamente o documento do processo administrativo:</li>
+                    </ul>
+                    {data.caseId && (
+                      <DocumentUploadInline 
+                        caseId={data.caseId}
+                        suggestedDocType="processo_administrativo"
+                        onUploadComplete={async () => {
+                          toast.success("Documento enviado! Aguarde processamento...");
+                          setTimeout(() => window.location.reload(), 3000);
+                        }}
+                      />
+                    )}
                   </AlertDescription>
                 </Alert>
               )}

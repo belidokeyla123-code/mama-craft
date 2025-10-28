@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
 import JSZip from "jszip";
@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ManualReclassifyDialog } from "./ManualReclassifyDialog";
 
 interface Document {
   id: string;
@@ -48,6 +49,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [isReprocessing, setIsReprocessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [reclassifyDoc, setReclassifyDoc] = useState<Document | null>(null);
 
   const loadDocuments = async () => {
     if (!caseId) {
@@ -814,10 +816,23 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                           <span>{new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}</span>
                         </div>
                       </div>
-                      {getDocumentTypeBadge(doc.document_type)}
+                       {getDocumentTypeBadge(doc.document_type)}
                     </div>
 
                     <div className="flex items-center gap-2 ml-4">
+                      {/* Botão de editar se for "OUTRO" */}
+                      {(doc.document_type?.toUpperCase() === 'OUTRO' || doc.document_type?.toUpperCase() === 'OUTROS') && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setReclassifyDoc(doc)}
+                          title="Editar classificação"
+                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
                       <Button
                         variant="ghost"
                         size="icon"
@@ -871,6 +886,16 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ManualReclassifyDialog
+        document={reclassifyDoc}
+        open={!!reclassifyDoc}
+        onOpenChange={(open) => !open && setReclassifyDoc(null)}
+        onSuccess={async () => {
+          await loadDocuments();
+          if (onDocumentsChange) onDocumentsChange();
+        }}
+      />
     </>
   );
 };

@@ -39,6 +39,12 @@ serve(async (req) => {
 
     const prompt = `Você é um advogado especialista em Direito Previdenciário. Analise este caso de salário-maternidade e forneça uma análise jurídica completa.
 
+IMPORTANTE SOBRE O BENEFÍCIO:
+- A REQUERENTE é a MÃE (author_name no JSON)
+- O FILHO é apenas um requisito para o benefício (não é o requerente)
+- Salário-maternidade é benefício pago à MÃE por ter dado à luz
+- Verifique a idade e qualidade de segurada da MÃE na data do parto
+
 DADOS DO CASO:
 ${JSON.stringify(caseData, null, 2)}
 
@@ -53,13 +59,13 @@ TAREFA: Faça uma análise jurídica completa e retorne JSON com:
   "qualidade_segurada": {
     "tipo": "especial" | "urbana",
     "comprovado": boolean,
-    "detalhes": "Explicação detalhada"
+    "detalhes": "Explicação detalhada sobre a QUALIDADE DE SEGURADA DA MÃE"
   },
   "carencia": {
     "necessaria": boolean,
     "cumprida": boolean,
     "meses_faltantes": number,
-    "detalhes": "Explicação"
+    "detalhes": "Explicação se a MÃE cumpriu carência"
   },
   "cnis_analysis": {
     "periodos_urbanos": [{"inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "empregador": "Nome"}],
@@ -92,7 +98,9 @@ Considere:
 - RMI = salário mínimo vigente (${caseData.salario_minimo_ref})
 - Valor da causa = 4 meses × RMI
 - Analise CNIS para identificar períodos reconhecidos pelo INSS
-- Se há benefícios anteriores de maternidade = reconhecimento de atividade rural`;
+- Se há benefícios anteriores de maternidade = reconhecimento de atividade rural
+- A requerente é ${caseData.author_name || 'a mãe'} (MÃE), não a criança
+- Verifique idade e qualidade da MÃE na data do evento (child_birth_date)`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

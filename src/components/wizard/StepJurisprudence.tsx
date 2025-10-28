@@ -82,65 +82,40 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
     
     setLoading(true);
     try {
-      // Adicionar à fila ao invés de chamar direto
-      const { data: result, error } = await supabase.functions.invoke('queue-jurisprudence', {
+      // Chamar DIRETAMENTE a busca (sem fila)
+      const { data: result, error } = await supabase.functions.invoke('search-jurisprudence', {
         body: { caseId: data.caseId }
       });
 
-      if (error) throw error;
-
-      toast.success("Busca de jurisprudência adicionada à fila. Processando...");
-      
-      // Polling para verificar status
-      const pollInterval = setInterval(async () => {
-        const { data: queue } = await supabase
-          .from('processing_queue')
-          .select('jurisprudence_status, jurisprudence_completed_at')
-          .eq('case_id', data.caseId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (queue?.jurisprudence_status === 'completed') {
-          clearInterval(pollInterval);
-          
-          // Recarregar fazendo chamada direta para pegar resultados
-          const { data: jurisResult } = await supabase.functions.invoke('search-jurisprudence', {
-            body: { caseId: data.caseId }
-          });
-          
-          if (jurisResult) {
-            setJurisprudencias(jurisResult.jurisprudencias || []);
-            setSumulas(jurisResult.sumulas || []);
-            setDoutrinas(jurisResult.doutrinas || []);
-            setTeses(jurisResult.teses_juridicas_aplicaveis || []);
-            
-            const total = (jurisResult.jurisprudencias?.length || 0) + 
-                         (jurisResult.sumulas?.length || 0) + 
-                         (jurisResult.doutrinas?.length || 0) +
-                         (jurisResult.teses_juridicas_aplicaveis?.length || 0);
-            
-            toast.success(`${total} fontes jurídicas encontradas`);
-          }
-          setLoading(false);
-        } else if (queue?.jurisprudence_status === 'failed') {
-          clearInterval(pollInterval);
+      if (error) {
+        // Tratar erros específicos
+        if (error.message?.includes('429')) {
+          toast.error('Limite de requisições atingido. Tente novamente em alguns minutos.');
+        } else if (error.message?.includes('402')) {
+          toast.error('Créditos insuficientes. Adicione créditos na sua conta.');
+        } else if (error.message?.includes('timeout')) {
+          toast.error('Busca demorou muito. Tente novamente.');
+        } else {
           toast.error('Erro ao buscar jurisprudências');
-          setLoading(false);
         }
-      }, 3000);
-      
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (loading) {
-          toast.error('Timeout: busca demorou muito');
-          setLoading(false);
-        }
-      }, 120000);
+        throw error;
+      }
 
-    } catch (error) {
+      setJurisprudencias(result.jurisprudencias || []);
+      setSumulas(result.sumulas || []);
+      setDoutrinas(result.doutrinas || []);
+      setTeses(result.teses_juridicas_aplicaveis || []);
+      
+      const total = (result.jurisprudencias?.length || 0) + 
+                   (result.sumulas?.length || 0) + 
+                   (result.doutrinas?.length || 0) +
+                   (result.teses_juridicas_aplicaveis?.length || 0);
+      
+      toast.success(`${total} fontes jurídicas encontradas`);
+
+    } catch (error: any) {
       console.error('Erro ao buscar jurisprudências:', error);
-      toast.error('Erro ao adicionar busca à fila');
+    } finally {
       setLoading(false);
     }
   };

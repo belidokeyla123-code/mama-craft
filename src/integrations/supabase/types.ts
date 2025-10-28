@@ -1020,6 +1020,8 @@ export type Database = {
         | "documento_terra"
         | "processo_administrativo"
         | "outro"
+        | "ficha_atendimento"
+        | "carteira_pescador"
       event_type: "parto" | "adocao" | "guarda"
       fase_processual:
         | "distribuida"
@@ -1194,6 +1196,8 @@ export const Constants = {
         "documento_terra",
         "processo_administrativo",
         "outro",
+        "ficha_atendimento",
+        "carteira_pescador",
       ],
       event_type: ["parto", "adocao", "guarda"],
       fase_processual: [
