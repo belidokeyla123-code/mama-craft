@@ -210,15 +210,50 @@ serve(async (req) => {
 
     // 4. Classificar tipo (se ainda não classificado)
     let docType = doc.document_type;
-    if (docType === 'OUTROS') {
+    if (docType === 'OUTROS' || docType === 'outro') {
       docType = classifyDocument(doc.file_name);
-      console.log(`[ANALYZE-SINGLE] 🏷️ Tipo detectado: ${docType}`);
+      console.log(`[ANALYZE-SINGLE] 🏷️ Tipo detectado por filename: ${docType}`);
+      
+      // 🔥 FALLBACK VISUAL: Se ainda for 'outro', pedir IA para classificar pela imagem
+      if (docType === 'outro') {
+        console.log(`[ANALYZE-SINGLE] 🤖 Classificação visual iniciando...`);
+        
+        const classifyResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${lovableApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash-lite',
+            max_completion_tokens: 100,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Qual o tipo deste documento? Responda APENAS com UMA das opções: certidao_nascimento, identificacao, comprovante_residencia, processo_administrativo, autodeclaracao_rural, documento_terra, procuracao, cnis, historico_escolar, declaracao_saude_ubs, outro' },
+                { type: 'image_url', image_url: { url: base64Image } }
+              ]
+            }]
+          })
+        });
+        
+        if (classifyResponse.ok) {
+          const classifyResult = await classifyResponse.json();
+          const visualType = classifyResult.choices?.[0]?.message?.content?.trim().toLowerCase();
+          if (visualType && visualType !== 'outro') {
+            docType = visualType;
+            console.log(`[ANALYZE-SINGLE] 👁️ Tipo detectado VISUALMENTE: ${docType}`);
+          }
+        }
+      }
       
       // Atualizar tipo no banco
       await supabase
         .from('documents')
         .update({ document_type: docType })
         .eq('id', documentId);
+    } else {
+      console.log(`[ANALYZE-SINGLE] 🏷️ Tipo já classificado: ${docType}`);
     }
 
     // 5. Montar prompt específico
@@ -285,6 +320,8 @@ serve(async (req) => {
 
     const extracted = JSON.parse(toolCall.function.arguments);
     console.log(`[ANALYZE-SINGLE] 📋 Dados extraídos:`, JSON.stringify(extracted, null, 2));
+    console.log(`[ANALYZE-SINGLE] 🔍 childName extraído:`, extracted.extractedData?.childName);
+    console.log(`[ANALYZE-SINGLE] 🔍 motherName extraído:`, extracted.extractedData?.motherName);
 
     // 8. Salvar extração individual (sem campo confidence que não existe)
     const { error: saveError } = await supabase
@@ -303,17 +340,36 @@ serve(async (req) => {
     // 9. Atualizar campos do caso se for certidão
     if (docType === 'certidao_nascimento' && extracted.extractedData) {
       const updates: any = {};
-      if (extracted.extractedData.childName) updates.child_name = extracted.extractedData.childName;
+      if (extracted.extractedData.childName) {
+        updates.child_name = extracted.extractedData.childName;
+        console.log(`[ANALYZE-SINGLE] ✅ childName encontrado: ${extracted.extractedData.childName}`);
+      } else {
+        console.log(`[ANALYZE-SINGLE] ⚠️ childName NÃO encontrado no extractedData!`);
+      }
       if (extracted.extractedData.childBirthDate) updates.child_birth_date = extracted.extractedData.childBirthDate;
-      if (extracted.extractedData.motherName) updates.author_name = extracted.extractedData.motherName;
+      if (extracted.extractedData.motherName) {
+        updates.author_name = extracted.extractedData.motherName;
+        console.log(`[ANALYZE-SINGLE] ✅ motherName encontrado: ${extracted.extractedData.motherName}`);
+      } else {
+        console.log(`[ANALYZE-SINGLE] ⚠️ motherName NÃO encontrado no extractedData!`);
+      }
 
       if (Object.keys(updates).length > 0) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('cases')
           .update(updates)
           .eq('id', caseId);
-        console.log(`[ANALYZE-SINGLE] 📝 Caso atualizado:`, updates);
+        
+        if (updateError) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar caso:`, updateError);
+        } else {
+          console.log(`[ANALYZE-SINGLE] 📝 Caso atualizado com sucesso:`, updates);
+        }
+      } else {
+        console.log(`[ANALYZE-SINGLE] ⚠️ Nenhum campo para atualizar!`);
       }
+    } else {
+      console.log(`[ANALYZE-SINGLE] ℹ️ Não é certidão ou extractedData vazio - docType: ${docType}`);
     }
 
     return new Response(
