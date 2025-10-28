@@ -27,6 +27,23 @@ export interface UrbanPeriod {
   details: string;
 }
 
+export interface SchoolPeriod {
+  instituicao: string;
+  periodo_inicio: string;
+  periodo_fim: string;
+  serie_ano: string;
+  localizacao: string;
+  observacoes?: string;
+}
+
+export interface HealthDeclarationUbs {
+  unidade_saude?: string;
+  tratamento_desde?: string;
+  tipo_tratamento?: string;
+  localizacao_ubs?: string;
+  observacoes?: string;
+}
+
 export interface CaseData {
   // Identificação da autora
   authorName: string;
@@ -72,6 +89,10 @@ export interface CaseData {
   ruralPeriods?: RuralPeriod[];
   urbanPeriods?: UrbanPeriod[];
   familyMembers?: string[];
+  
+  // Novos campos para histórico escolar e declaração de saúde
+  schoolHistory?: SchoolPeriod[];
+  healthDeclarationUbs?: HealthDeclarationUbs;
   
   // RA
   hasRa: boolean;

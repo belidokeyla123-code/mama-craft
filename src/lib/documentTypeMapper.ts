@@ -31,19 +31,31 @@ export const mapDocumentTypeToEnum = (docType: string): string => {
     "comprovante": "comprovante_residencia",
     
     "procuração": "procuracao",
-    "procuracao": "procuracao",
     "cnis": "cnis",
-    "histórico": "cnis",
-    "historico": "cnis",
     "ficha de atendimento": "ficha_atendimento",
     "carteira de pescador": "carteira_pescador",
-    "carteira pescador": "carteira_pescador",
+    
+    // NOVOS TIPOS
+    "histórico escolar": "historico_escolar",
+    "historico escolar": "historico_escolar",
+    "boletim": "historico_escolar",
+    "declaração escolar": "historico_escolar",
+    "escola": "historico_escolar",
+    
+    "declaração de saúde": "declaracao_saude_ubs",
+    "declaracao de saude": "declaracao_saude_ubs",
+    "declaração ubs": "declaracao_saude_ubs",
+    "ubs": "declaracao_saude_ubs",
+    "posto de saúde": "declaracao_saude_ubs",
+    "unidade básica": "declaracao_saude_ubs",
+    "saúde": "declaracao_saude_ubs",
   };
   
   const normalized = docType.toLowerCase().trim();
   return mapping[normalized] || "outro";
 };
 
+// Sanitizar nome do arquivo (remover caracteres inválidos do Windows)
 export const sanitizeFileName = (name: string): string => {
   return name
     .replace(/~/g, '_')        // ~ → _

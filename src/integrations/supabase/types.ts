@@ -351,6 +351,7 @@ export type Database = {
           father_name: string | null
           has_ra: boolean | null
           has_special_situation: boolean | null
+          health_declaration_ubs: Json | null
           id: string
           land_area: number | null
           land_cession_type: string | null
@@ -375,6 +376,7 @@ export type Database = {
           rural_periods: Json | null
           salario_minimo_history: Json | null
           salario_minimo_ref: number | null
+          school_history: Json | null
           special_notes: string | null
           started_with_chat: boolean | null
           status: Database["public"]["Enums"]["case_status"]
@@ -401,6 +403,7 @@ export type Database = {
           father_name?: string | null
           has_ra?: boolean | null
           has_special_situation?: boolean | null
+          health_declaration_ubs?: Json | null
           id?: string
           land_area?: number | null
           land_cession_type?: string | null
@@ -425,6 +428,7 @@ export type Database = {
           rural_periods?: Json | null
           salario_minimo_history?: Json | null
           salario_minimo_ref?: number | null
+          school_history?: Json | null
           special_notes?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
@@ -451,6 +455,7 @@ export type Database = {
           father_name?: string | null
           has_ra?: boolean | null
           has_special_situation?: boolean | null
+          health_declaration_ubs?: Json | null
           id?: string
           land_area?: number | null
           land_cession_type?: string | null
@@ -475,6 +480,7 @@ export type Database = {
           rural_periods?: Json | null
           salario_minimo_history?: Json | null
           salario_minimo_ref?: number | null
+          school_history?: Json | null
           special_notes?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
@@ -1022,6 +1028,8 @@ export type Database = {
         | "outro"
         | "ficha_atendimento"
         | "carteira_pescador"
+        | "historico_escolar"
+        | "declaracao_saude_ubs"
       event_type: "parto" | "adocao" | "guarda"
       fase_processual:
         | "distribuida"
@@ -1198,6 +1206,8 @@ export const Constants = {
         "outro",
         "ficha_atendimento",
         "carteira_pescador",
+        "historico_escolar",
+        "declaracao_saude_ubs",
       ],
       event_type: ["parto", "adocao", "guarda"],
       fase_processual: [

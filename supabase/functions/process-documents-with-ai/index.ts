@@ -116,10 +116,25 @@ const classifyDocument = (fileName: string): string => {
     return 'autodeclaracao_rural';
   }
   
-  // 5. CNIS: CNI~, CNIS, HIS~, HIST
-  if (name.match(/cni[0-9~]/i) || name.match(/cnis/i) || name.match(/his[0-9~]/i) || name.match(/histor/i)) {
+  // 5. CNIS: CNI~, CNIS (mas não histórico escolar)
+  if ((name.match(/cni[0-9~]/i) || name.match(/cnis/i)) && !name.match(/escola|boletim/i)) {
     console.log(`[CLASSIFY] ✅ CNIS detectado`);
     return 'cnis';
+  }
+  
+  // 5.5. HISTÓRICO ESCOLAR: HIS~ESCOLA, ESCOLA, BOLETIM, DECLAR~ESCOLA
+  if (name.match(/his[0-9~]/i) && name.match(/escola/i) || 
+      name.match(/escola.*rural/i) || name.match(/boletim/i) || 
+      name.match(/declara[cç][aã]o.*escola/i) || name.match(/declara[cç][aã]o.*estudo/i)) {
+    console.log(`[CLASSIFY] ✅ HISTÓRICO ESCOLAR detectado`);
+    return 'historico_escolar';
+  }
+  
+  // 5.6. DECLARAÇÃO DE SAÚDE UBS: UBS, SAUDE, POSTO
+  if (name.match(/\bubs\b/i) || name.match(/unidade.*b[aá]sica/i) || 
+      name.match(/posto.*sa[uú]de/i) || name.match(/declara[cç][aã]o.*sa[uú]de/i)) {
+    console.log(`[CLASSIFY] ✅ DECLARAÇÃO DE SAÚDE UBS detectada`);
+    return 'declaracao_saude_ubs';
   }
   
   // 6. DOCUMENTO DA TERRA: TER~, TERRA, DOC~, ITR, CCIR

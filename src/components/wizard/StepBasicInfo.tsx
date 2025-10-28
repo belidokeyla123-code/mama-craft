@@ -569,6 +569,183 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         </RadioGroup>
       </Card>
 
+      {/* NOVO: Histórico Escolar */}
+      <div className="space-y-4 pt-6 border-t">
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-purple-600" />
+          <h3 className="text-lg font-semibold">Histórico Escolar (se houver)</h3>
+        </div>
+
+        <Alert className="bg-purple-50 border-purple-200">
+          <AlertCircle className="h-4 w-4 text-purple-600" />
+          <AlertDescription>
+            Se a autora estudou em escola rural, adicione o histórico escolar. 
+            Isso comprova vínculo com atividade rural e fortalece a ação.
+          </AlertDescription>
+        </Alert>
+
+        {(!data.schoolHistory || data.schoolHistory.length === 0) && data.caseId && (
+          <Alert variant="destructive" className="border-orange-500">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Histórico escolar não adicionado</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>Se houver histórico escolar de escola rural, você pode:</p>
+              <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                <li>Preencher manualmente abaixo, OU</li>
+                <li><strong>Opção 1:</strong> Adicionar documento do histórico escolar:</li>
+              </ul>
+              
+              <DocumentUploadInline 
+                caseId={data.caseId}
+                suggestedDocType="historico_escolar"
+                onUploadComplete={async () => {
+                  toast.success("Documento enviado! Aguarde processamento...");
+                  setTimeout(() => window.location.reload(), 3000);
+                }}
+              />
+              
+              <div className="mt-4">
+                <PasteDataInline 
+                  extractionType="historico_escolar"
+                  placeholder="Cole o texto do histórico escolar ou CTRL+V um print..."
+                  onDataExtracted={(extractedData) => {
+                    const newHistory = extractedData.school_history || [];
+                    updateData({
+                      schoolHistory: [...(data.schoolHistory || []), ...newHistory]
+                    });
+                  }}
+                />
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Lista de períodos escolares */}
+        {data.schoolHistory && data.schoolHistory.length > 0 && (
+          <div className="space-y-2">
+            {data.schoolHistory.map((period: any, index: number) => (
+              <Card key={index} className="p-3 bg-purple-50">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 space-y-1">
+                    <p className="font-medium">{period.instituicao}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {period.serie_ano} • {period.periodo_inicio} a {period.periodo_fim}
+                    </p>
+                    <p className="text-sm">
+                      <Badge variant="outline">{period.localizacao}</Badge>
+                    </p>
+                    {period.observacoes && (
+                      <p className="text-xs text-muted-foreground">{period.observacoes}</p>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const newHistory = [...(data.schoolHistory || [])];
+                      newHistory.splice(index, 1);
+                      updateData({ schoolHistory: newHistory });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* NOVO: Declaração de Saúde UBS */}
+      <div className="space-y-4 pt-6 border-t">
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-green-600" />
+          <h3 className="text-lg font-semibold">Declaração de Saúde UBS (se houver)</h3>
+        </div>
+
+        <Alert className="bg-green-50 border-green-200">
+          <AlertCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription>
+            Se a autora recebe atendimento em UBS rural, adicione a declaração. 
+            Isso comprova residência e vínculo com zona rural.
+          </AlertDescription>
+        </Alert>
+
+        {(!data.healthDeclarationUbs || Object.keys(data.healthDeclarationUbs).length === 0) && data.caseId && (
+          <Alert variant="destructive" className="border-orange-500">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Declaração de saúde não adicionada</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>Se houver declaração de UBS rural, você pode:</p>
+              <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                <li>Preencher manualmente abaixo, OU</li>
+                <li><strong>Opção 1:</strong> Adicionar documento da declaração:</li>
+              </ul>
+              
+              <DocumentUploadInline 
+                caseId={data.caseId}
+                suggestedDocType="declaracao_saude_ubs"
+                onUploadComplete={async () => {
+                  toast.success("Documento enviado! Aguarde processamento...");
+                  setTimeout(() => window.location.reload(), 3000);
+                }}
+              />
+              
+              <div className="mt-4">
+                <PasteDataInline 
+                  extractionType="declaracao_saude_ubs"
+                  placeholder="Cole o texto da declaração de saúde ou CTRL+V um print..."
+                  onDataExtracted={(extractedData) => {
+                    updateData({
+                      healthDeclarationUbs: extractedData.health_declaration_ubs || {}
+                    });
+                  }}
+                />
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Mostrar declaração se houver */}
+        {data.healthDeclarationUbs && Object.keys(data.healthDeclarationUbs).length > 0 && (
+          <Card className="p-4 bg-green-50">
+            <div className="space-y-2">
+              <div>
+                <Label className="text-sm font-medium">Unidade de Saúde</Label>
+                <p className="text-sm">{data.healthDeclarationUbs.unidade_saude || 'Não informado'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Atendimento desde</Label>
+                <p className="text-sm">{data.healthDeclarationUbs.tratamento_desde || 'Não informado'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Tipo de Tratamento</Label>
+                <p className="text-sm">{data.healthDeclarationUbs.tipo_tratamento || 'Não informado'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Localização</Label>
+                <p className="text-sm">
+                  <Badge variant="outline">{data.healthDeclarationUbs.localizacao_ubs || 'Não informado'}</Badge>
+                </p>
+              </div>
+              {data.healthDeclarationUbs.observacoes && (
+                <div>
+                  <Label className="text-sm font-medium">Observações</Label>
+                  <p className="text-xs text-muted-foreground">{data.healthDeclarationUbs.observacoes}</p>
+                </div>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => updateData({ healthDeclarationUbs: {} })}
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Remover
+              </Button>
+            </div>
+          </Card>
+        )}
+      </div>
+
       {/* SEÇÃO 4: PROPRIETÁRIO DA TERRA (apenas se especial) */}
       {data.profile === "especial" && (
         <Card className="p-6">
