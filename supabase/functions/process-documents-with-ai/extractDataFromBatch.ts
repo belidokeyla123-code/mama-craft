@@ -225,6 +225,89 @@ AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
   for (const doc of processedBatch) {
     let docPrompt = `Documento: ${doc.fileName}\nTipo classificado: ${doc.docType}\n\nExtraia TODAS as informações visíveis neste documento com máxima precisão:`;
     
+    if (doc.docType === 'certidao_nascimento') {
+      docPrompt = `🚨🚨🚨 CERTIDÃO DE NASCIMENTO - DOCUMENTO CRÍTICO! 🚨🚨🚨
+
+⚠️⚠️⚠️ ATENÇÃO MÁXIMA: NÃO CONFUNDA MÃE COM CRIANÇA! ⚠️⚠️⚠️
+
+Este documento contém 3 PESSOAS DIFERENTES. Você DEVE identificar cada uma corretamente!
+
+🔍 INSTRUÇÕES ULTRA-ESPECÍFICAS:
+
+1️⃣ **NOME DA CRIANÇA** (childName) - OBRIGATÓRIO:
+   📍 LOCALIZAÇÃO: TOPO do documento, geralmente em DESTAQUE
+   📍 PROCURE POR:
+   - "NOME:" seguido do nome (no início do documento)
+   - "REGISTRADO(A):"
+   - "NOME DO REGISTRADO:"
+   - "NOME COMPLETO:"
+   - Geralmente está ANTES de qualquer menção aos pais
+   
+   ✅ EXEMPLO: "NOME: JOÃO PEDRO SILVA SANTOS"
+   ⚠️ Este é o BEBÊ que nasceu, NÃO é a mãe!
+
+2️⃣ **DATA DE NASCIMENTO DA CRIANÇA** (childBirthDate) - OBRIGATÓRIO:
+   📍 PROCURE POR:
+   - "DATA DE NASCIMENTO:" ou "DN:"
+   - "NASCIDO(A) EM:"
+   - "DATA DO NASCIMENTO:"
+   - Formato: DD/MM/AAAA → converter para YYYY-MM-DD
+   
+   ✅ EXEMPLO: "15/03/2023" → retornar "2023-03-15"
+
+3️⃣ **NOME DA MÃE** (motherName) - OBRIGATÓRIO:
+   📍 LOCALIZAÇÃO: Seção SEPARADA, DEPOIS dos dados da criança
+   📍 PROCURE POR:
+   - "FILIAÇÃO MATERNA:"
+   - "MÃE:"
+   - "NOME DA MÃE:"
+   - "DADOS DA MÃE:"
+   
+   ✅ EXEMPLO: "FILIAÇÃO MATERNA: MARIA APARECIDA SANTOS"
+   ⚠️ NUNCA use o nome que está no topo do documento!
+
+4️⃣ **NOME DO PAI** (fatherName) - OPCIONAL:
+   📍 PROCURE POR:
+   - "FILIAÇÃO PATERNA:"
+   - "PAI:"
+   - "NOME DO PAI:"
+   - "DADOS DO PAI:"
+
+5️⃣ **LOCAL DE NASCIMENTO** (childBirthPlace):
+   📍 PROCURE POR:
+   - "NATURAL DE:" + cidade/estado
+   - "NASCIDO(A) EM:" (quando seguido de cidade)
+   - "MUNICÍPIO:" + "ESTADO:"
+
+🚨 VALIDAÇÃO CRÍTICA:
+- childName DEVE SER DIFERENTE de motherName
+- Se você colocar o mesmo nome nos dois campos, ESTÁ ERRADO!
+- A criança é a pessoa que NASCEU
+- A mãe é quem DEU À LUZ à criança
+
+🔴 ESTRUTURA TÍPICA DE UMA CERTIDÃO:
+\`\`\`
+[TOPO DO DOCUMENTO]
+CERTIDÃO DE NASCIMENTO
+NOME: [NOME DA CRIANÇA] ← Este é childName!
+DATA DE NASCIMENTO: [DATA] ← Este é childBirthDate!
+
+[MEIO DO DOCUMENTO - SEÇÃO DE FILIAÇÃO]
+FILIAÇÃO MATERNA: [NOME DA MÃE] ← Este é motherName!
+FILIAÇÃO PATERNA: [NOME DO PAI] ← Este é fatherName!
+\`\`\`
+
+Documento: ${doc.fileName}
+Tipo: certidao_nascimento
+
+AGORA LEIA COM MÁXIMA ATENÇÃO E EXTRAIA:
+- childName (nome no TOPO)
+- childBirthDate (data de nascimento)
+- motherName (seção FILIAÇÃO MATERNA)
+- fatherName (seção FILIAÇÃO PATERNA)
+- childBirthPlace (local de nascimento)`;
+    }
+    
     if (doc.docType === 'autodeclaracao_rural') {
       docPrompt = `⚠️⚠️⚠️ AUTODECLARAÇÃO RURAL DETECTADA! ⚠️⚠️⚠️
 
