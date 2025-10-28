@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,8 +58,54 @@ serve(async (req) => {
     const docTypesNormalized = documents.map(d => normalizeDocType(d.document_type));
     const uniqueDocTypes = [...new Set(docTypesNormalized)];
 
+    // Checklist determinístico baseado no perfil
+    const getRequiredDocsByProfile = (profile: string): string[] => {
+      const commonDocs = [
+        'certidao_nascimento',
+        'identificacao', 
+        'comprovante_residencia',
+        'processo_administrativo'
+      ];
+      
+      if (profile === 'especial') {
+        return [
+          ...commonDocs,
+          'autodeclaracao_rural',
+          'documento_terra',
+          // CNIS é opcional - vazio é vantagem!
+        ];
+      }
+      
+      if (profile === 'segurada_urbana') {
+        return [
+          ...commonDocs,
+          'cnis', // obrigatório
+          'carteira_trabalho'
+        ];
+      }
+      
+      if (profile === 'contribuinte_individual') {
+        return [
+          ...commonDocs,
+          'cnis', // obrigatório
+          'comprovantes_pagamento'
+        ];
+      }
+      
+      return commonDocs;
+    };
+
+    const requiredDocs = getRequiredDocsByProfile(caseData.profile);
+
     // Preparar dados para IA
-    const prompt = `Você é um especialista em validação de processos de salário-maternidade. Analise o caso abaixo e valide a documentação.
+    const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
+
+⚠️⚠️⚠️ AGORA VOCÊ VAI VALIDAR DOCUMENTOS ⚠️⚠️⚠️
+
+Você é um especialista em validação de processos de salário-maternidade. Analise o caso abaixo e valide a documentação.
+
+📋 CHECKLIST OBRIGATÓRIO (SEMPRE USE ESTES):
+${requiredDocs.map(doc => `- ${doc} (CRITICAL)`).join('\n')}
 
 DADOS DO CASO:
 - Nome da autora: ${caseData.author_name}

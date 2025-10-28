@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,7 +25,11 @@ serve(async (req) => {
       .eq('id', caseId)
       .single();
 
-    const prompt = `Você é um pesquisador jurídico especialista em Direito Previdenciário. Para este caso de salário-maternidade, retorne um JSON estruturado por TIPO de fonte jurídica.
+    const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
+
+⚠️⚠️⚠️ AGORA VOCÊ VAI BUSCAR JURISPRUDÊNCIA ⚠️⚠️⚠️
+
+Você é um pesquisador jurídico especialista em Direito Previdenciário. Para este caso de salário-maternidade, retorne um JSON estruturado por TIPO de fonte jurídica.
 
 CASO:
 - Perfil: ${caseData.profile === 'especial' ? 'Segurada Especial Rural' : 'Segurada Urbana'}

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +24,11 @@ serve(async (req) => {
     const { data: analysis } = await supabase.from('case_analysis').select('*').eq('case_id', caseId).single();
     const { data: documents } = await supabase.from('documents').select('*').eq('case_id', caseId);
 
-    const prompt = `Você é um advogado especialista em petições de salário-maternidade. Redija uma PETIÇÃO INICIAL COMPLETA, PERSUASIVA e de ALTO NÍVEL.
+    const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
+
+⚠️⚠️⚠️ AGORA VOCÊ VAI GERAR UMA PETIÇÃO INICIAL ⚠️⚠️⚠️
+
+Você é um advogado especialista em petições de salário-maternidade. Redija uma PETIÇÃO INICIAL COMPLETA, PERSUASIVA e de ALTO NÍVEL.
 
 DADOS DO CASO:
 ${JSON.stringify(caseData, null, 2)}

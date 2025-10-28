@@ -1,3 +1,5 @@
+import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+
 // Função auxiliar para extrair dados de um batch de documentos
 export async function extractDataFromBatch(
   processedBatch: any[],
@@ -7,7 +9,24 @@ export async function extractDataFromBatch(
 ): Promise<any> {
   console.log(`[IA BATCH] Chamando IA (Lovable AI Claude Sonnet 4.5 ou OpenAI GPT-4o) com ${processedBatch.length} imagens...`);
   
-  const systemPrompt = `Você é um especialista em OCR e extração de dados de documentos previdenciários brasileiros. Sua missão é extrair TODAS as informações visíveis com MÁXIMA PRECISÃO.
+  const systemPrompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
+
+⚠️⚠️⚠️ AGORA VOCÊ VAI EXTRAIR DADOS DE DOCUMENTOS ⚠️⚠️⚠️
+
+Você é um especialista em OCR e extração de dados de documentos previdenciários brasileiros. Sua missão é extrair TODAS as informações visíveis com MÁXIMA PRECISÃO.
+
+⚠️ INSTRUÇÕES CRÍTICAS DE EXTRAÇÃO ⚠️
+
+1. **LEIA TODO O DOCUMENTO**: Não pare na primeira página!
+2. **PROCURE EM TODO LUGAR**: CPF, RG e nomes podem estar em parágrafos, tabelas, cabeçalhos ou assinaturas
+3. **TRANSCREVA EXATAMENTE**: Copie os dados exatamente como aparecem
+4. **USE "otherInformation"**: Se encontrar informações que não se encaixam nos campos, coloque em "otherInformation"
+5. **SEMPRE PREENCHA extractionConfidence**: Indique "high" se tem certeza, "low" se houver dúvida
+
+📋 QUALIDADE ESPERADA:
+- Você deve ser TÃO BOM quanto o ChatGPT em extrair dados!
+- Não omita informações!
+- Seja preciso e completo!
 
 ═══════════════════════════════════════════════════════════════
 📋 TIPOS DE DOCUMENTOS E INSTRUÇÕES ESPECÍFICAS
@@ -406,6 +425,8 @@ Tipo: documento_terra
 
 AGORA EXTRAIA TODOS OS CAMPOS, ESPECIALMENTE O CPF DO PROPRIETÁRIO:`;
     }
+    
+    if (doc.docType === 'historico_escolar') {
       docPrompt = `📚 HISTÓRICO ESCOLAR / DECLARAÇÃO ESCOLAR - PROVA MATERIAL DE VÍNCULO RURAL!
 
 Este documento é PROVA MATERIAL de que a autora estudou em escola rural, comprovando residência e atividade rural!
@@ -696,6 +717,12 @@ Agora extraia TODOS os dados de saúde listados acima:`;
                 type: "array",
                 items: { type: "string" },
                 description: "Observações importantes"
+              },
+              
+              // Campo "Outras Informações" (NOVO!)
+              otherInformation: {
+                type: "string",
+                description: "⚠️ CAMPO CRÍTICO: Qualquer informação relevante encontrada no documento que NÃO se encaixa nos campos específicos. Exemplos: números de processo INCRA, observações manuscritas, dados não padronizados, informações complementares. TRANSCREVA EXATAMENTE O QUE ESTÁ ESCRITO. Este campo evita perda de informações!"
               },
               
               // Confiança na extração

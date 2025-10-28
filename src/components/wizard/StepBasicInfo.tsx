@@ -226,6 +226,69 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     }
   };
 
+  const handleSaveSection = async () => {
+    if (!data.caseId) {
+      toast.error("ID do caso não encontrado");
+      return;
+    }
+
+    try {
+      toast.loading("Salvando informações...");
+      
+      // Atualizar caso no banco
+      const { error } = await supabase
+        .from('cases')
+        .update({
+          author_name: data.authorName,
+          author_cpf: data.authorCpf,
+          author_rg: data.authorRg,
+          author_birth_date: data.authorBirthDate,
+          author_marital_status: data.authorMaritalStatus,
+          author_address: data.authorAddress,
+          child_name: data.childName,
+          child_birth_date: data.childBirthDate,
+          father_name: data.fatherName,
+          event_date: data.eventDate,
+          profile: data.profile,
+          rural_periods: data.ruralPeriods as any,
+          urban_periods: data.urbanPeriods as any,
+          land_owner_name: data.landOwnerName,
+          land_owner_cpf: data.landOwnerCpf,
+          land_owner_rg: data.landOwnerRg,
+          land_ownership_type: data.landOwnershipType,
+          land_property_name: data.landPropertyName,
+          land_municipality: data.landMunicipality,
+          land_area: data.landArea,
+          land_total_area: data.landTotalArea,
+          land_exploited_area: data.landExploitedArea,
+          land_cession_type: data.landCessionType,
+          land_itr: data.landITR,
+          rural_activities_planting: data.ruralActivitiesPlanting,
+          rural_activities_breeding: data.ruralActivitiesBreeding,
+          rural_activity_since: data.ruralActivitySince,
+          school_history: data.schoolHistory as any,
+          health_declaration_ubs: data.healthDeclarationUbs as any,
+          has_ra: data.hasRa,
+          ra_protocol: data.raProtocol,
+          ra_request_date: data.raRequestDate,
+          ra_denial_date: data.raDenialDate,
+          ra_denial_reason: data.raDenialReason,
+          special_notes: data.specialNotes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', data.caseId);
+
+      if (error) throw error;
+
+      toast.dismiss();
+      toast.success("✅ Informações salvas com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      toast.dismiss();
+      toast.error("❌ Falha ao salvar informações");
+    }
+  };
+
   // Alertas para campos críticos vazios
   const criticalFieldsEmpty = {
     childName: !data.childName,
@@ -368,6 +431,12 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             rows={2}
           />
         </div>
+        
+        <div className="flex justify-end mt-6 pt-4 border-t">
+          <Button onClick={handleSaveSection} className="gap-2">
+            💾 Salvar Identificação
+          </Button>
+        </div>
       </Card>
 
       {/* SEÇÃO 2: DADOS DA CRIANÇA */}
@@ -420,6 +489,12 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               placeholder="José da Silva"
             />
           </div>
+        </div>
+        
+        <div className="flex justify-end mt-6 pt-4 border-t">
+          <Button onClick={handleSaveSection} className="gap-2">
+            💾 Salvar Dados da Criança
+          </Button>
         </div>
       </Card>
 
@@ -567,6 +642,12 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             </Label>
           </div>
         </RadioGroup>
+        
+        <div className="flex justify-end mt-6 pt-4 border-t">
+          <Button onClick={handleSaveSection} className="gap-2">
+            💾 Salvar Perfil
+          </Button>
+        </div>
       </Card>
 
       {/* NOVO: Histórico Escolar */}
@@ -979,6 +1060,12 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               </div>
             </div>
           </div>
+          
+          <div className="flex justify-end mt-6 pt-4 border-t">
+            <Button onClick={handleSaveSection} className="gap-2">
+              💾 Salvar Dados da Terra
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -1156,6 +1243,12 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
                 </div>
               </div>
             ))}
+          </div>
+          
+          <div className="flex justify-end mt-6 pt-4 border-t">
+            <Button onClick={handleSaveSection} className="gap-2">
+              💾 Salvar Períodos Rurais
+            </Button>
           </div>
         </Card>
       )}
