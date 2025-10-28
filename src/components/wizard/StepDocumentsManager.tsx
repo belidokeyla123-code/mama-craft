@@ -419,16 +419,21 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   };
 
   const handleReprocess = async () => {
+    if (!caseId || documents.length === 0) {
+      toast({
+        title: "Sem documentos",
+        description: "Adicione documentos antes de atualizar.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setIsReprocessing(true);
     try {
-      const { error } = await supabase
-        .from('processing_queue')
-        .upsert({
-          case_id: caseId,
-          status: 'queued',
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'case_id' });
-
+      const { error } = await supabase.functions.invoke('queue-validation', {
+        body: { caseId }
+      });
+      
       if (error) throw error;
 
       toast({

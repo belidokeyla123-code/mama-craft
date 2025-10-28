@@ -153,7 +153,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                     <Badge variant="destructive">{doc.importance}</Badge>
                   </div>
                   
-                  {doc.importance === 'critical' && data.caseId && (
+                  {(doc.importance === 'critical' || doc.importance === 'high') && data.caseId && (
                     <DocumentUploadInline 
                       caseId={data.caseId}
                       suggestedDocType={doc.doc_type}

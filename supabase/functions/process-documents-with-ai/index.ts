@@ -85,39 +85,79 @@ serve(async (req) => {
 });
 
 // Classificar documento por nome
-const classifyDocument = (fileName: string) => {
-  const name = fileName.toLowerCase();
+const classifyDocument = (fileName: string): string => {
+  const name = fileName.toLowerCase().replace(/[^a-z0-9]/g, '');
   
-  // Reconhecer nomes truncados do Windows (ex: PRO~1, HIS~1)
-  if (name.includes('pro') && !name.includes('protocolo') && !name.includes('processo')) return 'autodeclaracao_rural';
-  if (name.includes('procuracao') || name.includes('procuração')) return 'procuracao';
-  if (name.includes('certidao') && name.includes('nascimento')) return 'certidao_nascimento';
-  if (name.includes('certidao') && name.includes('casamento')) return 'certidao_casamento';
-  if (name.includes('cpf') || name.includes('rg') || name.includes('identidade')) return 'identificacao';
-  if (name.includes('residencia') || name.includes('endereco')) return 'comprovante_residencia';
-  if (name.includes('autodeclaracao') || name.includes('rural')) return 'autodeclaracao_rural';
-  if (name.includes('cnis') || name.includes('his')) return 'cnis';
-  if (name.includes('cartao') || name.includes('gestante') || name.includes('vacina')) return 'cartao_gestante';
+  console.log(`[CLASSIFY] Analisando: "${fileName}" -> normalizado: "${name}"`);
   
-  // MELHORAR detecção de documento da terra
-  if (name.includes('terra') || 
-      name.includes('propriedade') || 
-      name.includes('comodato') ||
-      name.includes('itr') ||
-      name.includes('ccir') ||
-      name.includes('fazenda') ||
-      name.includes('sitio') ||
-      name.includes('sítio') ||
-      name.includes('escritura') ||
-      name.includes('matricula') ||
-      name.includes('matrícula')) {
+  // Ordem de prioridade na detecção (do mais específico ao mais genérico)
+  
+  // 1. Procuração (PROC, PROCUR)
+  if (name.includes('proc') && (name.includes('procur') || name.length < 15)) {
+    console.log(`[CLASSIFY] ✅ Identificado como PROCURAÇÃO`);
+    return 'procuracao';
+  }
+  
+  // 2. Certidão de Nascimento (CERT, NASC, CERTID)
+  if (name.includes('cert') || name.includes('nasc') || name.includes('certid')) {
+    console.log(`[CLASSIFY] ✅ Identificado como CERTIDÃO DE NASCIMENTO`);
+    return 'certidao_nascimento';
+  }
+  
+  // 3. RG/CPF/Identidade (RG, CPF, IDENTIDADE, CARTEIRA, RNM)
+  if (name.includes('rg') || name.includes('cpf') || name.includes('identidade') || 
+      name.includes('carteira') || name.includes('rnm')) {
+    console.log(`[CLASSIFY] ✅ Identificado como IDENTIFICAÇÃO (RG/CPF)`);
+    return 'identificacao';
+  }
+  
+  // 4. Autodeclaração Rural (AUTODEC, DECLARA, AUT)
+  if (name.includes('autodec') || name.includes('auto') || name.includes('dec')) {
+    console.log(`[CLASSIFY] ✅ Identificado como AUTODECLARAÇÃO RURAL`);
+    return 'autodeclaracao_rural';
+  }
+  
+  // 5. CNIS / Histórico (CNIS, HISTOR, HIST)
+  if (name.includes('cnis') || name.includes('histor') || name.includes('hist')) {
+    console.log(`[CLASSIFY] ✅ Identificado como CNIS`);
+    return 'cnis';
+  }
+  
+  // 6. Documento da Terra (TERRA, PROPRIEDADE, COMODATO, ITR, CCIR, DOC + TERRA)
+  if (name.includes('terra') || name.includes('propriedade') || name.includes('comodato') ||
+      name.includes('itr') || name.includes('ccir') || name.includes('fazenda') ||
+      name.includes('sitio') || name.includes('escritura') || name.includes('matricula') ||
+      (name.includes('doc') && name.length < 20)) {
+    console.log(`[CLASSIFY] ✅ Identificado como DOCUMENTO DA TERRA`);
     return 'documento_terra';
   }
   
-  // Processo administrativo
-  if (name.includes('indeferimento') || name.includes('inss') || name.includes('nb') || 
-      name.includes('processo') || name.includes('administrativo')) return 'processo_administrativo';
+  // 7. Processo Administrativo / RA / Indeferimento (PROCES + ADM, INDEFER, ADM)
+  if ((name.includes('proces') && name.includes('adm')) || name.includes('ind') ||
+      name.includes('indefer') || name.includes('admini')) {
+    console.log(`[CLASSIFY] ✅ Identificado como PROCESSO ADMINISTRATIVO`);
+    return 'processo_administrativo';
+  }
   
+  // 8. Comprovante de Endereço (COMPR, ENDERECO, RESIDENCIA, CONTA)
+  if (name.includes('compr') || name.includes('endereco') || name.includes('residencia') || name.includes('conta')) {
+    console.log(`[CLASSIFY] ✅ Identificado como COMPROVANTE DE ENDEREÇO`);
+    return 'comprovante_endereco';
+  }
+  
+  // 9. Ficha de Atendimento (FICHA, ATEND)
+  if (name.includes('ficha') || name.includes('atend')) {
+    console.log(`[CLASSIFY] ✅ Identificado como FICHA DE ATENDIMENTO`);
+    return 'ficha_atendimento';
+  }
+  
+  // 10. Carteira de Pescador (PESCA, PESCADOR)
+  if (name.includes('pesca') || name.includes('pescador')) {
+    console.log(`[CLASSIFY] ✅ Identificado como CARTEIRA DE PESCADOR`);
+    return 'carteira_pescador';
+  }
+  
+  console.log(`[CLASSIFY] ⚠️ NÃO RECONHECIDO - Classificando como "outro"`);
   return 'outro';
 };
 

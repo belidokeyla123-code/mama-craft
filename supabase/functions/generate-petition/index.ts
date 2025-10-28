@@ -39,13 +39,19 @@ ${documents?.map(d => `- ${d.document_type}: ${d.file_name}`).join('\n')}
 
 INSTRUÇÕES:
 1. Use técnicas de PNL e persuasão
-2. Seja extremamente convincente
-3. Fundamente com as jurisprudências fornecidas
+2. Seja convincente mas direto  
+3. Fundamente com jurisprudências fornecidas
 4. Cite leis (Lei 8.213/91, Decreto 3.048/99)
-5. Use linguagem técnica mas acessível
-6. Estruture profissionalmente
+5. Linguagem técnica mas acessível
+6. **SEJA CONCISO**: Petição de no máximo 12 páginas
 
-ESTRUTURA DA PETIÇÃO:
+**FORMATAÇÃO**:
+- Formatação ABNT para petições (mas SEM tags HTML)
+- Tópicos numerados e bem estruturados
+- Linguagem técnico-jurídica clara e direta
+- Argumentação persuasiva e objetiva
+
+ESTRUTURA (CONCISA):
 I. EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) FEDERAL DA [VARA]
 
 II. DOS FATOS

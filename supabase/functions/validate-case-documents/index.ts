@@ -78,13 +78,18 @@ Valide se a documentação é suficiente para protocolar a ação. Retorne um JS
   "recommendations": ["Recomendação 1", "Recomendação 2"]
 }
 
-Documentos essenciais:
-- Certidão de nascimento da criança (comprova o fato gerador)
-- RG/CPF da autora (identificação)
-- Comprovantes de atividade rural (para segurada especial)
-- Autodeclaração rural (caracteriza a segurada especial)
-- Documentos de propriedade/posse da terra (se aplicável)
-- CNIS (histórico contributivo)`;
+⚠️ **REGRA DE IMPORTÂNCIA**:
+Use "critical" (não "high") para documentos ESSENCIAIS sem os quais a ação não pode ser protocolada:
+- Certidão de nascimento da criança (critical - comprova o fato gerador)
+- RG/CPF da autora (critical - identificação)
+- Comprovantes de atividade rural (critical - para segurada especial)
+- Autodeclaração rural (critical - caracteriza a segurada especial)
+- **DOCUMENTOS DE PROPRIEDADE/POSSE DA TERRA** (critical - comprova local de trabalho)
+- **CNIS** (critical - histórico contributivo)
+- Requerimento administrativo/Indeferimento (critical - comprova negativa do INSS)
+
+Use "high" apenas para documentos importantes mas não impeditivos.
+Use "medium" para documentos complementares.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

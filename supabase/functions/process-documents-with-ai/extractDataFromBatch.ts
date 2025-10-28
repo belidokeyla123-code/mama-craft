@@ -84,11 +84,21 @@ export async function extractDataFromBatch(
 - NÃO agrupe períodos diferentes! Separe cada um!
 - Se menciona zona urbana, EXTRAIR também (urbanPeriods)
 
-🔹 **DOCUMENTO DA TERRA / PROPRIEDADE**
+🔹 **DOCUMENTO DA TERRA / PROPRIEDADE** (CRÍTICO!)
    ✓ Nome do proprietário
    ✓ CPF do proprietário (apenas números)
    ✓ RG do proprietário
    ✓ Tipo de propriedade/relação
+
+🔹 **CNIS - CADASTRO NACIONAL DE INFORMAÇÕES SOCIAIS** (ANÁLISE CRÍTICA!)
+   Este documento é ESSENCIAL. Analise com MÁXIMA ATENÇÃO:
+   ✓ Listar TODOS os períodos urbanos (vínculos empregatícios):
+     → Nome do empregador
+     → Data início e fim (YYYY-MM-DD)
+   ✓ Listar TODOS os períodos rurais reconhecidos:
+     → Descrição e datas
+   ✓ Benefícios anteriores (especialmente salário-maternidade)
+   ✓ Se CNIS vazio → marcar "cnis_vazio": true (PONTO FORTE!)
 
 🔹 **PROCESSO INSS / INDEFERIMENTO / NB** (CRÍTICO!)
    ✓ Número COMPLETO do protocolo/NB (ex: "NB 123.456.789-0")

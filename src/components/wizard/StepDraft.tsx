@@ -54,6 +54,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [analyzingJudge, setAnalyzingJudge] = useState(false);
   const [adaptingRegional, setAdaptingRegional] = useState(false);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const [isProtocoling, setIsProtocoling] = useState(false);
 
   // Atualizar status para "drafted" quando a minuta estiver pronta
   useEffect(() => {
@@ -193,6 +194,36 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
+  const handleProtocolar = async () => {
+    if (!data.caseId) return;
+    
+    setIsProtocoling(true);
+    try {
+      // Atualizar status do caso para "protocolada"
+      const { error } = await supabase
+        .from('cases')
+        .update({ 
+          status: 'protocolada',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', data.caseId);
+      
+      if (error) throw error;
+      
+      toast.success("✅ Ação protocolada com sucesso!");
+      
+      // Aguardar um momento e navegar para a aba de protocoladas
+      setTimeout(() => {
+        window.location.href = '/protocoladas';
+      }, 1000);
+    } catch (error: any) {
+      console.error('Erro ao protocolar:', error);
+      toast.error("Erro ao protocolar: " + error.message);
+    } finally {
+      setIsProtocoling(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -227,6 +258,23 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar DOCX (ABNT)
+        </Button>
+        <Button 
+          onClick={handleProtocolar}
+          disabled={!petition || isProtocoling}
+          className="gap-2 bg-success hover:bg-success/90"
+        >
+          {isProtocoling ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Protocolando...
+            </>
+          ) : (
+            <>
+              <CheckCheck className="h-4 w-4" />
+              Protocolar Ação
+            </>
+          )}
         </Button>
         <div>
           <input

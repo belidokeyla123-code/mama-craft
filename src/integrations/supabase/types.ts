@@ -887,7 +887,7 @@ export type Database = {
           {
             foreignKeyName: "processing_queue_case_id_fkey"
             columns: ["case_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },

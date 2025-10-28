@@ -18,18 +18,36 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Adicionar/atualizar na fila de processamento
-    const { error } = await supabase
+    // Verificar se já existe entrada para este caso
+    const { data: existing } = await supabase
       .from('processing_queue')
-      .upsert({
-        case_id: caseId,
-        jurisprudence_status: 'queued',
-        status: 'queued',
-        updated_at: new Date().toISOString()
-      }, { 
-        onConflict: 'case_id',
-        ignoreDuplicates: false 
-      });
+      .select('id')
+      .eq('case_id', caseId)
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      // Atualizar entrada existente
+      const result = await supabase
+        .from('processing_queue')
+        .update({
+          jurisprudence_status: 'queued',
+          status: 'queued',
+          updated_at: new Date().toISOString()
+        })
+        .eq('case_id', caseId);
+      error = result.error;
+    } else {
+      // Criar nova entrada
+      const result = await supabase
+        .from('processing_queue')
+        .insert({
+          case_id: caseId,
+          jurisprudence_status: 'queued',
+          status: 'queued'
+        });
+      error = result.error;
+    }
 
     if (error) throw error;
 
