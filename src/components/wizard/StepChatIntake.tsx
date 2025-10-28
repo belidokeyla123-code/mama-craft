@@ -615,6 +615,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     }
 
     setIsProcessing(true);
+    const startTime = Date.now();
     setMessages(prev => [...prev, {
       role: "assistant",
       content: "🔄 Reprocessando TODOS os documentos com IA... Aguarde alguns segundos."
@@ -624,7 +625,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       // Buscar todos os documentos do caso
       const { data: allDocs, error: docsError } = await supabase
         .from('documents')
-        .select('id')
+        .select('id, file_name')
         .eq('case_id', data.caseId);
 
       if (docsError) throw docsError;
@@ -639,93 +640,121 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         return;
       }
 
-      console.log(`[REPROCESS] Reprocessando ${allDocs.length} documentos...`);
+      console.log(`[REPROCESS] Reprocessando ${allDocs.length} documentos em paralelo...`);
 
-      // Processar novamente TODOS os documentos
-      const { data: extractionResult, error: extractionError } = await supabase.functions.invoke(
-        "process-documents-with-ai",
-        {
-          body: {
-            caseId: data.caseId,
-            documentIds: allDocs.map(d => d.id)
+      // PROCESSAMENTO PARALELO OTIMIZADO (máximo 5 por vez)
+      const CONCURRENT_LIMIT = 5;
+      const allExtractedData: any = {};
+      let processedCount = 0;
+
+      // Dividir em chunks para processamento paralelo controlado
+      for (let i = 0; i < allDocs.length; i += CONCURRENT_LIMIT) {
+        const chunk = allDocs.slice(i, i + CONCURRENT_LIMIT);
+        
+        // Processar chunk em paralelo
+        const chunkPromises = chunk.map(async (doc) => {
+          try {
+            const { data: result, error } = await supabase.functions.invoke(
+              'analyze-single-document',
+              {
+                body: {
+                  documentId: doc.id,
+                  caseId: data.caseId
+                }
+              }
+            );
+
+            if (error) {
+              console.error(`[REPROCESS] Erro em ${doc.file_name}:`, error);
+              return null;
+            }
+
+            processedCount++;
+            console.log(`[REPROCESS] ${processedCount}/${allDocs.length} - ${doc.file_name} ✓`);
+
+            return {
+              docType: result.docType,
+              extracted: result.extracted || {}
+            };
+          } catch (err) {
+            console.error(`[REPROCESS] Falha em ${doc.file_name}:`, err);
+            return null;
           }
-        }
-      );
+        });
 
-      if (extractionError) throw extractionError;
+        const chunkResults = await Promise.all(chunkPromises);
 
-      // Aguardar processamento em background
-      await new Promise(resolve => setTimeout(resolve, 8000));
+        // Mesclar dados extraídos
+        chunkResults.forEach((result) => {
+          if (result && result.extracted) {
+            Object.assign(allExtractedData, result.extracted);
+          }
+        });
+      }
 
-      // Buscar dados extraídos
-      const { data: extractions, error: extractionsError } = await supabase
-        .from('extractions')
-        .select('*')
-        .eq('case_id', data.caseId)
-        .order('extracted_at', { ascending: false })
-        .limit(1);
+      console.log('[REPROCESS] ✅ Todos os documentos processados:', allExtractedData);
 
-      if (extractionsError) throw extractionsError;
-
-      if (extractions && extractions.length > 0) {
-        const latestExtraction = extractions[0];
-        const extractedData: any = latestExtraction.auto_filled_fields || latestExtraction.entities || {};
-        const missingFields = latestExtraction.missing_fields || [];
-
-        console.log('[REPROCESS] Dados reprocessados:', extractedData);
-
+      // Atualizar dados do caso com os dados extraídos
+      if (allExtractedData.childName) {
         updateData({
-          ...extractedData as any,
+          childName: allExtractedData.childName,
+          childBirthDate: allExtractedData.childBirthDate,
+          authorName: allExtractedData.motherName || data.authorName,
+          authorCpf: allExtractedData.motherCpf || data.authorCpf,
+          fatherName: allExtractedData.fatherName,
           caseId: data.caseId
         });
+      }
 
-        toast({
-          title: "✅ Reprocessamento concluído!",
-          description: `${allDocs.length} documento(s) reprocessado(s).`
-        });
+      const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+      
+      toast({
+        title: "✅ Reprocessamento concluído!",
+        description: `${processedCount} documentos analisados em ${totalTime}s`,
+      });
 
-        // Verificar campos críticos
-        const criticalMissing = [];
-        if (!(extractedData as any).childName) criticalMissing.push('Nome da criança');
-        if (!(extractedData as any).childBirthDate) criticalMissing.push('Data de nascimento da criança');
+      // Verificar campos críticos
+      const criticalMissing = [];
+      if (!allExtractedData.childName) criticalMissing.push('Nome da criança');
+      if (!allExtractedData.childBirthDate) criticalMissing.push('Data de nascimento da criança');
 
-        let messageContent = `✅ **Reprocessamento concluído!**\n\n`;
-        messageContent += `📋 **${allDocs.length} documento(s) reprocessado(s)**\n\n`;
-        
-        if (Object.keys(extractedData).length > 0) {
-          messageContent += "**Dados atualizados:**\n";
-          Object.entries(extractedData)
-            .filter(([_, value]) => value && value !== '')
-            .slice(0, 10)
-            .forEach(([key, value]) => {
-              messageContent += `• ${key}: ${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}\n`;
-            });
-          messageContent += "\n";
-        }
+      let messageContent = `✅ **Reprocessamento concluído em ${totalTime}s!**\n\n`;
+      messageContent += `📋 **${processedCount}/${allDocs.length} documento(s) processado(s)**\n\n`;
+      
+      if (Object.keys(allExtractedData).length > 0) {
+        messageContent += "**Dados atualizados:**\n";
+        Object.entries(allExtractedData)
+          .filter(([_, value]) => value && value !== '')
+          .slice(0, 10)
+          .forEach(([key, value]) => {
+            messageContent += `• ${key}: ${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}\n`;
+          });
+        messageContent += "\n";
+      }
 
-        if (criticalMissing.length > 0) {
-          messageContent += `⚠️ **Ainda faltando:** ${criticalMissing.join(', ')}\n\n`;
-          messageContent += `Se o problema persistir, tente reenviar os documentos necessários (certidão de nascimento, RG/CPF).`;
-        } else {
-          messageContent += '✅ Todos os campos críticos foram preenchidos!';
-        }
+      if (criticalMissing.length > 0) {
+        messageContent += `⚠️ **Ainda faltando:** ${criticalMissing.join(', ')}\n\n`;
+        messageContent += `Se o problema persistir, tente reenviar os documentos necessários (certidão de nascimento, RG/CPF).`;
+      } else {
+        messageContent += '✅ Todos os campos críticos foram preenchidos!';
+      }
 
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: messageContent
-        }]);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: messageContent
+      }]);
 
-        // Disparar pipeline completo
-        if (triggerFullPipeline) {
-          console.log('[REPROCESS] Disparando pipeline completo...');
-          try {
-            await triggerFullPipeline('Documentos reprocessados');
-            console.log('[REPROCESS] ✅ Pipeline disparado');
-          } catch (pipelineError) {
-            console.error('[REPROCESS] Erro ao disparar pipeline:', pipelineError);
-          }
+      // Disparar pipeline completo
+      if (triggerFullPipeline) {
+        console.log('[REPROCESS] Disparando pipeline completo...');
+        try {
+          await triggerFullPipeline('Documentos reprocessados');
+          console.log('[REPROCESS] ✅ Pipeline disparado');
+        } catch (pipelineError) {
+          console.error('[REPROCESS] Erro ao disparar pipeline:', pipelineError);
         }
       }
+
     } catch (error) {
       console.error('[REPROCESS] Erro:', error);
       toast({
