@@ -48,6 +48,8 @@ export async function extractDataFromBatch(
    ✓ Tabela de períodos: DESDE XX/XX/XXXX ATÉ XX/XX/XXXX
    ✓ CONDIÇÃO EM RELAÇÃO AO IMÓVEL: COMODATO/Proprietário/Arrendatário/etc
    ✓ SITUAÇÃO: Individual ou Regime de Economia Familiar (checkbox)
+   ✓ COM QUEM MORA: Pai, mãe, esposo, filhos, avós, tios - EXTRAIR LITERALMENTE
+   ✓ ATIVIDADES: Plantio, criação, colheita - DESCREVER DETALHADAMENTE
    
    **SEÇÃO 2.1: CONDIÇÃO NO GRUPO**
    ✓ Titular ou Componente do grupo familiar
@@ -55,6 +57,7 @@ export async function extractDataFromBatch(
    **SEÇÃO 2.2: GRUPO FAMILIAR COMPLETO**
    ✓ NOME + DN + CPF + ESTADO CIVIL + PARENTESCO de CADA membro
    ✓ Extrair TODOS os membros listados na tabela
+   ✓ Formato: [{"name":"Nome","birthDate":"YYYY-MM-DD","cpf":"12345678900","maritalStatus":"solteiro","relationship":"mãe"}]
    
 📋 **SEÇÃO 3: DADOS DA TERRA**
    
@@ -116,25 +119,29 @@ export async function extractDataFromBatch(
    
    **Este documento contém informações ESSENCIAIS para a ação judicial:**
    
-   ✓ NÚMERO DO PROTOCOLO/NB (OBRIGATÓRIO):
-     → Formato: "NB 187.654.321-0" ou "Protocolo: 123456789"
-     → Localizar na primeira página ou no cabeçalho
-     → NÃO OMITIR este campo!
+   ✓ NÚMERO DO PROTOCOLO/NB (raProtocol) - OBRIGATÓRIO:
+     → Procure por: "NB", "Benefício", "Protocolo", "Número do Benefício"
+     → Formato comum: "NB 187.654.321-0" ou "Protocolo: 123456789"
+     → Localizar na PRIMEIRA PÁGINA, geralmente no topo
+     → Se encontrar, COPIE EXATAMENTE COMO ESTÁ
    
-   ✓ DATA DO REQUERIMENTO (OBRIGATÓRIA):
+   ✓ DATA DO REQUERIMENTO (raRequestDate) - OBRIGATÓRIA:
+     → Procure por: "Data do Requerimento", "Data da Solicitação", "Data do Pedido"
      → Data em que a segurada PEDIU o benefício
      → Converter para formato YYYY-MM-DD
    
-   ✓ DATA DO INDEFERIMENTO (OBRIGATÓRIA):
+   ✓ DATA DO INDEFERIMENTO (raDenialDate) - OBRIGATÓRIA:
+     → Procure por: "Data da Decisão", "Data do Despacho", "Data do Indeferimento"
      → Data da decisão de negativa do INSS
      → Converter para formato YYYY-MM-DD
    
-   ✓ MOTIVO DO INDEFERIMENTO (LITERAL E COMPLETO!):
+   ✓ MOTIVO DO INDEFERIMENTO (raDenialReason) - LITERAL E COMPLETO:
+     → Procure por seções: "FUNDAMENTAÇÃO", "MOTIVO", "RAZÕES DO INDEFERIMENTO"
      → Copie PALAVRA POR PALAVRA TODO o texto do indeferimento
-     → Incluir: fundamentação jurídica, artigos de lei citados, análise técnica
+     → Incluir: fundamentação jurídica, artigos de lei citados, análise técnica completa
      → NÃO resuma, NÃO parafraseie, copie LITERALMENTE
      → Exemplo: "Não comprovada a qualidade de segurado especial conforme Lei 8.213/91 art. 39..."
-     → Se houver múltiplas páginas de fundamentação, copie TUDO!
+     → Se houver múltiplas páginas de fundamentação, copie TODAS!
 
 ═══════════════════════════════════════════════════════════════
 ⚠️ REGRAS ABSOLUTAS - SIGA RIGOROSAMENTE!
@@ -166,57 +173,122 @@ AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
 
 Este é o documento MAIS IMPORTANTE para períodos rurais!
 
-🔴 OBRIGATÓRIO: Você DEVE extrair os períodos rurais deste documento!
+🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
 
-📋 INSTRUÇÕES CRÍTICAS:
-1. Leia CADA parágrafo cuidadosamente
-2. Identifique TODOS os períodos mencionados (ex: "morei de 1990 a 2000", "trabalho desde 2001")
-3. NUNCA deixe ruralPeriods vazio se este documento existir!
-4. Se houver múltiplos períodos, crie um objeto separado para CADA um
-5. Se não houver datas exatas, infira do contexto (ex: "desde criança" = usar ano estimado)
+1. **PERÍODOS DE ATIVIDADE RURAL** (ruralPeriods):
+   - startDate: Data de início (YYYY-MM-DD)
+   - endDate: Data de fim (YYYY-MM-DD ou vazio se ainda trabalha)
+   - location: Local COMPLETO (Sítio/Fazenda + Município/UF)
+   - withWhom: COM QUEM MORA - COPIE EXATAMENTE: "pai e mãe", "esposo e 3 filhos", "avó paterna", etc
+   - activities: ATIVIDADES - COPIE TUDO: "plantio de café, cacau, banana, mandioca; criação de galinha e porco"
 
-⚠️ ESTE CAMPO É OBRIGATÓRIO! Sem períodos rurais = FALHA TOTAL!
+2. **SEÇÃO 2.2 - GRUPO FAMILIAR** (familyMembersDetailed):
+   Procure uma TABELA com colunas: NOME | DN | CPF | ESTADO CIVIL | PARENTESCO
+   Extrair CADA linha desta tabela!
+
+3. **SEÇÃO 3 - DADOS DA TERRA**:
+   - landArea: Área cedida em hectares (número)
+   - landTotalArea: Área total do imóvel (número)
+   - landExploitedArea: Área explorada (número)
+   - landPropertyName: Nome da propriedade
+   - landMunicipality: Município/UF
+   - landITR: Registro ITR
+   - landCessionType: COMODATO/Arrendamento/etc
+   - landOwnerName: Nome do proprietário da terra
+   - landOwnerCpf: CPF do proprietário (só números)
+   - landOwnerRg: RG do proprietário
+
+4. **ATIVIDADES RURAIS DETALHADAS**:
+   - ruralActivitiesPlanting: "CAFÉ, CACAU, BANANA, MANDIOCA, MILHO, ARROZ"
+   - ruralActivitiesBreeding: "GALINHA E PORCO"
+
+⚠️ LEIA TODAS AS PÁGINAS DESTE DOCUMENTO PÁGINA POR PÁGINA!
 
 Documento: ${doc.fileName}
 Tipo: ${doc.docType}
 
-Agora extraia TODOS os períodos rurais mencionados:`;
+Agora extraia TODOS os dados listados acima:`;
     }
     
     if (doc.docType === 'documento_terra') {
       docPrompt = `🔍 DOCUMENTO DA TERRA - ATENÇÃO MÁXIMA:
 
-Este é um documento CRÍTICO que define se a terra é PRÓPRIA ou de TERCEIRO.
+Este documento define se a terra é PRÓPRIA ou de TERCEIRO.
 
-**TAREFAS ESPECÍFICAS**:
-1. Identificar o PROPRIETÁRIO da terra:
-   - Nome COMPLETO do proprietário
-   - CPF do proprietário (apenas números)
-   - RG do proprietário com órgão expedidor
+🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
 
-2. Identificar o TIPO de documento:
-   - Escritura = TERRA PRÓPRIA
-   - ITR em nome da autora = TERRA PRÓPRIA
-   - Comodato = TERRA DE TERCEIRO
-   - Arrendamento = TERRA DE TERCEIRO
-   - Cessão = TERRA DE TERCEIRO
+**PROPRIETÁRIO DA TERRA**:
+- landOwnerName: Nome COMPLETO do proprietário (OBRIGATÓRIO)
+- landOwnerCpf: CPF do proprietário SEM FORMATAÇÃO - só 11 números (OBRIGATÓRIO)
+- landOwnerRg: RG do proprietário com órgão expedidor
 
-3. Extrair TODOS os dados da terra:
-   - Área total (hectares)
-   - Área explorada (hectares)
-   - Nome da propriedade
-   - Município/UF
-   - Registro ITR (se houver)
-   - Forma de cessão (comodato/arrendamento/etc)
+**DADOS DA PROPRIEDADE**:
+- landArea: Área cedida em hectares - procure por "ha" ou "hectare" (número decimal)
+- landTotalArea: Área total do imóvel em hectares (número decimal)
+- landExploitedArea: Área explorada em hectares (número decimal)
+- landPropertyName: Nome da propriedade (Sítio X, Fazenda Y)
+- landMunicipality: Município/UF
+- landITR: Número do registro ITR (se houver)
+- landCessionType: Tipo de cessão - procure palavras como "COMODATO", "Arrendamento", "Parceria", "Cessão"
 
-⚠️ REGRA CRÍTICA:
-- Se o CPF do PROPRIETÁRIO for IGUAL ao CPF da AUTORA → landOwnershipType = "propria"
-- Se o CPF do PROPRIETÁRIO for DIFERENTE do CPF da AUTORA → landOwnershipType = "terceiro"
+**TIPO DE PROPRIEDADE** (landOwnershipType):
+- Se for ESCRITURA ou ITR em nome da autora → "propria"
+- Se for COMODATO, ARRENDAMENTO, CESSÃO → "terceiro"
+- DICA: Procure nos parágrafos iniciais do documento
+
+⚠️ PROCURE EM:
+- Cabeçalho do documento
+- Parágrafos iniciais (geralmente tem "FULANO DE TAL, CPF XXX, proprietário...")
+- Tabelas com dados cadastrais
+- Assinaturas no final
 
 Documento: ${doc.fileName}
 Tipo: ${doc.docType}
 
-Agora extraia TODOS os dados da propriedade:`;
+Agora extraia TODOS os campos listados acima COM MÁXIMA ATENÇÃO:`;
+    }
+    
+    if (doc.docType === 'processo_administrativo') {
+      docPrompt = `📄 PROCESSO ADMINISTRATIVO / INDEFERIMENTO INSS - CRÍTICO!
+
+Este documento é ESSENCIAL para a ação judicial e deve ser lido COM MÁXIMA ATENÇÃO!
+
+🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
+
+1. **raProtocol** - NÚMERO DO PROTOCOLO/BENEFÍCIO (OBRIGATÓRIO):
+   → Procure por palavras-chave: "NB", "Número do Benefício", "Protocolo", "Requerimento nº"
+   → Formato comum: "187.654.321-0", "NB 187654321", "Protocolo: 123456789"
+   → Localização: PRIMEIRA PÁGINA, geralmente no TOPO ou no CABEÇALHO
+   → COPIE EXATAMENTE COMO ESTÁ ESCRITO
+
+2. **raRequestDate** - DATA DO REQUERIMENTO (OBRIGATÓRIA):
+   → Procure por: "Data do Requerimento", "Data da Solicitação", "DER", "Data de Entrada do Requerimento"
+   → É a data em que a segurada PEDIU o benefício ao INSS
+   → Formato: YYYY-MM-DD (exemplo: 2023-05-15)
+
+3. **raDenialDate** - DATA DO INDEFERIMENTO (OBRIGATÓRIA):
+   → Procure por: "Data da Decisão", "Data do Despacho", "Data do Indeferimento", "Data da Negativa"
+   → É a data em que o INSS NEGOU o benefício
+   → Formato: YYYY-MM-DD
+
+4. **raDenialReason** - MOTIVO DO INDEFERIMENTO (LITERAL E COMPLETO - OBRIGATÓRIO):
+   → Procure por seções com títulos: "FUNDAMENTAÇÃO", "MOTIVO", "RAZÕES", "ANÁLISE", "DESPACHO"
+   → COPIE PALAVRA POR PALAVRA TODO o texto explicando por que foi negado
+   → NÃO resuma, NÃO parafraseie, NÃO omita nada
+   → Inclua: fundamentação jurídica completa, artigos de lei citados, análise técnica
+   → Se houver múltiplas páginas de texto, copie TODAS elas
+   → Exemplo esperado: "Não restou comprovada a qualidade de segurado especial, tendo em vista que os documentos apresentados não são suficientes para comprovar o exercício de atividade rural em regime de economia familiar no período de carência exigido pela Lei 8.213/91, art. 39..."
+
+⚠️ IMPORTANTE:
+- Leia TODAS as páginas deste documento
+- Páginas iniciais geralmente têm protocolo e datas
+- Páginas intermediárias/finais têm a fundamentação completa
+- NÃO OMITA NENHUMA INFORMAÇÃO!
+
+Documento: ${doc.fileName}
+Tipo: ${doc.docType}
+
+Agora extraia TODOS os 4 campos listados acima COM MÁXIMA PRECISÃO:`;
     }
     
     messages.push({

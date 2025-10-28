@@ -639,6 +639,18 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             Dados da Terra / Propriedade Rural
           </h3>
           
+          {/* Alerta se dados da terra não foram extraídos */}
+          {(!data.landArea && !data.landPropertyName && !data.landMunicipality) && (
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Dados da terra não extraídos</AlertTitle>
+              <AlertDescription>
+                As informações da propriedade rural não foram extraídas automaticamente. 
+                Clique em "Re-processar Documentos" no topo da página ou preencha manualmente abaixo.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Área cedida */}
             <div className="space-y-2">
@@ -841,13 +853,30 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             <Label htmlFor="familyMembers">Quem mora com ela atualmente?</Label>
             <Textarea
               id="familyMembers"
-              value={data.familyMembers?.join(', ') || ""}
-              onChange={(e) => updateData({ 
-                familyMembers: e.target.value.split(',').map(m => m.trim()).filter(m => m) 
-              })}
+              value={
+                Array.isArray(data.familyMembers) 
+                  ? data.familyMembers.map((member: any) => {
+                      // Se for objeto com name e relationship, formatar
+                      if (typeof member === 'object' && member.name) {
+                        return `${member.name} (${member.relationship || 'não especificado'})`;
+                      }
+                      // Se for string simples, retornar diretamente
+                      return String(member);
+                    }).join(', ')
+                  : ""
+              }
+              onChange={(e) => {
+                const membersText = e.target.value;
+                // Salvar como array de strings simples
+                const membersArray = membersText.split(',').map(m => m.trim()).filter(m => m);
+                updateData({ familyMembers: membersArray as any });
+              }}
               placeholder="Ex: Esposo, 2 filhos menores, sogra..."
               rows={2}
             />
+            <p className="text-xs text-muted-foreground">
+              Digite os membros da família separados por vírgula
+            </p>
           </div>
         </Card>
       )}
@@ -936,6 +965,18 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
           {data.hasRa && (
             <div className="ml-6 space-y-4 p-4 bg-muted/50 rounded-lg">
+              {/* Alerta se os dados não foram extraídos */}
+              {(!data.raProtocol || !data.raRequestDate || !data.raDenialDate || !data.raDenialReason) && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Dados do RA não extraídos</AlertTitle>
+                  <AlertDescription>
+                    Os dados do Requerimento Administrativo não foram extraídos automaticamente. 
+                    Clique em "Re-processar Documentos" no topo da página ou preencha manualmente abaixo.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="raProtocol">Número do Protocolo (NB) *</Label>
