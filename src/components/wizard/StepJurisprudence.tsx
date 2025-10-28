@@ -79,6 +79,16 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
     }
   }, [data.caseId]);
 
+  // Auto-buscar jurisprudência se não houver cache
+  useEffect(() => {
+    if (!loading && jurisprudencias.length === 0 && data.caseId && !hasCache) {
+      const timer = setTimeout(() => {
+        searchJurisprudence();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [jurisprudencias, data.caseId, loading, hasCache]);
+
   // Salvar seleções automaticamente (debounced)
   useEffect(() => {
     const timer = setTimeout(async () => {

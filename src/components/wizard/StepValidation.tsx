@@ -197,11 +197,21 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           <div className="space-y-2">
             {checklist.map((item: any, idx: number) => (
               <div key={idx} className="flex items-center gap-3 p-3 border rounded">
-                {item.status === 'ok' ? (
-                  <CheckCircle className="h-5 w-5 text-success flex-shrink-0" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                )}
+                  {item.document ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium text-green-600">OK</span>
+                      <Button size="sm" variant="ghost" onClick={async () => {
+                        try {
+                          await supabase.from('documents').delete().eq('id', item.document.id);
+                          sonnerToast.success("Documento excluído");
+                          handleValidate();
+                        } catch { sonnerToast.error("Erro"); }
+                      }} className="h-6 w-6 p-0">
+                        <XCircle className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ) : <XCircle className="h-4 w-4 text-destructive" />}
                 <span className="flex-1">{item.item}</span>
                 <Badge variant={item.importance === 'critical' ? 'destructive' : 'secondary'}>
                   {item.importance}

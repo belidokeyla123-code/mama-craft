@@ -67,6 +67,16 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
     }
   }, [data.caseId]);
 
+  // Auto-executar análise se não houver cache
+  useEffect(() => {
+    if (!loading && !analysis && data.caseId) {
+      const timer = setTimeout(() => {
+        performAnalysis();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [analysis, data.caseId, loading]);
+
   const loadCachedAnalysis = async () => {
     if (!data.caseId) return;
     

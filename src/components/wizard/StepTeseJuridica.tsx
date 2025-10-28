@@ -37,6 +37,16 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
     }
   }, [data.caseId]);
 
+  // Auto-gerar teses se não houver cache
+  useEffect(() => {
+    if (!loading && !teses && data.caseId) {
+      const timer = setTimeout(() => {
+        generateTeses();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [teses, data.caseId, loading]);
+
   const loadCachedTeses = async () => {
     if (!data.caseId) return;
     

@@ -52,6 +52,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [judgeAnalysis, setJudgeAnalysis] = useState<JudgeAnalysis | null>(null);
   const [regionalAdaptation, setRegionalAdaptation] = useState<RegionalAdaptation | null>(null);
   const [analyzingJudge, setAnalyzingJudge] = useState(false);
+  const [analyzingAppellate, setAnalyzingAppellate] = useState(false);
+  const [appellateAnalysis, setAppellateAnalysis] = useState<any>(null);
   const [adaptingRegional, setAdaptingRegional] = useState(false);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [isProtocoling, setIsProtocoling] = useState(false);
@@ -59,6 +61,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [applyingJudgeCorrections, setApplyingJudgeCorrections] = useState(false);
   const [applyingRegionalAdaptations, setApplyingRegionalAdaptations] = useState(false);
   const [applyingIndividualSuggestion, setApplyingIndividualSuggestion] = useState<number | null>(null);
+  const [applyingIndividualAdaptation, setApplyingIndividualAdaptation] = useState<number | null>(null);
 
   // Carregar do cache ao entrar na aba
   useEffect(() => {
@@ -339,26 +342,104 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
-  const applyRegionalAdaptations = async () => {
-    if (!regionalAdaptation?.petition_adaptada) return;
-    
-    setApplyingRegionalAdaptations(true);
+  const analyzeWithAppellateModule = async () => {
+    setAnalyzingAppellate(true);
     try {
-      setPetition(regionalAdaptation.petition_adaptada);
-      
-      // Salvar versão adaptada
-      await supabase.from('drafts').insert({
-        case_id: data.caseId,
-        markdown_content: regionalAdaptation.petition_adaptada,
-        payload: { adapted_for: regionalAdaptation.trf, timestamp: new Date().toISOString() }
-      });
-      
-      toast.success(`✅ Petição adaptada para ${regionalAdaptation.trf}!`);
-    } catch (error) {
-      console.error('Erro ao aplicar adaptações:', error);
-      toast.error('Erro ao aplicar adaptações regionais');
+      // Buscar TODOS os dados contextuais
+      const { data: caseInfo } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', data.caseId)
+        .single();
+
+      const { data: documents } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('case_id', data.caseId);
+
+      const { data: analysis } = await supabase
+        .from('case_analysis')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: jurisprudence } = await supabase
+        .from('jurisprudence_results')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+
+      const { data: tese } = await supabase
+        .from('drafts')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+
+      const { data: result, error } = await supabase.functions.invoke(
+        'analyze-petition-appellate',
+        {
+          body: {
+            petition,
+            caseInfo,
+            documents: documents || [],
+            analysis: analysis || null,
+            jurisprudence: jurisprudence || null,
+            tese: tese || null,
+            judgeAnalysis: judgeAnalysis || null
+          }
+        }
+      );
+
+      if (error) throw error;
+
+      setAppellateAnalysis(result);
+      toast.success("✅ Análise recursiva concluída!");
+    } catch (error: any) {
+      console.error('Erro no módulo tribunal:', error);
+      toast.error('Erro na análise recursiva: ' + error.message);
     } finally {
-      setApplyingRegionalAdaptations(false);
+      setAnalyzingAppellate(false);
+    }
+  };
+
+  const applySingleAdaptation = async (adaptacao: any, index: number) => {
+    setApplyingIndividualAdaptation(index);
+    try {
+      const { data: result, error } = await supabase.functions.invoke(
+        'apply-judge-corrections',
+        {
+          body: {
+            petition,
+            judgeAnalysis: {
+              brechas: [],
+              pontos_fortes: [],
+              pontos_fracos: [],
+              recomendacoes: [adaptacao.adaptacao]
+            }
+          }
+        }
+      );
+
+      if (error) throw error;
+
+      if (result?.petition_corrigida) {
+        setPetition(result.petition_corrigida);
+        
+        await supabase.from('drafts').insert({
+          case_id: data.caseId,
+          markdown_content: result.petition_corrigida,
+          payload: { regional_adaptation: adaptacao.tipo }
+        });
+
+        toast.success(`✅ Adaptação "${adaptacao.tipo}" aplicada!`);
+      }
+    } catch (error: any) {
+      console.error('Erro:', error);
+      toast.error('Erro: ' + error.message);
+    } finally {
+      setApplyingIndividualAdaptation(null);
     }
   };
 

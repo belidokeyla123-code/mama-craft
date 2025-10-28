@@ -11,67 +11,75 @@ serve(async (req) => {
   }
 
   try {
-    const { petition } = await req.json();
+    const { petition, caseInfo, documents, analysis, jurisprudence, tese, judgeAnalysis } = await req.json();
 
-    const prompt = `Você é um DESEMBARGADOR de TRF analisando uma petição de salário-maternidade. Sua missão: PREPARAR A PETIÇÃO PARA EVENTUAL RECURSO.
+    const prompt = `Você é um DESEMBARGADOR de TRF com VISÃO 360° do processo.
 
-PETIÇÃO ANALISADA:
+📁 CONTEXTO COMPLETO DO CASO:
+
+**INFORMAÇÕES BÁSICAS:**
+${JSON.stringify(caseInfo, null, 2)}
+
+**DOCUMENTOS (${documents?.length || 0}):**
+${documents?.map((d: any) => `- ${d.document_type}: ${d.file_name}`).join('\n') || 'Nenhum'}
+
+**ANÁLISE PRÉVIA:**
+${analysis ? `Probabilidade: ${analysis.probabilidade_sucesso}% | RMI: R$ ${analysis.rmi}` : 'Não realizada'}
+
+**ANÁLISE DO JUIZ:**
+${judgeAnalysis ? `Risco: ${judgeAnalysis.risco_improcedencia}% | Brechas: ${judgeAnalysis.brechas?.length || 0}` : 'Não realizada'}
+
+**PETIÇÃO:**
 ${petition}
 
-TAREFA: Retorne um JSON com análise recursiva preventiva:
+---
+
+🎯 TAREFA: ANÁLISE RECURSIVA PREVENTIVA PARA TRF
+
+RETORNE JSON com adaptações regionais e preventivas:
 
 {
+  "adaptacoes_regionais": [
+    {
+      "tipo": "foro",
+      "adaptacao": "Subseção Judiciária correta baseada no endereço: ${caseInfo?.author_address || 'verificar endereço'}",
+      "justificativa": "Competência territorial",
+      "prioridade": "alta"
+    },
+    {
+      "tipo": "estilo_argumentativo", 
+      "adaptacao": "Usar linguagem direta e objetiva (estilo preferido do TRF da região)",
+      "justificativa": "Aumenta chances de procedência",
+      "prioridade": "media"
+    }
+  ],
   "pontos_a_reforcar": [
     {
-      "ponto": "Fundamentação legal sobre dispensa de carência",
-      "motivo": "Juízes de primeira instância frequentemente exigem carência indevidamente",
-      "como_reforcar": "Adicionar parágrafo específico citando art. 39, parágrafo único, e precedente do TRF4 explicando que segurada especial NÃO precisa de carência",
-      "prioridade": "alta"
+      "ponto": "Título claro",
+      "como_reforcar": "Texto específico",
+      "prioridade": "alta|media|baixa"
     }
   ],
-  "jurisprudencias_recursal_sugeridas": [
+  "jurisprudencias_recursal": [
     {
       "tribunal": "TRF4",
-      "numero": "AC 5012345-67.2020.4.04.9999",
-      "tese": "Reforma de sentença que indeferiu salário-maternidade por ausência de prova",
-      "por_que_incluir": "Demonstra que TRF4 reforma sentenças desfavoráveis nestes casos",
-      "onde_incluir": "Capítulo DO DIREITO, ao final, como reforço"
+      "tese": "Resumo",
+      "onde_incluir": "Seção específica"
     }
   ],
-  "previsao_pontos_criticos_juiz": [
-    {
-      "ponto_critico": "Juiz pode questionar autenticidade da autodeclaração",
-      "probabilidade": "alta",
-      "argumento_preventivo": "Incluir parágrafo explicando que autodeclaração tem presunção de veracidade e pode ser corroborada por testemunhas, conforme jurisprudência pacífica"
-    }
-  ],
-  "sugestoes_tutela_urgencia": {
-    "aplicavel": true,
-    "fundamento": "Necessidade de subsistência da autora e do recém-nascido",
-    "texto_sugerido": "Parágrafo específico para pedido de tutela antecipada"
-  },
-  "adaptacoes_finais": [
-    {
-      "secao": "DOS PEDIDOS",
-      "adicionar": "Pedido expresso de honorários recursais em caso de sentença desfavorável",
-      "justificativa": "Já preparar a petição para eventual apelação"
-    }
-  ],
-  "risco_improcedencia_pos_analise": 25,
-  "recomendacao_final": "A petição está bem fundamentada. Sugestões implementadas reduzirão risco de indeferimento de 40% para 25%."
+  "risco_pos_analise": 20,
+  "recomendacao": "Síntese executiva"
 }
 
-FOQUE EM:
-1. Antecipar objeções típicas de juízes de primeira instância
-2. Reforçar pontos que costumam ser questionados
-3. Sugerir jurisprudências de SEGUNDA INSTÂNCIA (TRFs) que reformaram sentenças
-4. Preparar argumentos para eventual apelação
-5. Incluir pedidos preventivos (tutela, honorários recursais)`;
+IMPORTANTE:
+- Use o ENDEREÇO correto para determinar foro/subseção
+- Seja RÁPIDO mas PRECISO
+- Adaptações devem ser ACIONÁVEIS`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s otimizado
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s otimizado
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
