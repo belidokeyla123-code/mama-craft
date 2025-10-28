@@ -71,7 +71,7 @@ FOQUE EM:
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s otimizado
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s otimizado
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

@@ -11,58 +11,88 @@ serve(async (req) => {
   }
 
   try {
-    const { petition } = await req.json();
+    const { petition, caseInfo, documents, analysis, jurisprudence, tese } = await req.json();
 
-    const prompt = `Você é um JUIZ FEDERAL experiente analisando esta petição inicial. Seja CRÍTICO e RIGOROSO.
+    const prompt = `Você é um JUIZ FEDERAL experiente com VISÃO 360° do processo. 
 
-PETIÇÃO:
+📁 DADOS COMPLETOS DO CASO:
+
+**INFORMAÇÕES BÁSICAS:**
+${JSON.stringify(caseInfo, null, 2)}
+
+**DOCUMENTOS ANEXADOS (${documents?.length || 0}):**
+${documents?.map((d: any) => `
+- Tipo: ${d.document_type}
+- Nome: ${d.file_name}
+- Dados extraídos: ${JSON.stringify(d.extractions, null, 2)}
+`).join('\n') || 'Nenhum documento anexado'}
+
+**ANÁLISE JURÍDICA PRÉVIA:**
+${analysis ? JSON.stringify(analysis, null, 2) : 'Não realizada'}
+
+**JURISPRUDÊNCIAS SELECIONADAS:**
+${jurisprudence?.results ? JSON.stringify(jurisprudence.results, null, 2) : 'Nenhuma selecionada'}
+
+**TESE JURÍDICA:**
+${tese?.teses ? JSON.stringify(tese.teses, null, 2) : 'Não elaborada'}
+
+**PETIÇÃO INICIAL:**
 ${petition}
 
-TAREFA: Analise a petição como um juiz e identifique:
-1. BRECHAS ARGUMENTATIVAS - Onde o argumento é fraco ou falho
-2. BRECHAS PROBATÓRIAS - Que documentos/provas estão faltando
-3. BRECHAS JURÍDICAS - Fundamentos legais ausentes ou mal aplicados
-4. CONTRADIÇÕES - Inconsistências no texto
-5. RISCOS DE IMPROCEDÊNCIA - O que pode levar à rejeição
+---
 
-Retorne JSON:
+⚠️ TAREFA: ANÁLISE DE QUALIDADE COMPLETA - RECHECKAGEM RÁPIDA E CRÍTICA
+
+**REGRAS OBRIGATÓRIAS:**
+
+1. **NÃO sugira que faltam documentos se eles EXISTEM nos dados acima!**
+   - Exemplo: Se há procuração listada, NÃO diga que falta procuração!
+   
+2. **Verifique se os dados extraídos dos documentos estão NA PETIÇÃO:**
+   - Endereço da procuração está na qualificação da autora?
+   - RG e CPF dos documentos estão corretos na petição?
+   - Datas dos documentos batem com os fatos narrados?
+
+3. **Verifique COERÊNCIA entre as seções:**
+   - A análise jurídica está refletida na fundamentação?
+   - As jurisprudências selecionadas foram citadas?
+   - A tese jurídica está incorporada na argumentação?
+
+4. **Identifique brechas REAIS:**
+   - Argumentos fracos ou contraditórios
+   - Fundamentos legais ausentes
+   - Falhas na concatenação lógica
+   - Pedidos mal formulados
+
+**RETORNE JSON:**
 {
   "brechas": [
     {
       "tipo": "probatoria" | "argumentativa" | "juridica",
-      "descricao": "Descrição detalhada da brecha",
+      "descricao": "Descrição ESPECÍFICA da brecha",
       "gravidade": "alta" | "media" | "baixa",
-      "localizacao": "Em qual parte da petição está",
-      "sugestao": "Como corrigir/melhorar",
-      "documento_necessario": "Nome do documento que falta (se aplicável)"
+      "localizacao": "Em qual parte da petição",
+      "sugestao": "Como corrigir (seja PRÁTICO e ESPECÍFICO)",
+      "documento_necessario": "Nome do documento que falta (SOMENTE se realmente faltar)"
     }
   ],
-  "pontos_fortes": [
-    "Ponto forte identificado"
-  ],
-  "pontos_fracos": [
-    "Ponto fraco identificado"
-  ],
-  "risco_improcedencia": 35,
-  "recomendacoes": [
-    "Recomendação específica 1",
-    "Recomendação específica 2"
-  ],
-  "sugestoes_melhoria": [
-    {
-      "secao": "Dos Fatos" | "Do Direito" | "Das Provas" | "Dos Pedidos",
-      "sugestao": "O que melhorar nesta seção"
-    }
-  ]
+  "pontos_fortes": ["Máximo 5 pontos"],
+  "pontos_fracos": ["Máximo 5 pontos"],
+  "risco_improcedencia": 20,
+  "recomendacoes": ["Máximo 3 recomendações PRÁTICAS"]
 }
 
-Seja específico e prático nas sugestões.`;
+**IMPORTANTE:**
+- Seja RÁPIDO mas PRECISO
+- NÃO invente problemas que não existem
+- Foque em melhorias ACIONÁVEIS
+- Considere que o caso JÁ foi analisado pela IA antes`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 15 segundos (otimizado)
+    // Timeout de 12 segundos (otimizado)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

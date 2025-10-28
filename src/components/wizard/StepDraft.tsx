@@ -58,6 +58,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [hasCache, setHasCache] = useState(false);
   const [applyingJudgeCorrections, setApplyingJudgeCorrections] = useState(false);
   const [applyingRegionalAdaptations, setApplyingRegionalAdaptations] = useState(false);
+  const [applyingIndividualSuggestion, setApplyingIndividualSuggestion] = useState<number | null>(null);
 
   // Carregar do cache ao entrar na aba
   useEffect(() => {
@@ -143,19 +144,64 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
     setAnalyzingJudge(true);
     try {
+      // 1. Buscar informações básicas do caso
+      const { data: caseInfo } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', data.caseId)
+        .single();
+
+      // 2. Buscar TODOS os documentos + extrações
+      const { data: documents } = await supabase
+        .from('documents')
+        .select(`
+          *,
+          extractions(*)
+        `)
+        .eq('case_id', data.caseId);
+
+      // 3. Buscar análise jurídica
+      const { data: analysis } = await supabase
+        .from('case_analysis')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+
+      // 4. Buscar jurisprudências selecionadas
+      const { data: jurisprudence } = await supabase
+        .from('jurisprudence_results')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+
+      // 5. Buscar tese jurídica
+      const { data: tese } = await supabase
+        .from('teses_juridicas')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+
+      // 6. Chamar edge function com TODOS os dados
       const { data: result, error } = await supabase.functions.invoke('analyze-petition-judge-view', {
-        body: { petition }
+        body: {
+          petition,
+          caseInfo,
+          documents: documents || [],
+          analysis: analysis || null,
+          jurisprudence: jurisprudence || null,
+          tese: tese || null
+        }
       });
 
       if (error) throw error;
 
       if (result) {
         setJudgeAnalysis(result);
-        toast.success("Análise crítica concluída!");
+        toast.success("✅ Análise do juiz concluída!");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao analisar petição:', error);
-      toast.error('Erro ao analisar petição');
+      toast.error('Erro na análise do juiz: ' + error.message);
     } finally {
       setAnalyzingJudge(false);
     }
@@ -222,6 +268,43 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       case 'media': return 'default';
       case 'baixa': return 'secondary';
       default: return 'outline';
+    }
+  };
+
+  const applySingleSuggestion = async (brecha: any, index: number) => {
+    setApplyingIndividualSuggestion(index);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: {
+          petition,
+          judgeAnalysis: {
+            brechas: [brecha], // Apenas uma brecha
+            pontos_fortes: [],
+            pontos_fracos: [],
+            recomendacoes: []
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (result?.petition_corrigida) {
+        setPetition(result.petition_corrigida);
+        
+        // Salvar versão atualizada
+        await supabase.from('drafts').insert({
+          case_id: data.caseId,
+          markdown_content: result.petition_corrigida,
+          payload: { single_correction: brecha.descricao }
+        });
+
+        toast.success(`✅ Correção "${brecha.tipo}" aplicada!`);
+      }
+    } catch (error: any) {
+      console.error('Erro ao aplicar sugestão individual:', error);
+      toast.error('Erro: ' + error.message);
+    } finally {
+      setApplyingIndividualSuggestion(null);
     }
   };
 
@@ -551,9 +634,30 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                           Local: {brecha.localizacao}
                         </p>
                         <div className="bg-muted/50 p-3 rounded mt-2">
-                          <p className="text-sm">
+                          <p className="text-sm mb-3">
                             <strong>Sugestão:</strong> {brecha.sugestao}
                           </p>
+                          
+                          {/* Botão Individual */}
+                          <Button
+                            size="sm"
+                            onClick={() => applySingleSuggestion(brecha, index)}
+                            disabled={applyingIndividualSuggestion !== null}
+                            className="gap-2 w-full"
+                            variant="outline"
+                          >
+                            {applyingIndividualSuggestion === index ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Aplicando...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCheck className="h-3 w-3" />
+                                Aplicar esta Sugestão
+                              </>
+                            )}
+                          </Button>
                         </div>
                       </Card>
                     ))}

@@ -24,7 +24,7 @@ const STEPS = [
   { id: 3, name: "Validação" },
   { id: 4, name: "Análise" },
   { id: 5, name: "Jurisprudência" },
-  { id: 6, name: "Tese Jurídica" },
+  { id: 6, name: "Teses" },
   { id: 7, name: "Minuta" },
 ];
 
@@ -303,7 +303,7 @@ export default function CaseDetail() {
                       {currentStep > step.id ? (
                         <Check className="h-5 w-5" />
                       ) : (
-                        <span>{step.id}</span>
+                        <span className="font-semibold">{step.id + 1}</span>
                       )}
                     </button>
                     {index < STEPS.length - 1 && (
