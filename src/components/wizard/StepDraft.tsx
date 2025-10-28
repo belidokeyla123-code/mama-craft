@@ -812,28 +812,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
             {regionalAdaptation && (
               <CollapsibleContent className="mt-6 space-y-4">
-                {/* Botão Aplicar Adaptações */}
-                {regionalAdaptation.petition_adaptada && (
-                  <div className="flex justify-end">
-                    <Button 
-                      onClick={applyRegionalAdaptations}
-                      disabled={applyingRegionalAdaptations}
-                      className="gap-2 bg-blue-600 hover:bg-blue-700"
-                    >
-                      {applyingRegionalAdaptations ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Aplicando...
-                        </>
-                      ) : (
-                        <>
-                          <MapPin className="h-4 w-4" />
-                          Aplicar Adaptações Regionais
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
+                {/* Botões individuais aplicam as adaptações - sem botão global */}
 
                 {/* Identificação do TRF */}
                 <div className="flex items-center gap-3">
