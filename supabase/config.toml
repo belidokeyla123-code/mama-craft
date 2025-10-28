@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.analyze-petition-appellate]
 verify_jwt = false
+
+[functions.extract-data-from-text]
+verify_jwt = false

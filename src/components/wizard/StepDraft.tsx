@@ -251,10 +251,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             </>
           )}
         </Button>
-        <Button onClick={handleCopy} variant="outline" disabled={!petition} className="gap-2">
-          {copied ? <CheckCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          {copied ? "Copiado!" : "Copiar"}
-        </Button>
         <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar DOCX (ABNT)
@@ -313,6 +309,18 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         </Card>
       ) : petition ? (
         <Card className="p-6">
+          <div className="flex justify-end mb-3">
+            <Button 
+              onClick={handleCopy} 
+              variant="outline" 
+              size="sm"
+              disabled={!petition} 
+              className="gap-2"
+            >
+              {copied ? <CheckCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Copiado!" : "Copiar Petição"}
+            </Button>
+          </div>
           <div className="bg-muted/30 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
             {petition}
           </div>

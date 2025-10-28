@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
+import { PasteDataInline } from "./PasteDataInline";
 
 interface StepBasicInfoProps {
   data: CaseData;
@@ -653,14 +654,36 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
                   <li>Adicionar novamente o documento da terra (ITR, matrícula, escritura, comodato) para extração automática:</li>
                 </ul>
                 {data.caseId && (
-                  <DocumentUploadInline 
-                    caseId={data.caseId}
-                    suggestedDocType="documento_terra"
-                    onUploadComplete={async () => {
-                      toast.success("Documento enviado! Aguarde processamento...");
-                      setTimeout(() => window.location.reload(), 3000);
-                    }}
-                  />
+                  <>
+                    <DocumentUploadInline 
+                      caseId={data.caseId}
+                      suggestedDocType="documento_terra"
+                      onUploadComplete={async () => {
+                        toast.success("Documento enviado! Aguarde processamento...");
+                        setTimeout(() => window.location.reload(), 3000);
+                      }}
+                    />
+                    
+                    <div className="mt-4">
+                      <PasteDataInline 
+                        extractionType="terra"
+                        placeholder="Cole aqui o texto do documento da terra (ITR, matrícula, escritura, etc)..."
+                        onDataExtracted={(extractedData) => {
+                          // Atualizar os campos automaticamente
+                          updateData({
+                            landArea: extractedData.landArea || data.landArea,
+                            landTotalArea: extractedData.landTotalArea || data.landTotalArea,
+                            landExploitedArea: extractedData.landExploitedArea || data.landExploitedArea,
+                            landCessionType: extractedData.landCessionType || data.landCessionType,
+                            landITR: extractedData.landITR || data.landITR,
+                            landPropertyName: extractedData.landPropertyName || data.landPropertyName,
+                            landMunicipality: extractedData.landMunicipality || data.landMunicipality,
+                            landOwnerName: extractedData.landOwnerName || data.landOwnerName,
+                          });
+                        }}
+                      />
+                    </div>
+                  </>
                 )}
               </AlertDescription>
             </Alert>
@@ -993,14 +1016,32 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
                       <li>Adicionar novamente o documento do processo administrativo:</li>
                     </ul>
                     {data.caseId && (
-                      <DocumentUploadInline 
-                        caseId={data.caseId}
-                        suggestedDocType="processo_administrativo"
-                        onUploadComplete={async () => {
-                          toast.success("Documento enviado! Aguarde processamento...");
-                          setTimeout(() => window.location.reload(), 3000);
-                        }}
-                      />
+                      <>
+                        <DocumentUploadInline 
+                          caseId={data.caseId}
+                          suggestedDocType="processo_administrativo"
+                          onUploadComplete={async () => {
+                            toast.success("Documento enviado! Aguarde processamento...");
+                            setTimeout(() => window.location.reload(), 3000);
+                          }}
+                        />
+                        
+                        <div className="mt-4">
+                          <PasteDataInline 
+                            extractionType="processo_administrativo"
+                            placeholder="Cole aqui o texto do processo administrativo (indeferimento, protocolo, etc)..."
+                            onDataExtracted={(extractedData) => {
+                              // Atualizar os campos automaticamente
+                              updateData({
+                                raProtocol: extractedData.raProtocol || data.raProtocol,
+                                raRequestDate: extractedData.raRequestDate || data.raRequestDate,
+                                raDenialDate: extractedData.raDenialDate || data.raDenialDate,
+                                raDenialReason: extractedData.raDenialReason || data.raDenialReason,
+                              });
+                            }}
+                          />
+                        </div>
+                      </>
                     )}
                   </AlertDescription>
                 </Alert>
