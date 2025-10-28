@@ -27,7 +27,6 @@ export const mapDocumentTypeToEnum = (docType: string): string => {
     "indeferimento": "processo_administrativo",
     
     "comprovante de residência": "comprovante_residencia",
-    "comprovante de endereco": "comprovante_residencia",
     "comprovante": "comprovante_residencia",
     
     "procuração": "procuracao",
@@ -41,6 +40,8 @@ export const mapDocumentTypeToEnum = (docType: string): string => {
     "boletim": "historico_escolar",
     "declaração escolar": "historico_escolar",
     "escola": "historico_escolar",
+    "his": "historico_escolar",
+    "11-his": "historico_escolar",
     
     "declaração de saúde": "declaracao_saude_ubs",
     "declaracao de saude": "declaracao_saude_ubs",
@@ -49,6 +50,16 @@ export const mapDocumentTypeToEnum = (docType: string): string => {
     "posto de saúde": "declaracao_saude_ubs",
     "unidade básica": "declaracao_saude_ubs",
     "saúde": "declaracao_saude_ubs",
+    
+    // MAPEAMENTOS PARA NOMES TRUNCADOS
+    "comprovante de endereco": "comprovante_residencia",
+    "comprovante endereco": "comprovante_residencia",
+    "comp": "comprovante_residencia",
+    "3-comp": "comprovante_residencia",
+    
+    "ficha": "ficha_atendimento",
+    "fic": "ficha_atendimento",
+    "12-fic": "ficha_atendimento",
   };
   
   const normalized = docType.toLowerCase().trim();

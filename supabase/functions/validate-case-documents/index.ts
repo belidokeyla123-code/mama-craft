@@ -41,6 +41,22 @@ serve(async (req) => {
       .select('*')
       .eq('case_id', caseId);
 
+    // Normalizar tipos de documentos com sinônimos
+    const normalizeDocType = (type: string): string => {
+      const synonyms: Record<string, string> = {
+        'comprovante_endereco': 'comprovante_residencia',
+        'OUTROS': 'outro',
+        'outros': 'outro',
+        'OUTRO': 'outro'
+      };
+      const normalized = type.toLowerCase().trim();
+      return synonyms[normalized] || normalized;
+    };
+
+    // Normalizar e agrupar documentos por tipo
+    const docTypesNormalized = documents.map(d => normalizeDocType(d.document_type));
+    const uniqueDocTypes = [...new Set(docTypesNormalized)];
+
     // Preparar dados para IA
     const prompt = `Você é um especialista em validação de processos de salário-maternidade. Analise o caso abaixo e valide a documentação.
 
@@ -53,7 +69,12 @@ DADOS DO CASO:
 - Tem RA: ${caseData.has_ra ? 'Sim' : 'Não'}
 
 DOCUMENTOS ENVIADOS (${documents.length} documentos):
-${documents.map(d => `- ${d.document_type}: ${d.file_name}`).join('\n')}
+${documents.map(d => `- ${normalizeDocType(d.document_type)}: ${d.file_name}`).join('\n')}
+
+⚠️ **IMPORTANTE**: Ao validar documentos, considere sinônimos:
+- "comprovante_endereco" = "comprovante_residencia" ✅
+- "outros" = "outro" ✅
+Se o caso tem "comprovante_endereco", considere como "comprovante_residencia" presente.
 
 INFORMAÇÕES EXTRAÍDAS:
 ${JSON.stringify(extractions, null, 2)}

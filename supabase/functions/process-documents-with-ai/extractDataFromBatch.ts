@@ -291,6 +291,87 @@ Tipo: ${doc.docType}
 Agora extraia TODOS os 4 campos listados acima COM MÁXIMA PRECISÃO:`;
     }
     
+    if (doc.docType === 'historico_escolar') {
+      docPrompt = `📚 HISTÓRICO ESCOLAR / DECLARAÇÃO ESCOLAR - PROVA MATERIAL DE VÍNCULO RURAL!
+
+Este documento é PROVA MATERIAL de que a autora estudou em escola rural, comprovando residência e atividade rural!
+
+🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
+
+1. **schoolHistory** (campo JSONB - array de períodos):
+   → Formato: [{"instituicao": "Nome da Escola", "periodo_inicio": "YYYY-MM-DD", "periodo_fim": "YYYY-MM-DD", "serie_ano": "3ª série primária", "localizacao": "Rural - Município/UF"}]
+   
+   EXTRAIR:
+   - **instituicao**: Nome COMPLETO da escola (ex: "Escola Rural Municipal São José")
+   - **periodo_inicio**: Data de início dos estudos (YYYY-MM-DD) - pode ser apenas o ano se não tiver mês/dia
+   - **periodo_fim**: Data de fim dos estudos (YYYY-MM-DD) ou vazio se ainda estuda
+   - **serie_ano**: Série/ano que cursou (ex: "1ª a 4ª série", "Ensino Fundamental")
+   - **localizacao**: LOCALIZAÇÃO DA ESCOLA - procure por:
+     * "Zona Rural"
+     * "Área Rural"
+     * Nome do sítio/fazenda/povoado onde fica a escola
+     * Município e UF
+     * IMPORTANTE: Se a escola está em zona rural, ISSO COMPROVA que a autora morava na zona rural!
+
+2. **Observações importantes** (observations):
+   → Se o documento menciona "escola rural", "zona rural", "área rural" → adicione: "Histórico escolar comprova residência em zona rural durante período dos estudos"
+   → Se houver endereço da autora no documento → extrair para motherAddress
+
+⚠️ POR QUE ESTE DOCUMENTO É IMPORTANTE:
+- Escola em zona rural = família mora/trabalha em zona rural
+- Comprova vínculo com a comunidade rural
+- É PROVA MATERIAL aceita pela justiça para comprovar atividade rural!
+
+Documento: ${doc.fileName}
+Tipo: ${doc.docType}
+
+Agora extraia TODOS os dados escolares listados acima:`;
+    }
+    
+    if (doc.docType === 'declaracao_saude_ubs') {
+      docPrompt = `🏥 DECLARAÇÃO DE SAÚDE / UBS - PROVA MATERIAL DE RESIDÊNCIA E VÍNCULO RURAL!
+
+Este documento comprova que a autora recebe atendimento em Unidade Básica de Saúde, provando residência local e vínculo com a comunidade!
+
+🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
+
+1. **healthDeclarationUbs** (campo JSONB):
+   → Formato: {"unidade_saude": "Nome da UBS", "tratamento_desde": "YYYY-MM-DD", "tipo_tratamento": "Descrição", "localizacao": "Zona Rural - Município/UF", "profissional_responsavel": "Nome + CRM"}
+   
+   EXTRAIR:
+   - **unidade_saude**: Nome COMPLETO da UBS/Posto de Saúde (ex: "UBS Rural da Fazenda Esperança")
+   - **tratamento_desde**: Desde quando recebe atendimento nesta UBS (YYYY-MM-DD)
+   - **tipo_tratamento**: Tipo de tratamento/acompanhamento (ex: "Pré-natal", "Acompanhamento gestacional", "Consultas de rotina")
+   - **localizacao**: LOCALIZAÇÃO DA UBS - procure por:
+     * "Zona Rural"
+     * "Área Rural"  
+     * Nome da localidade (sítio/fazenda/povoado)
+     * Município e UF
+     * IMPORTANTE: UBS em zona rural = autora mora/trabalha na zona rural!
+   - **profissional_responsavel**: Nome do médico/enfermeiro + CRM/COREN (se constar)
+   - **observacoes_medicas**: Qualquer observação sobre a autora (ex: "Paciente reside em área rural de difícil acesso")
+
+2. **Dados complementares**:
+   → Se houver ENDEREÇO da autora no documento → extrair para motherAddress
+   → Se houver CPF/RG da autora → extrair para motherCpf/motherRg
+   → Se mencionar "gestante", "pré-natal", "salário-maternidade" → anotar em observations
+
+3. **Observações importantes** (observations):
+   → Adicionar: "Declaração de UBS comprova residência em zona rural e vínculo com a comunidade local"
+   → Se mencionar "difícil acesso", "zona rural", "área rural" → anotar!
+
+⚠️ POR QUE ESTE DOCUMENTO É IMPORTANTE:
+- UBS em zona rural = família mora/trabalha lá
+- Comprova residência continuada no local
+- É PROVA MATERIAL aceita pela justiça!
+- Comprova vínculo com a comunidade rural
+
+Documento: ${doc.fileName}
+Tipo: ${doc.docType}
+
+Agora extraia TODOS os dados de saúde listados acima:`;
+    }
+    
     messages.push({
       role: "user",
       content: [
@@ -450,6 +531,36 @@ Agora extraia TODOS os 4 campos listados acima COM MÁXIMA PRECISÃO:`;
                   }
                 },
                 description: "Lista COMPLETA de membros do grupo familiar conforme seção 2.2 da autodeclaração"
+              },
+              
+              // Histórico Escolar (NOVO)
+              schoolHistory: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    instituicao: { type: "string", description: "Nome completo da escola" },
+                    periodo_inicio: { type: "string", description: "Data início dos estudos YYYY-MM-DD" },
+                    periodo_fim: { type: "string", description: "Data fim dos estudos YYYY-MM-DD" },
+                    serie_ano: { type: "string", description: "Série/ano cursado" },
+                    localizacao: { type: "string", description: "Localização da escola (rural/urbana + município)" }
+                  }
+                },
+                description: "Histórico escolar - prova material de vínculo rural"
+              },
+              
+              // Declaração de Saúde UBS (NOVO)
+              healthDeclarationUbs: {
+                type: "object",
+                properties: {
+                  unidade_saude: { type: "string", description: "Nome da UBS/Posto de Saúde" },
+                  tratamento_desde: { type: "string", description: "Desde quando recebe tratamento YYYY-MM-DD" },
+                  tipo_tratamento: { type: "string", description: "Tipo de tratamento/acompanhamento" },
+                  localizacao: { type: "string", description: "Localização da UBS (rural/urbana + município)" },
+                  profissional_responsavel: { type: "string", description: "Médico/Enfermeiro responsável + CRM/COREN" },
+                  observacoes_medicas: { type: "string", description: "Observações sobre a autora" }
+                },
+                description: "Declaração de saúde UBS - prova material de residência rural"
               },
               
               // Processo administrativo

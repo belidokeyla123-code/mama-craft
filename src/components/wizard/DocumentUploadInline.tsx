@@ -26,6 +26,8 @@ export const DocumentUploadInline = ({
 
     setUploading(true);
     try {
+      const insertedDocIds: string[] = [];
+      
       for (const file of files) {
         // Sanitizar nome do arquivo
         const sanitizedName = sanitizeFileName(file.name);
@@ -42,8 +44,8 @@ export const DocumentUploadInline = ({
         // Mapear tipo de documento para enum válido
         const mappedDocType = mapDocumentTypeToEnum(suggestedDocType || 'outro');
 
-        // Registrar documento no banco
-        const { error: insertError } = await supabase
+        // Registrar documento no banco e capturar ID
+        const { data: doc, error: insertError } = await supabase
           .from('documents')
           .insert([{
             case_id: caseId,
@@ -52,16 +54,22 @@ export const DocumentUploadInline = ({
             document_type: mappedDocType as any,
             mime_type: file.type || 'application/octet-stream',
             file_size: file.size
-          }]);
+          }])
+          .select('id')
+          .single();
 
         if (insertError) throw insertError;
+        if (doc) insertedDocIds.push(doc.id);
 
         setUploadedFiles(prev => [...prev, file.name]);
       }
 
-      // Processar com IA
+      // Processar com IA passando os IDs dos documentos
       const { error: processError } = await supabase.functions.invoke('process-documents-with-ai', {
-        body: { caseId }
+        body: { 
+          caseId,
+          documentIds: insertedDocIds
+        }
       });
 
       if (processError) {

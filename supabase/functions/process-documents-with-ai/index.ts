@@ -84,7 +84,7 @@ serve(async (req) => {
   }
 });
 
-// Classificar documento por nome COM SUPORTE A NOMES TRUNCADOS DO WINDOWS
+// Classificar documento por nome COM SUPORTE A NOMES TRUNCADOS E NOVOS TIPOS
 const classifyDocument = (fileName: string): string => {
   const name = fileName.toLowerCase();
   console.log(`[CLASSIFY] Analisando: "${fileName}"`);
@@ -110,34 +110,39 @@ const classifyDocument = (fileName: string): string => {
     return 'identificacao';
   }
   
-  // 4. AUTODECLARAÇÃO RURAL: AUT~, AUTO, DEC~
+  // 4. CNIS: CNI~, CNIS (mas NÃO histórico escolar)
+  if ((name.match(/cni[0-9~]/i) || name.match(/cnis/i)) && 
+      !name.match(/\bhis\b/i) && !name.match(/escola/i) && !name.match(/boletim/i)) {
+    console.log(`[CLASSIFY] ✅ CNIS detectado`);
+    return 'cnis';
+  }
+  
+  // 5. HISTÓRICO ESCOLAR: HIS-, HIS~, histórico, escolar (NÃO pode ter CNIS)
+  if ((name.match(/\bhis[0-9~-]/i) || name.match(/\bhis\b/i) || name.match(/11-his/i) ||
+       name.includes('historico') || name.includes('escolar') || 
+       name.includes('boletim') || name.includes('escola')) && 
+      !name.includes('cnis')) {
+    console.log(`[CLASSIFY] ✅ HISTÓRICO ESCOLAR detectado`);
+    return 'historico_escolar';
+  }
+  
+  // 6. DECLARAÇÃO DE SAÚDE UBS: UBS, saúde, posto
+  if (name.includes('ubs') || 
+      name.match(/unidade.*b[aá]sica/i) || 
+      name.match(/posto.*sa[uú]de/i) || 
+      name.match(/declara[cç][aã]o.*sa[uú]de/i) ||
+      name.match(/sa[uú]de.*declara/i)) {
+    console.log(`[CLASSIFY] ✅ DECLARAÇÃO DE SAÚDE UBS detectada`);
+    return 'declaracao_saude_ubs';
+  }
+  
+  // 7. AUTODECLARAÇÃO RURAL: AUT~, AUTO, DEC~
   if (name.match(/aut[0-9~]/i) || name.match(/autodec/i) || name.match(/dec[0-9~]/i)) {
     console.log(`[CLASSIFY] ✅ AUTODECLARAÇÃO RURAL detectada`);
     return 'autodeclaracao_rural';
   }
   
-  // 5. CNIS: CNI~, CNIS (mas não histórico escolar)
-  if ((name.match(/cni[0-9~]/i) || name.match(/cnis/i)) && !name.match(/escola|boletim/i)) {
-    console.log(`[CLASSIFY] ✅ CNIS detectado`);
-    return 'cnis';
-  }
-  
-  // 5.5. HISTÓRICO ESCOLAR: HIS~ESCOLA, ESCOLA, BOLETIM, DECLAR~ESCOLA
-  if (name.match(/his[0-9~]/i) && name.match(/escola/i) || 
-      name.match(/escola.*rural/i) || name.match(/boletim/i) || 
-      name.match(/declara[cç][aã]o.*escola/i) || name.match(/declara[cç][aã]o.*estudo/i)) {
-    console.log(`[CLASSIFY] ✅ HISTÓRICO ESCOLAR detectado`);
-    return 'historico_escolar';
-  }
-  
-  // 5.6. DECLARAÇÃO DE SAÚDE UBS: UBS, SAUDE, POSTO
-  if (name.match(/\bubs\b/i) || name.match(/unidade.*b[aá]sica/i) || 
-      name.match(/posto.*sa[uú]de/i) || name.match(/declara[cç][aã]o.*sa[uú]de/i)) {
-    console.log(`[CLASSIFY] ✅ DECLARAÇÃO DE SAÚDE UBS detectada`);
-    return 'declaracao_saude_ubs';
-  }
-  
-  // 6. DOCUMENTO DA TERRA: TER~, TERRA, DOC~, ITR, CCIR
+  // 8. DOCUMENTO DA TERRA: TER~, TERRA, DOC~, ITR, CCIR
   if (name.match(/ter[0-9~]/i) || name.match(/terra/i) || name.match(/doc[0-9~]/i) || 
       name.match(/\bitr\b/i) || name.match(/ccir/i) || name.match(/propriedade/i) ||
       name.match(/comodato/i) || name.match(/fazenda/i) || name.match(/sitio/i) || 
@@ -146,27 +151,32 @@ const classifyDocument = (fileName: string): string => {
     return 'documento_terra';
   }
   
-  // 7. PROCESSO ADMINISTRATIVO: PRO~1 (outro PRO), IND~, INDEFER, ADM
+  // 9. PROCESSO ADMINISTRATIVO: PRO~1, IND~, INDEFER, ADM
   if (name.match(/indeferim/i) || name.match(/ind[0-9~]/i) || name.match(/admini/i) ||
       (name.match(/proces/i) && name.match(/adm/i))) {
     console.log(`[CLASSIFY] ✅ PROCESSO ADMINISTRATIVO detectado`);
     return 'processo_administrativo';
   }
   
-  // 8. COMPROVANTE DE RESIDÊNCIA: COM~, COMPR, END~, RESID
-  if (name.match(/com[0-9~]/i) || name.match(/compr/i) || name.match(/end[0-9~]/i) || 
-      name.match(/endereco/i) || name.match(/residencia/i) || name.match(/\bconta\b/i)) {
+  // 10. COMPROVANTE DE RESIDÊNCIA: COMP, 3-COMP, COM~, COMPR
+  if (name.match(/\bcomp[0-9~-]/i) || name.match(/\bcomp\b/i) ||
+      name.match(/com[0-9~]/i) || name.match(/compr/i) || 
+      name.match(/end[0-9~]/i) || name.match(/endereco/i) || 
+      name.match(/residencia/i) || name.match(/\bconta\b/i) ||
+      name.match(/3-comp/i)) {
     console.log(`[CLASSIFY] ✅ COMPROVANTE DE RESIDÊNCIA detectado`);
     return 'comprovante_residencia';
   }
   
-  // 9. FICHA DE ATENDIMENTO: FIC~, FICHA, ATE~, ATEND
-  if (name.match(/fic[0-9~]/i) || name.match(/ficha/i) || name.match(/ate[0-9~]/i) || name.match(/atend/i)) {
+  // 11. FICHA DE ATENDIMENTO: FIC, 12-FIC, FIC~, FICHA
+  if (name.match(/\bfic[0-9~-]/i) || name.match(/\bfic\b/i) ||
+      name.match(/ficha/i) || name.match(/ate[0-9~]/i) || 
+      name.match(/atend/i) || name.match(/12-fic/i)) {
     console.log(`[CLASSIFY] ✅ FICHA DE ATENDIMENTO detectada`);
     return 'ficha_atendimento';
   }
   
-  // 10. CARTEIRA DE PESCADOR: PES~, PESCA
+  // 12. CARTEIRA DE PESCADOR: PES~, PESCA
   if (name.match(/pes[0-9~]/i) || name.match(/pesca/i)) {
     console.log(`[CLASSIFY] ✅ CARTEIRA DE PESCADOR detectada`);
     return 'carteira_pescador';

@@ -432,7 +432,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     
     setIsReprocessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('reclassify-documents', {
+      const { data, error } = await supabase.functions.invoke('reclassify-all-documents', {
         body: { caseId }
       });
       
