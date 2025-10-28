@@ -175,9 +175,9 @@ Use "medium" para documentos complementares.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 45 segundos
+    // Timeout de 15 segundos
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -225,23 +225,40 @@ Use "medium" para documentos complementares.`;
       const aiData = await aiResponse.json();
       const validationResult = JSON.parse(aiData.choices[0].message.content);
 
-      // Adicionar document_id aos itens do checklist
+      // Adicionar document_id aos itens do checklist com logging detalhado
       const enrichedChecklist = validationResult.checklist.map((checkItem: any) => {
-        // Extrair o tipo de documento do nome do item (normalizado)
-        const itemType = checkItem.item.toLowerCase()
-          .replace(/[^a-z_]/g, '')
-          .replace('rgcpf', 'identificacao')
-          .replace('certidaodenascimento', 'certidao_nascimento')
-          .replace('autodeclaracaorural', 'autodeclaracao_rural')
-          .replace('documentodaterra', 'documento_terra')
-          .replace('processoadministrativo', 'processo_administrativo')
-          .replace('comprovantederesidencia', 'comprovante_residencia');
+        // Extrair o tipo de documento do nome do item
+        const itemLower = checkItem.item.toLowerCase();
         
-        // Encontrar documento correspondente
-        const matchingDoc = documents.find(d => 
-          normalizeDocType(d.document_type) === itemType ||
-          d.document_type.toLowerCase().includes(itemType)
-        );
+        // Mapeamento mais agressivo de strings para tipos
+        let itemType = '';
+        if (itemLower.includes('rg') || itemLower.includes('cpf') || itemLower.includes('identifica')) {
+          itemType = 'identificacao';
+        } else if (itemLower.includes('certid') && itemLower.includes('nasc')) {
+          itemType = 'certidao_nascimento';
+        } else if (itemLower.includes('autodecl') || itemLower.includes('rural')) {
+          itemType = 'autodeclaracao_rural';
+        } else if (itemLower.includes('terra') || itemLower.includes('itr') || itemLower.includes('propriedade')) {
+          itemType = 'documento_terra';
+        } else if (itemLower.includes('processo') || itemLower.includes('administrativo') || itemLower.includes('ra')) {
+          itemType = 'processo_administrativo';
+        } else if (itemLower.includes('resid') || itemLower.includes('endereco') || itemLower.includes('comprovante')) {
+          itemType = 'comprovante_residencia';
+        } else if (itemLower.includes('cnis')) {
+          itemType = 'cnis';
+        } else if (itemLower.includes('carteira')) {
+          itemType = 'carteira_trabalho';
+        }
+        
+        // Encontrar documento correspondente com múltiplas estratégias
+        const matchingDoc = documents.find(d => {
+          const docTypeNorm = normalizeDocType(d.document_type);
+          return docTypeNorm === itemType || 
+                 d.document_type.toLowerCase().includes(itemType) ||
+                 itemType.includes(docTypeNorm);
+        });
+        
+        console.log(`[MATCH] Item: "${checkItem.item}" -> Type: "${itemType}" -> Doc: ${matchingDoc?.id || 'NOT FOUND'}`);
         
         return {
           ...checkItem,

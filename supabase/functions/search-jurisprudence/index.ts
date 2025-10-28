@@ -57,16 +57,10 @@ serve(async (req) => {
     
     console.log('[JURISPRUDENCE] Cache MISS - Chamando IA...');
 
-    const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
+    // Prompt ultra-simplificado para resposta rápida
+    const prompt = `Perfil: ${caseData.profile === 'especial' ? 'Rural' : 'Urbana'}. Evento: ${caseData.event_type}. Tem RA: ${caseData.has_ra ? 'Sim' : 'Não'}.
 
-Busque jurisprudências, súmulas e doutrinas REAIS para:
-
-**CASO:**
-- Perfil: ${caseData.profile === 'especial' ? 'Segurada Especial Rural' : 'Segurada Urbana'}
-- Evento: ${caseData.event_type}
-- Tem RA: ${caseData.has_ra ? 'Sim' : 'Não'}
-
-Retorne máx 3 de cada tipo. JSON:
+JSON com 2 de cada:
 {
   "jurisprudencias": [{"tipo":"","tribunal":"","numero_processo":"","tese_fixada":"","relevancia":0,"por_que_relevante":""}],
   "sumulas": [{"tribunal":"","numero":"","tipo":"","texto_completo":"","relevancia":0,"como_aplicar":""}],
@@ -76,10 +70,10 @@ Retorne máx 3 de cada tipo. JSON:
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       
-    // Chamar IA para busca jurisprudências - OTIMIZADO
-    console.log('[SEARCH-JURIS] Chamando IA para busca rápida...');
+    // Chamar IA para busca jurisprudências - SUPER RÁPIDO
+    console.log('[SEARCH-JURIS] Chamando IA...');
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos timeout
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
