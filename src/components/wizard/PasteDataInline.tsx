@@ -39,7 +39,6 @@ export const PasteDataInline = ({
           const base64 = reader.result as string;
           setImageBase64(base64);
           setText(""); // Limpar texto se houver
-          toast.success("Imagem colada! Clique em 'Extrair Dados' para processar.");
         };
         reader.readAsDataURL(blob);
         return;
@@ -71,7 +70,6 @@ export const PasteDataInline = ({
 
       if (result?.success && result?.data) {
         onDataExtracted(result.data);
-        toast.success("Dados extraídos com sucesso!");
         setText("");
         setImageBase64(null);
       } else {

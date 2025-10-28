@@ -20,11 +20,9 @@ export const useCaseOrchestration = ({ caseId, enabled }: OrchestrationOptions) 
 
     isProcessingRef.current = true;
     console.log(`[ORCHESTRATION] Iniciando pipeline completo. Motivo: ${reason}`);
-    toast.loading('Atualizando caso completo...', { id: 'orchestration' });
 
     try {
       // 1. VALIDAÇÃO
-      toast.loading('1/4 - Validando documentos...', { id: 'orchestration' });
       const { data: validationResult, error: validationError } = await supabase.functions.invoke(
         'validate-case-documents',
         { body: { caseId } }
@@ -39,7 +37,6 @@ export const useCaseOrchestration = ({ caseId, enabled }: OrchestrationOptions) 
       }
 
       // 2. ANÁLISE JURÍDICA
-      toast.loading('2/4 - Analisando caso juridicamente...', { id: 'orchestration' });
       const { error: analysisError } = await supabase.functions.invoke('analyze-case-legal', {
         body: { caseId }
       });
@@ -47,7 +44,6 @@ export const useCaseOrchestration = ({ caseId, enabled }: OrchestrationOptions) 
       if (analysisError) throw analysisError;
 
       // 3. JURISPRUDÊNCIA
-      toast.loading('3/4 - Buscando jurisprudências...', { id: 'orchestration' });
       const { error: jurisError } = await supabase.functions.invoke('search-jurisprudence', {
         body: { caseId }
       });
@@ -55,7 +51,6 @@ export const useCaseOrchestration = ({ caseId, enabled }: OrchestrationOptions) 
       if (jurisError) throw jurisError;
 
       // 4. TESES JURÍDICAS
-      toast.loading('4/4 - Gerando teses jurídicas...', { id: 'orchestration' });
       const { data: jurisResults } = await supabase
         .from('jurisprudence_results')
         .select('*')
@@ -76,11 +71,9 @@ export const useCaseOrchestration = ({ caseId, enabled }: OrchestrationOptions) 
 
         if (teseError) throw teseError;
       }
-
-      toast.success('✅ Caso atualizado completamente!', { id: 'orchestration' });
     } catch (error: any) {
       console.error('[ORCHESTRATION] Erro:', error);
-      toast.error(`Erro: ${error.message}`, { id: 'orchestration' });
+      toast.error(`Erro: ${error.message}`);
     } finally {
       isProcessingRef.current = false;
     }

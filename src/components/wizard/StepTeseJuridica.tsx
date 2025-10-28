@@ -122,10 +122,9 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
             case_id: data.caseId,
             teses: result.teses,
             selected_ids: []
-          });
+        });
         
         setHasCache(true);
-        toast.success(`${result.teses.length} teses jurídicas geradas!`);
       }
     } catch (error: any) {
       console.error('Erro ao gerar teses:', error);
@@ -177,7 +176,6 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
     }
     
     setEditingTitle(null);
-    toast.success('Tese editada com sucesso!');
   };
 
   const cancelEdit = () => {

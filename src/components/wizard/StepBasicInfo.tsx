@@ -127,7 +127,6 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         if (foundRuralPeriods.length > 0) {
           console.log('[AUTO-FILL] Períodos rurais encontrados nas extrações:', foundRuralPeriods);
           updateData({ ruralPeriods: foundRuralPeriods });
-          toast.success(`${foundRuralPeriods.length} período(s) rural(is) carregado(s) automaticamente da autodeclaração!`);
         }
       } catch (error) {
         console.error("Erro ao carregar períodos rurais:", error);
@@ -209,8 +208,6 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     }
 
     try {
-      toast.loading("Re-processando documentos com IA...");
-      
       // Buscar documentos do caso
       const { data: documents, error: docsError } = await supabase
         .from("documents")
@@ -232,8 +229,6 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       });
 
       if (error) throw error;
-
-      toast.success("Documentos re-processados!");
       
       // 🆕 DISPARAR PIPELINE COMPLETO
       await triggerFullPipeline('Re-processamento de documentos');
@@ -252,8 +247,6 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     }
 
     try {
-      toast.loading("Salvando informações...");
-      
       // Atualizar caso no banco
       const { error } = await supabase
         .from('cases')
@@ -298,12 +291,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         .eq('id', data.caseId);
 
       if (error) throw error;
-
-      toast.dismiss();
-      toast.success("✅ Informações salvas com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar:", error);
-      toast.dismiss();
       toast.error("❌ Falha ao salvar informações");
     }
   };

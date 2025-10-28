@@ -91,10 +91,8 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
             await supabase.functions.invoke('analyze-case-legal', {
               body: { caseId: data.caseId }
             });
-            sonnerToast.success('Análise jurídica completada automaticamente!');
           } catch (error) {
             console.error('Erro na análise automática:', error);
-            sonnerToast.info('Vá para a aba Análise para completar');
           }
         }, 2000);
       }

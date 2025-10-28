@@ -76,7 +76,6 @@ export const StepDocuments = ({ data, updateData }: StepDocumentsProps) => {
       const updatedDocs = [...documents, ...newFiles];
       setDocuments(updatedDocs);
       updateData({ documents: updatedDocs });
-      toast.success(`${newFiles.length} arquivo(s) adicionado(s)`);
     }
   }, [documents, updateData]);
 
@@ -104,8 +103,6 @@ export const StepDocuments = ({ data, updateData }: StepDocumentsProps) => {
     const newTypes = { ...documentTypes };
     delete newTypes[documents[index].name];
     setDocumentTypes(newTypes);
-    
-    toast.success("Documento removido");
   };
 
   const updateDocumentType = (fileName: string, type: string) => {

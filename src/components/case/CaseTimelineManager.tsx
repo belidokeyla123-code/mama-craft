@@ -87,7 +87,6 @@ export default function CaseTimelineManager({ caseId }: Props) {
           .eq('id', existingEvent.id);
 
         if (error) throw error;
-        toast.success(existingEvent.concluida ? 'Fase marcada como pendente' : 'Fase concluída!');
       } else {
         // Criar nova fase
         const ordem = events.length;
@@ -102,7 +101,6 @@ export default function CaseTimelineManager({ caseId }: Props) {
           });
 
         if (error) throw error;
-        toast.success('Fase adicionada!');
       }
 
       await loadTimeline();
@@ -160,7 +158,6 @@ export default function CaseTimelineManager({ caseId }: Props) {
         if (error) throw error;
       }
 
-      toast.success('Fase atualizada!');
       setEditingPhase(null);
       await loadTimeline();
     } catch (error) {

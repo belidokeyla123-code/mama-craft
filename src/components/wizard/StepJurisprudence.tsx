@@ -178,13 +178,6 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
         });
       
       setHasCache(true);
-      
-      const total = (result.jurisprudencias?.length || 0) + 
-                   (result.sumulas?.length || 0) + 
-                   (result.doutrinas?.length || 0) +
-                   (result.teses_juridicas_aplicaveis?.length || 0);
-      
-      toast.success(`${total} fontes jurídicas encontradas`);
 
     } catch (error: any) {
       console.error('Erro ao buscar jurisprudências:', error);

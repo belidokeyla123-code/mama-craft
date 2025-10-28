@@ -75,15 +75,12 @@ export const DocumentUploadInline = ({
       if (processError) {
         console.error('Erro ao processar:', processError);
         toast.warning("Documentos enviados mas processamento falhou. Tente reprocessar.");
-      } else {
-        toast.success(`${files.length} documento(s) enviado(s) e processado(s)!`);
       }
 
       // Aguardar processamento antes de chamar callback
       if (onUploadComplete) {
         setTimeout(() => {
           onUploadComplete();
-          toast.success("Dados atualizados! Verifique as outras abas.");
         }, 5000);
       }
     } catch (error: any) {

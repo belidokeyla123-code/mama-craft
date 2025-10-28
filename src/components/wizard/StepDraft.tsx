@@ -129,7 +129,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (petitionContent) {
         setPetition(petitionContent);
         setHasCache(true);
-        toast.success("Petição gerada com sucesso!");
       }
     } catch (error) {
       console.error('Erro ao gerar petição:', error);
@@ -200,7 +199,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
       if (result) {
         setJudgeAnalysis(result);
-        toast.success("✅ Análise do juiz concluída!");
       }
     } catch (error: any) {
       console.error('Erro ao analisar petição:', error);
@@ -230,7 +228,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         setRegionalAdaptation(result);
         if (result.petition_adaptada) {
           setPetition(result.petition_adaptada);
-          toast.success(`Petição adaptada para ${result.trf}`);
         }
       }
     } catch (error) {
@@ -249,7 +246,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         return;
       }
       setTemplateFile(file);
-      toast.success(`Template "${file.name}" carregado`);
       toast.info("Funcionalidade de merge com template será implementada em breve");
     }
   };
@@ -257,7 +253,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const handleCopy = () => {
     navigator.clipboard.writeText(petition);
     setCopied(true);
-    toast.success("Petição copiada!");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -300,8 +295,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           markdown_content: result.petition_corrigida,
           payload: { single_correction: brecha.descricao }
         });
-
-        toast.success(`✅ Correção "${brecha.tipo}" aplicada!`);
       }
     } catch (error: any) {
       console.error('Erro ao aplicar sugestão individual:', error);
@@ -331,8 +324,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           markdown_content: result.petition_corrigida,
           payload: { corrected_by_judge: true, timestamp: new Date().toISOString() }
         });
-        
-        toast.success("✅ Petição blindada com correções do juiz!");
       }
     } catch (error) {
       console.error('Erro ao aplicar correções:', error);
@@ -395,7 +386,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (error) throw error;
 
       setAppellateAnalysis(result);
-      toast.success("✅ Análise recursiva concluída!");
     } catch (error: any) {
       console.error('Erro no módulo tribunal:', error);
       toast.error('Erro na análise recursiva: ' + error.message);
@@ -432,8 +422,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           markdown_content: result.petition_corrigida,
           payload: { regional_adaptation: adaptacao.tipo }
         });
-
-        toast.success(`✅ Adaptação "${adaptacao.tipo}" aplicada!`);
       }
     } catch (error: any) {
       console.error('Erro:', error);
@@ -453,8 +441,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         markdown_content: petition,
         payload: { final_version: true, timestamp: new Date().toISOString() }
       });
-      
-      toast.success("✅ Versão final salva com sucesso!");
     } catch (error) {
       console.error('Erro ao salvar versão final:', error);
       toast.error("Erro ao salvar versão final");
@@ -503,8 +489,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         });
       
       if (finError) throw finError;
-      
-      toast.success("✅ Ação protocolada com sucesso!");
       
       // Redirecionar para aba de protocoladas
       setTimeout(() => {

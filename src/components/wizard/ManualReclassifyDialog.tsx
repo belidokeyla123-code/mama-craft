@@ -87,8 +87,6 @@ export const ManualReclassifyDialog = ({
 
       if (error) throw error;
 
-      const displayName = selectedType === "outro" ? customName.trim() : selectedType;
-      toast.success(`Documento reclassificado como "${displayName}"`);
       onOpenChange(false);
       onSuccess();
     } catch (error: any) {

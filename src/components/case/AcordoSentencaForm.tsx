@@ -101,7 +101,6 @@ export default function AcordoSentencaForm({ caseId, onSuccess }: Props) {
 
       if (statusError) console.error('Erro ao atualizar status:', statusError);
 
-      toast.success('Conclusão registrada com sucesso!');
       setOpen(false);
       resetForm();
       onSuccess?.();
