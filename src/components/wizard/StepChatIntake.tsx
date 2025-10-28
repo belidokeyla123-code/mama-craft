@@ -942,35 +942,6 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         </p>
       </div>
 
-      {/* Cole Prints com Ctrl+V */}
-      <PasteDataInline
-        extractionType="processo_administrativo"
-        onDataExtracted={(extractedData) => {
-          console.log('[CHAT] Dados extraídos via Ctrl+V:', extractedData);
-          
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: `✅ Dados extraídos via Ctrl+V com sucesso!`
-          }]);
-          
-          const updates: any = {};
-          if (extractedData.raProtocol) updates.raProtocol = extractedData.raProtocol;
-          if (extractedData.childName) updates.childName = extractedData.childName;
-          if (extractedData.childBirthDate) updates.childBirthDate = extractedData.childBirthDate;
-          if (extractedData.motherName) updates.motherName = extractedData.motherName;
-          if (extractedData.motherCpf) updates.motherCpf = extractedData.motherCpf;
-          if (extractedData.landOwnerCpf) updates.landOwnerCpf = extractedData.landOwnerCpf;
-          if (extractedData.landOwnerRg) updates.landOwnerRg = extractedData.landOwnerRg;
-          if (extractedData.landOwnerName) updates.landOwnerName = extractedData.landOwnerName;
-          
-          if (Object.keys(updates).length > 0) {
-            updateData(updates);
-            toast({ title: `${Object.keys(updates).length} campo(s) atualizado(s)` });
-          }
-        }}
-        placeholder="Cole texto OU pressione Ctrl+V para colar imagem (print de tela)..."
-      />
-
       <Card className="p-4">
         <ScrollArea className="h-96 pr-4">
           <div className="space-y-4">
@@ -1004,32 +975,59 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       </Card>
 
       {uploadedFiles.length > 0 && (
-        <Alert>
+        <Alert className="py-2">
           <FileText className="h-4 w-4" />
           <AlertDescription>
-            <strong>{uploadedFiles.length} arquivo(s) carregado(s):</strong>
-            <ul className="mt-2 space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <strong className="text-sm">{uploadedFiles.length} arquivo(s):</strong>
               {uploadedFiles.map((file, idx) => (
-                <li key={idx} className="text-sm flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                    <span>{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
-                  </div>
+                <span key={idx} className="text-xs bg-secondary px-2 py-1 rounded flex items-center gap-1">
+                  {file.name}
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => handleRemoveFile(idx)}
-                    className="h-6 w-6 p-0 hover:bg-destructive/10"
-                    title="Remover documento"
+                    className="h-4 w-4 p-0 hover:bg-destructive/10"
                   >
-                    <X className="h-4 w-4 text-destructive" />
+                    <X className="h-3 w-3 text-destructive" />
                   </Button>
-                </li>
+                </span>
               ))}
-            </ul>
+            </div>
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Cole Prints com Ctrl+V - Versão Compacta */}
+      <div className="bg-muted/30 rounded-lg p-3 border border-dashed">
+        <PasteDataInline
+          extractionType="processo_administrativo"
+          onDataExtracted={(extractedData) => {
+            console.log('[CHAT] Dados extraídos via Ctrl+V:', extractedData);
+            
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `✅ Dados extraídos via Ctrl+V com sucesso!`
+            }]);
+            
+            const updates: any = {};
+            if (extractedData.raProtocol) updates.raProtocol = extractedData.raProtocol;
+            if (extractedData.childName) updates.childName = extractedData.childName;
+            if (extractedData.childBirthDate) updates.childBirthDate = extractedData.childBirthDate;
+            if (extractedData.motherName) updates.motherName = extractedData.motherName;
+            if (extractedData.motherCpf) updates.motherCpf = extractedData.motherCpf;
+            if (extractedData.landOwnerCpf) updates.landOwnerCpf = extractedData.landOwnerCpf;
+            if (extractedData.landOwnerRg) updates.landOwnerRg = extractedData.landOwnerRg;
+            if (extractedData.landOwnerName) updates.landOwnerName = extractedData.landOwnerName;
+            
+            if (Object.keys(updates).length > 0) {
+              updateData(updates);
+              toast({ title: `${Object.keys(updates).length} campo(s) atualizado(s)` });
+            }
+          }}
+          placeholder="Ctrl+V para colar print ou texto..."
+        />
+      </div>
 
       <div className="flex gap-2">
         <input
