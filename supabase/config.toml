@@ -56,3 +56,12 @@ verify_jwt = false
 
 [functions.reclassify-all-documents]
 verify_jwt = false
+
+[functions.generate-tese-juridica]
+verify_jwt = false
+
+[functions.analyze-video]
+verify_jwt = false
+
+[functions.analyze-document-content]
+verify_jwt = false

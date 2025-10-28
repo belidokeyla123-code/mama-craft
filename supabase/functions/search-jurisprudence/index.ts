@@ -13,7 +13,9 @@ serve(async (req) => {
   }
 
   try {
+    console.log('[JURISPRUDENCE] Iniciando busca de jurisprudência');
     const { caseId } = await req.json();
+    console.log('[JURISPRUDENCE] CaseID:', caseId);
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -24,6 +26,36 @@ serve(async (req) => {
       .select('*')
       .eq('id', caseId)
       .single();
+    
+    console.log('[JURISPRUDENCE] Caso carregado:', caseData?.profile, caseData?.event_type);
+    
+    // Gerar chave de cache baseada no perfil e tipo de evento
+    const cacheKey = `${caseData.profile}_${caseData.event_type}`;
+    console.log('[JURISPRUDENCE] Cache key:', cacheKey);
+    
+    // Verificar cache global
+    const { data: cachedResult } = await supabase
+      .from('jurisprudence_cache')
+      .select('*')
+      .eq('profile', caseData.profile)
+      .eq('event_type', caseData.event_type)
+      .single();
+    
+    if (cachedResult) {
+      console.log('[JURISPRUDENCE] ✅ Cache HIT! Retornando resultado cacheado');
+      
+      // Incrementar contador de hits
+      await supabase
+        .from('jurisprudence_cache')
+        .update({ hits: cachedResult.hits + 1 })
+        .eq('id', cachedResult.id);
+      
+      return new Response(JSON.stringify(cachedResult.results), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    console.log('[JURISPRUDENCE] Cache MISS - Chamando IA...');
 
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 

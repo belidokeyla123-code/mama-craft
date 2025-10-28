@@ -386,6 +386,7 @@ export type Database = {
           updated_at: string
           urban_periods: Json | null
           valor_causa: number | null
+          video_analysis: Json | null
         }
         Insert: {
           author_address?: string | null
@@ -438,6 +439,7 @@ export type Database = {
           updated_at?: string
           urban_periods?: Json | null
           valor_causa?: number | null
+          video_analysis?: Json | null
         }
         Update: {
           author_address?: string | null
@@ -490,6 +492,7 @@ export type Database = {
           updated_at?: string
           urban_periods?: Json | null
           valor_causa?: number | null
+          video_analysis?: Json | null
         }
         Relationships: []
       }
@@ -1103,6 +1106,7 @@ export type Database = {
         | "carteira_pescador"
         | "historico_escolar"
         | "declaracao_saude_ubs"
+        | "cnis"
       event_type: "parto" | "adocao" | "guarda"
       fase_processual:
         | "distribuida"
@@ -1281,6 +1285,7 @@ export const Constants = {
         "carteira_pescador",
         "historico_escolar",
         "declaracao_saude_ubs",
+        "cnis",
       ],
       event_type: ["parto", "adocao", "guarda"],
       fase_processual: [

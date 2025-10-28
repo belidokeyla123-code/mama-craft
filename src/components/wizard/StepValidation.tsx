@@ -3,7 +3,7 @@ import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,6 +84,50 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     }
   };
 
+  const handleDeleteDocument = async (documentId: string) => {
+    try {
+      // 1. Buscar documento para pegar file_path
+      const { data: doc, error: fetchError } = await supabase
+        .from('documents')
+        .select('file_path, file_name')
+        .eq('id', documentId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      // 2. Confirmar exclusão
+      if (!confirm(`Excluir "${doc.file_name}"?`)) return;
+      
+      // 3. Excluir do storage
+      await supabase.storage
+        .from('case-documents')
+        .remove([doc.file_path]);
+      
+      // 4. Excluir do banco
+      const { error: deleteError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', documentId);
+      
+      if (deleteError) throw deleteError;
+      
+      toast({
+        title: "Documento excluído",
+        description: `${doc.file_name} foi removido com sucesso.`,
+      });
+      
+      // 5. Revalidar
+      await handleValidate();
+    } catch (error: any) {
+      console.error('Erro ao excluir:', error);
+      toast({
+        title: "Erro ao excluir",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isValidating || !validationResult) {
     return (
       <Card className="p-6">
@@ -135,6 +179,17 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                 <Badge variant={item.importance === 'critical' ? 'destructive' : 'secondary'}>
                   {item.importance}
                 </Badge>
+                
+                {/* Botão de excluir se o documento existe */}
+                {item.document_id && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteDocument(item.document_id)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>

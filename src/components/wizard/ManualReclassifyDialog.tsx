@@ -37,6 +37,8 @@ const DOCUMENT_TYPES = [
   { value: "comprovante_residencia", label: "Comprovante de Residência" },
   { value: "ficha_atendimento", label: "Ficha de Atendimento" },
   { value: "carteira_pescador", label: "Carteira de Pescador" },
+  { value: "historico_escolar", label: "Histórico Escolar" },
+  { value: "declaracao_saude_ubs", label: "Declaração de Saúde UBS" },
   { value: "outro", label: "Outro" },
 ];
 

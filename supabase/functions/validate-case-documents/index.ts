@@ -225,6 +225,32 @@ Use "medium" para documentos complementares.`;
       const aiData = await aiResponse.json();
       const validationResult = JSON.parse(aiData.choices[0].message.content);
 
+      // Adicionar document_id aos itens do checklist
+      const enrichedChecklist = validationResult.checklist.map((checkItem: any) => {
+        // Extrair o tipo de documento do nome do item (normalizado)
+        const itemType = checkItem.item.toLowerCase()
+          .replace(/[^a-z_]/g, '')
+          .replace('rgcpf', 'identificacao')
+          .replace('certidaodenascimento', 'certidao_nascimento')
+          .replace('autodeclaracaorural', 'autodeclaracao_rural')
+          .replace('documentodaterra', 'documento_terra')
+          .replace('processoadministrativo', 'processo_administrativo')
+          .replace('comprovantederesidencia', 'comprovante_residencia');
+        
+        // Encontrar documento correspondente
+        const matchingDoc = documents.find(d => 
+          normalizeDocType(d.document_type) === itemType ||
+          d.document_type.toLowerCase().includes(itemType)
+        );
+        
+        return {
+          ...checkItem,
+          document_id: matchingDoc?.id || null
+        };
+      });
+
+      validationResult.checklist = enrichedChecklist;
+
       // Salvar na tabela document_validation
       const { error: insertError } = await supabase
         .from('document_validation')

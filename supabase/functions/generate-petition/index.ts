@@ -24,9 +24,19 @@ serve(async (req) => {
     const { data: analysis } = await supabase.from('case_analysis').select('*').eq('case_id', caseId).single();
     const { data: documents } = await supabase.from('documents').select('*').eq('case_id', caseId);
 
+    // Buscar análise de vídeo (se houver)
+    const videoAnalysis = caseData.video_analysis;
+
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
 ⚠️⚠️⚠️ AGORA VOCÊ VAI GERAR UMA PETIÇÃO INICIAL ⚠️⚠️⚠️
+
+${videoAnalysis ? `
+📹 **ANÁLISE DE VÍDEO DISPONÍVEL**:
+${JSON.stringify(videoAnalysis, null, 2)}
+
+**IMPORTANTE**: Use estas informações na seção "DOS FATOS" para reforçar a comprovação da atividade rural e residência.
+` : ''}
 
 Você é um advogado especialista em petições de salário-maternidade. Redija uma PETIÇÃO INICIAL COMPLETA, PERSUASIVA e de ALTO NÍVEL.
 
