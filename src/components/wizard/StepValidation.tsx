@@ -1,14 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Trash2, Video } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { toast as sonnerToast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 
 interface StepValidationProps {
@@ -19,9 +18,6 @@ interface StepValidationProps {
 export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [videoAnalysis, setVideoAnalysis] = useState<any>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -151,42 +147,6 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
 
   const { score, is_sufficient, checklist, missing_docs, recommendations } = validationResult;
 
-  const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('video/')) {
-      sonnerToast.error('Por favor, selecione um arquivo de vídeo');
-      return;
-    }
-
-    if (file.size > 50 * 1024 * 1024) {
-      sonnerToast.error('Vídeo muito grande (máx 50MB)');
-      return;
-    }
-
-    setIsAnalyzing(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        
-        const { data: result, error } = await supabase.functions.invoke('analyze-video', {
-          body: { caseId: data.caseId, videoFile: base64 }
-        });
-
-        if (error) throw error;
-        setVideoAnalysis(result);
-        sonnerToast.success('Vídeo analisado com sucesso');
-      };
-      reader.readAsDataURL(file);
-    } catch (error: any) {
-      console.error('Erro ao analisar vídeo:', error);
-      sonnerToast.error('Erro ao analisar vídeo');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -289,67 +249,6 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         </Button>
       </div>
 
-      {/* Seção de Instrução Concentrada */}
-      <Card className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Video className="h-5 w-5 text-primary" />
-          <h3 className="text-lg font-semibold">Instrução Concentrada - Vídeos e Depoimentos</h3>
-        </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Envie vídeos mostrando a atividade rural, local de trabalho, depoimentos ou outras evidências visuais.
-        </p>
-        
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="video/*"
-          onChange={handleVideoUpload}
-          className="hidden"
-        />
-        
-        <Button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isAnalyzing}
-        >
-          {isAnalyzing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Analisando...
-            </>
-          ) : (
-            <>
-              <Video className="h-4 w-4 mr-2" />
-              Enviar Vídeo
-            </>
-          )}
-        </Button>
-
-        {videoAnalysis && (
-          <Card className="mt-4 p-4 bg-muted">
-            <h4 className="font-semibold mb-2">Análise do Vídeo:</h4>
-            <p className="text-sm mb-2">{videoAnalysis.descricao_video}</p>
-            <p className="text-sm text-muted-foreground mb-2">
-              <strong>Relevância:</strong> {videoAnalysis.relevancia_caso}
-            </p>
-            {videoAnalysis.informacoes_extraidas && (
-              <div className="text-sm">
-                <strong>Informações extraídas:</strong>
-                <ul className="list-disc list-inside mt-1">
-                  {videoAnalysis.informacoes_extraidas.local && (
-                    <li>Local: {videoAnalysis.informacoes_extraidas.local}</li>
-                  )}
-                  {videoAnalysis.informacoes_extraidas.atividades?.map((ativ: string, idx: number) => (
-                    <li key={idx}>Atividade: {ativ}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <p className="text-sm mt-2">
-              <strong>Sugestão para petição:</strong> {videoAnalysis.sugestao_uso_peticao}
-            </p>
-          </Card>
-        )}
-      </Card>
     </div>
   );
 };
