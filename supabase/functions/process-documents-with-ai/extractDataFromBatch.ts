@@ -227,76 +227,34 @@ AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
     
     if (doc.docType === 'certidao_nascimento') {
       console.log(`[CERTIDÃO] 🚨 Processando certidão de nascimento: ${doc.fileName}`);
-      docPrompt = `🚨🚨🚨 CERTIDÃO DE NASCIMENTO - LEIA COM EXTREMA ATENÇÃO! 🚨🚨🚨
+      docPrompt = `🚨 CERTIDÃO DE NASCIMENTO - EXTRAIR: childName, childBirthDate, motherName, fatherName
 
-⚠️ ESTE DOCUMENTO TEM 3 PESSOAS DIFERENTES. VOCÊ DEVE IDENTIFICAR CADA UMA!
+**REGRA CRÍTICA: childName ≠ motherName**
 
-═══════════════════════════════════════════════════════════════
-📍 ESTRUTURA VISUAL DE UMA CERTIDÃO DE NASCIMENTO:
-═══════════════════════════════════════════════════════════════
+**PASSO 1 - childName (CRIANÇA que nasceu):**
+- Localização: TOPO do documento
+- Palavras-chave: "NOME:", "REGISTRADO(A):", "NOME COMPLETO:"
+- Exemplo visual:
+  ┌─────────────────────────────────┐
+  │ CERTIDÃO DE NASCIMENTO          │
+  │ NOME: JOÃO PEDRO SILVA  ← childName │
+  │ DN: 15/03/2023          ← childBirthDate │
+  └─────────────────────────────────┘
 
-[INÍCIO DO DOCUMENTO - TOPO]
-╔════════════════════════════════════════════════╗
-║ CERTIDÃO DE NASCIMENTO                         ║
-║                                                ║
-║ NOME: JOÃO PEDRO SILVA SANTOS    ← childName  ║
-║ DATA DE NASCIMENTO: 15/03/2023   ← childBirthDate ║
-║ NATURAL DE: SÃO PAULO/SP          ← childBirthPlace ║
-╚════════════════════════════════════════════════╝
+**PASSO 2 - motherName (MÃE - pessoa diferente):**
+- Localização: SEÇÃO FILIAÇÃO (depois dos dados da criança)
+- Palavras-chave: "MÃE:", "FILIAÇÃO MATERNA:"
+- Exemplo visual:
+  ┌─────────────────────────────────┐
+  │ FILIAÇÃO:                       │
+  │ MÃE: MARIA SILVA        ← motherName │
+  │ PAI: JOSÉ SILVA         ← fatherName │
+  └─────────────────────────────────┘
 
-[MEIO DO DOCUMENTO - SEÇÃO DE FILIAÇÃO]
-╔════════════════════════════════════════════════╗
-║ FILIAÇÃO:                                      ║
-║                                                ║
-║ MÃE: MARIA APARECIDA SANTOS      ← motherName ║
-║ PAI: JOSÉ CARLOS SANTOS          ← fatherName ║
-╚════════════════════════════════════════════════╝
-
-═══════════════════════════════════════════════════════════════
-
-🔴 INSTRUÇÕES PASSO-A-PASSO:
-
-PASSO 1: PROCURE O NOME DA CRIANÇA (childName)
-▸ Onde está: NO TOPO do documento
-▸ Vem ANTES de qualquer menção aos pais
-▸ Palavras-chave: "NOME:", "REGISTRADO(A):", "NOME COMPLETO:"
-▸ Este é o BEBÊ que nasceu!
-▸ Exemplo: "NOME: JOÃO PEDRO SILVA SANTOS"
-▸ EXTRAIR: "JOÃO PEDRO SILVA SANTOS"
-
-PASSO 2: PROCURE A DATA DE NASCIMENTO (childBirthDate)
-▸ Está perto do nome da criança
-▸ Palavras-chave: "DATA DE NASCIMENTO:", "DN:", "NASCIDO EM:"
-▸ Formato comum: DD/MM/AAAA
-▸ Exemplo: "15/03/2023"
-▸ CONVERTER para: "2023-03-15"
-
-PASSO 3: PROCURE O NOME DA MÃE (motherName)
-▸ Onde está: SEÇÃO SEPARADA, depois dos dados da criança
-▸ Palavras-chave: "FILIAÇÃO MATERNA:", "MÃE:", "NOME DA MÃE:"
-▸ Este é DIFERENTE do nome da criança!
-▸ Exemplo: "MÃE: MARIA APARECIDA SANTOS"
-▸ EXTRAIR: "MARIA APARECIDA SANTOS"
-
-PASSO 4: PROCURE O NOME DO PAI (fatherName) - OPCIONAL
-▸ Palavras-chave: "FILIAÇÃO PATERNA:", "PAI:", "NOME DO PAI:"
-▸ Exemplo: "PAI: JOSÉ CARLOS SANTOS"
-
-═══════════════════════════════════════════════════════════════
-🚨 VALIDAÇÃO CRÍTICA - VERIFIQUE ANTES DE RESPONDER:
-═══════════════════════════════════════════════════════════════
-
-✅ childName é DIFERENTE de motherName?
-✅ childName é o nome que está no TOPO do documento?
-✅ motherName está na seção FILIAÇÃO ou MÃE?
-✅ childBirthDate está no formato YYYY-MM-DD?
-
-❌ SE você colocar o mesmo nome em childName e motherName = ERRO!
-❌ SE você colocar o nome da seção "MÃE:" em childName = ERRO!
-
-═══════════════════════════════════════════════════════════════
-🎯 AGORA EXTRAIA COM MÁXIMA ATENÇÃO:
-═══════════════════════════════════════════════════════════════
+**VALIDAÇÃO OBRIGATÓRIA:**
+- ✅ childName deve ser DIFERENTE de motherName
+- ✅ Data formato: YYYY-MM-DD
+- ❌ ERRO: colocar nome da mãe em childName
 
 Documento: ${doc.fileName}
 Tipo: certidao_nascimento
@@ -855,10 +813,10 @@ Agora extraia TODOS os dados de saúde listados acima:`;
 
     // Adicionar parâmetros específicos por modelo
     if (useLovableAI) {
-      requestBody.max_completion_tokens = 8000; // Gemini suporta mais tokens
+      requestBody.max_completion_tokens = 16384; // Gemini 2.5 Pro suporta até 16384 tokens de saída
       // NÃO adicionar temperature (Gemini não suporta)
     } else {
-      requestBody.max_tokens = 4096;
+      requestBody.max_tokens = 8192;
       requestBody.temperature = 0;
     }
 
