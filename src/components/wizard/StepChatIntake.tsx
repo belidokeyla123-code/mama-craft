@@ -45,6 +45,17 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     enabled: !!data.caseId 
   });
 
+  // 🆕 DEBUG: Log quando o componente monta e quando há caseId
+  console.log('[CHAT INTAKE] Componente montado');
+  console.log('[CHAT INTAKE] Case ID atual:', data.caseId);
+  console.log('[CHAT INTAKE] triggerFullPipeline disponível:', !!triggerFullPipeline);
+  console.log('[CHAT INTAKE] Dados atuais:', {
+    authorName: data.authorName,
+    authorCpf: data.authorCpf,
+    childName: data.childName,
+    childBirthDate: data.childBirthDate
+  });
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const validFiles: File[] = [];
@@ -242,6 +253,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       console.log(`[UPLOAD] ✓ Pasta "${clientFolderName}" criada com ${documents.length} documento(s)`);
 
       // Chamar edge function para extrair informações
+      console.log('[CHAT] Chamando edge function para processar documentos...');
       const { data: extractionResult, error: extractionError } = await supabase.functions.invoke(
         "process-documents-with-ai",
         {
@@ -254,9 +266,89 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
       if (extractionError) throw extractionError;
 
-      // Atualizar mensagens com o resultado
-      const extractedData = extractionResult.extractedData || {};
-      const missingFields = extractionResult.missingFields || [];
+      console.log('[CHAT] Resposta da edge function:', extractionResult);
+
+      // Declarar variáveis para dados extraídos
+      let extractedData: any = {};
+
+      // A edge function processa em background, então vamos aguardar e buscar os dados
+      if (extractionResult?.status === 'processing') {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "🔄 Processando documentos com IA... Aguarde alguns segundos."
+        }]);
+
+        // Aguardar 5 segundos para o processamento em background terminar
+        console.log('[CHAT] Aguardando processamento em background...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // Buscar dados extraídos do banco
+        console.log('[CHAT] Buscando extrações do banco...');
+        const { data: extractions, error: extractionsError } = await supabase
+          .from('extractions')
+          .select('*')
+          .eq('case_id', caseId)
+          .order('extracted_at', { ascending: false })
+          .limit(1);
+
+        if (extractionsError) {
+          console.error('[CHAT] Erro ao buscar extrações:', extractionsError);
+          throw extractionsError;
+        }
+
+        console.log('[CHAT] Extrações encontradas:', extractions);
+
+        // Se não há extrações ainda, aguardar mais um pouco
+        if (!extractions || extractions.length === 0) {
+          console.log('[CHAT] Nenhuma extração encontrada, aguardando mais 3 segundos...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          const { data: extractions2 } = await supabase
+            .from('extractions')
+            .select('*')
+            .eq('case_id', caseId)
+            .order('extracted_at', { ascending: false })
+            .limit(1);
+          
+          if (extractions2 && extractions2.length > 0) {
+            console.log('[CHAT] Extrações encontradas na segunda tentativa');
+            extractedData = extractions2[0].entities || {};
+          } else {
+            console.warn('[CHAT] Nenhuma extração encontrada após 8 segundos');
+            extractedData = {};
+          }
+        } else {
+          extractedData = extractions[0].entities || {};
+        }
+
+        console.log('[CHAT] Dados extraídos finais:', extractedData);
+      } else {
+        // Fallback: usar dados da resposta se houver
+        extractedData = extractionResult?.extractedData || {};
+      }
+
+      // Buscar também o caso atualizado do banco
+      const { data: updatedCase } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', caseId)
+        .single();
+
+      if (updatedCase) {
+        console.log('[CHAT] Caso atualizado encontrado:', updatedCase);
+        // Merge com dados extraídos
+        if (updatedCase.author_name && updatedCase.author_name !== 'Processando...') {
+          extractedData.motherName = updatedCase.author_name;
+        }
+        if (updatedCase.child_name) extractedData.childName = updatedCase.child_name;
+        if (updatedCase.child_birth_date) extractedData.childBirthDate = updatedCase.child_birth_date;
+      }
+
+      const missingFields: string[] = [];
+      if (!extractedData.motherName) missingFields.push('motherName');
+      if (!extractedData.motherCpf) missingFields.push('motherCpf');
+      if (!extractedData.childName) missingFields.push('childName');
+      if (!extractedData.childBirthDate) missingFields.push('childBirthDate');
 
       console.log("Dados extraídos:", extractedData);
       console.log("Campos faltantes:", missingFields);
@@ -405,21 +497,25 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         documents: uploadedFiles.map(f => f.name),
       });
 
-      // 🆕 SALVAR NO BANCO DE DADOS
+      // 🆕 SALVAR NO BANCO DE DADOS E DISPARAR PIPELINE
       if (caseId) {
+        console.log('[CHAT] Salvando dados extraídos no banco...');
+        console.log('[CHAT] Case ID:', caseId);
+        console.log('[CHAT] Dados extraídos:', extractedData);
+        
         try {
-          await supabase
+          const { error: updateError } = await supabase
             .from('cases')
             .update({
-              author_name: extractedData.motherName || data.authorName,
-              author_cpf: extractedData.motherCpf || data.authorCpf,
+              author_name: extractedData.motherName || data.authorName || 'Processando...',
+              author_cpf: extractedData.motherCpf || data.authorCpf || '00000000000',
               author_rg: extractedData.motherRg || data.authorRg,
               author_birth_date: extractedData.motherBirthDate || data.authorBirthDate,
               author_address: extractedData.motherAddress || data.authorAddress,
               author_marital_status: extractedData.maritalStatus || data.authorMaritalStatus,
               child_name: extractedData.childName || data.childName,
               child_birth_date: extractedData.childBirthDate || data.childBirthDate,
-              event_date: extractedData.childBirthDate || data.eventDate,
+              event_date: extractedData.childBirthDate || data.eventDate || new Date().toISOString().split('T')[0],
               father_name: extractedData.fatherName || data.fatherName,
               land_owner_name: extractedData.landOwnerName || data.landOwnerName,
               land_owner_cpf: extractedData.landOwnerCpf || data.landOwnerCpf,
@@ -436,16 +532,37 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             })
             .eq('id', caseId);
 
-      console.log('[CHAT] Dados salvos no banco');
-      
-      // 🆕 DISPARAR PIPELINE COMPLETO
-      if (triggerFullPipeline) {
-        await triggerFullPipeline('Dados extraídos via chat');
-      }
-      
-    } catch (dbError) {
-          console.error('[CHAT] Erro ao salvar no banco:', dbError);
+          if (updateError) {
+            console.error('[CHAT] Erro ao salvar no banco:', updateError);
+            throw updateError;
+          }
+
+          console.log('[CHAT] ✅ Dados salvos no banco com sucesso');
+          
+          // 🆕 DISPARAR PIPELINE COMPLETO
+          if (triggerFullPipeline) {
+            console.log('[CHAT] Disparando pipeline completo...');
+            try {
+              await triggerFullPipeline('Dados extraídos via chat');
+              console.log('[CHAT] ✅ Pipeline disparado com sucesso');
+            } catch (pipelineError) {
+              console.error('[CHAT] Erro ao disparar pipeline:', pipelineError);
+              // Não vamos jogar erro aqui para não quebrar o fluxo
+            }
+          } else {
+            console.warn('[CHAT] ⚠️ triggerFullPipeline não disponível');
+          }
+          
+        } catch (dbError) {
+          console.error('[CHAT] ❌ Erro crítico ao salvar no banco:', dbError);
+          toast({
+            title: "Erro ao salvar dados",
+            description: "Os dados foram extraídos mas não foram salvos. Tente novamente.",
+            variant: "destructive",
+          });
         }
+      } else {
+        console.error('[CHAT] ❌ Case ID não encontrado após processamento');
       }
 
     } catch (error: any) {
