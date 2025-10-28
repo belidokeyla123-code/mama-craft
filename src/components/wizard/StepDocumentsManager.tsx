@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
 import JSZip from "jszip";
@@ -527,18 +527,28 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   };
 
   const getDocumentTypeBadge = (type: string) => {
-    const types: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+    const typeUpper = type?.toUpperCase() || "OUTROS";
+    
+    const types: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }> = {
       CERTIDAO_NASCIMENTO: { label: "Certidão", variant: "default" },
+      CERTIDAO: { label: "Certidão", variant: "default" },
       IDENTIFICACAO: { label: "RG/CPF", variant: "secondary" },
       COMPROVANTE_RESIDENCIA: { label: "Comprovante", variant: "outline" },
+      COMPROV_RESID: { label: "Comprovante", variant: "outline" },
       AUTODECLARACAO_RURAL: { label: "Rural", variant: "default" },
+      DECL_SINDICAL: { label: "Rural", variant: "default" },
       DOCUMENTO_TERRA: { label: "Terra", variant: "secondary" },
+      ITR: { label: "ITR", variant: "secondary" },
+      CCIR: { label: "CCIR", variant: "secondary" },
       PROCESSO_ADMINISTRATIVO: { label: "Processo", variant: "destructive" },
-      OUTROS: { label: "Outro", variant: "outline" },
+      PROCURACAO: { label: "Procuração", variant: "outline" },
+      CNIS: { label: "CNIS", variant: "default" },
+      OUTROS: { label: "Outro", variant: "destructive", className: "bg-destructive/20 text-destructive border-destructive" },
+      OUTRO: { label: "Outro", variant: "destructive", className: "bg-destructive/20 text-destructive border-destructive" },
     };
 
-    const config = types[type] || types.OUTROS;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    const config = types[typeUpper] || types.OUTROS;
+    return <Badge variant={config.variant} className={config.className}>{config.label}</Badge>;
   };
 
   // Agrupar páginas de PDFs usando a função de agrupamento
@@ -623,6 +633,14 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     );
   }
 
+  // Calcular porcentagem de documentos "OUTROS"
+  const outrosCount = documents.filter(doc => 
+    doc.document_type?.toUpperCase() === 'OUTROS' || 
+    doc.document_type?.toUpperCase() === 'OUTRO'
+  ).length;
+  const outrosPercentage = documents.length > 0 ? (outrosCount / documents.length) * 100 : 0;
+  const hasHighOutrosPercentage = outrosPercentage > 30;
+
   return (
     <>
       <input
@@ -636,6 +654,17 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       
       <Card className="p-6">
         <div className="space-y-4">
+          {/* Alerta inteligente se muitos documentos são "OUTROS" */}
+          {hasHighOutrosPercentage && (
+            <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertDescription className="text-amber-800 dark:text-amber-200">
+                <strong>Atenção:</strong> {outrosCount} de {documents.length} documentos ({outrosPercentage.toFixed(0)}%) estão classificados como "OUTROS". 
+                Clique em <strong>"🔄 Corrigir Classificação"</strong> para reclassificar automaticamente.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Documentos Enviados</h3>
@@ -645,9 +674,11 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
               <Button
                 onClick={handleReclassify}
                 disabled={isReprocessing}
-                variant="outline"
-                className="gap-2"
-                title="Corrigir classificação dos documentos"
+                variant={hasHighOutrosPercentage ? "default" : "outline"}
+                className={hasHighOutrosPercentage ? "gap-2 bg-amber-500 hover:bg-amber-600 text-white" : "gap-2"}
+                title={hasHighOutrosPercentage 
+                  ? "⚠️ Recomendado: Muitos documentos estão como 'OUTROS'. Clique para reclassificar automaticamente." 
+                  : "Corrigir classificação dos documentos baseado nos nomes dos arquivos"}
               >
                 {isReprocessing ? (
                   <>
@@ -657,7 +688,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 ) : (
                   <>
                     <RefreshCw className="h-4 w-4" />
-                    Reclassificar
+                    {hasHighOutrosPercentage ? "🔄 Corrigir Classificação" : "Reclassificar"}
                   </>
                 )}
               </Button>
