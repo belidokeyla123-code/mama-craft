@@ -19,87 +19,145 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Buscar todos os dados
+    // Buscar TODOS os dados incluindo extrações
     const { data: caseData } = await supabase.from('cases').select('*').eq('id', caseId).single();
     const { data: analysis } = await supabase.from('case_analysis').select('*').eq('case_id', caseId).single();
-    const { data: documents } = await supabase.from('documents').select('*').eq('case_id', caseId);
+    const { data: documents } = await supabase
+      .from('documents')
+      .select('*, extractions(*)')
+      .eq('case_id', caseId);
+
+    // Buscar procuração especificamente
+    const procuracao = documents?.find(d => d.document_type === 'procuracao');
+    const procuracaoData = procuracao?.extractions?.[0]?.entities || {};
 
     // Buscar análise de vídeo (se houver)
     const videoAnalysis = caseData.video_analysis;
 
+    // Mapear tribunal por UF
+    const uf = caseData.author_address?.match(/[A-Z]{2}$/)?.[0] || 'SP';
+    const trfMap: Record<string, string> = {
+      'AC': 'TRF1', 'AM': 'TRF1', 'AP': 'TRF1', 'BA': 'TRF1', 'DF': 'TRF1', 'GO': 'TRF1',
+      'MA': 'TRF1', 'MG': 'TRF1', 'MT': 'TRF1', 'PA': 'TRF1', 'PI': 'TRF1', 'RO': 'TRF1',
+      'RR': 'TRF1', 'TO': 'TRF1',
+      'ES': 'TRF2', 'RJ': 'TRF2',
+      'MS': 'TRF3', 'SP': 'TRF3',
+      'PR': 'TRF4', 'RS': 'TRF4', 'SC': 'TRF4',
+      'AL': 'TRF5', 'CE': 'TRF5', 'PB': 'TRF5', 'PE': 'TRF5', 'RN': 'TRF5', 'SE': 'TRF5'
+    };
+    const trf = trfMap[uf] || 'TRF3';
+
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
-⚠️⚠️⚠️ AGORA VOCÊ VAI GERAR UMA PETIÇÃO INICIAL ⚠️⚠️⚠️
+⚠️⚠️⚠️ AGORA VOCÊ VAI GERAR UMA PETIÇÃO INICIAL COMPLETA E PROFISSIONAL ⚠️⚠️⚠️
 
-${videoAnalysis ? `
-📹 **ANÁLISE DE VÍDEO DISPONÍVEL**:
-${JSON.stringify(videoAnalysis, null, 2)}
+Você é um ADVOGADO ESPECIALISTA EM PETIÇÕES PREVIDENCIÁRIAS com conhecimento COMPLETO.
 
-**IMPORTANTE**: Use estas informações na seção "DOS FATOS" para reforçar a comprovação da atividade rural e residência.
-` : ''}
+**DADOS COMPLETOS DISPONÍVEIS:**
 
-Você é um advogado especialista em petições de salário-maternidade. Redija uma PETIÇÃO INICIAL COMPLETA, PERSUASIVA e de ALTO NÍVEL.
-
-DADOS DO CASO:
+CASO:
 ${JSON.stringify(caseData, null, 2)}
 
 ANÁLISE JURÍDICA:
 ${JSON.stringify(analysis, null, 2)}
 
+DOCUMENTOS COM DADOS EXTRAÍDOS:
+${JSON.stringify(documents?.map(d => ({
+  tipo: d.document_type,
+  nome: d.file_name,
+  dados_extraidos: d.extractions?.[0]?.entities
+})), null, 2)}
+
+PROCURAÇÃO:
+${JSON.stringify(procuracaoData, null, 2)}
+
 JURISPRUDÊNCIAS SELECIONADAS:
 ${JSON.stringify(selectedJurisprudencias, null, 2)}
 
-DOCUMENTOS:
-${documents?.map(d => `- ${d.document_type}: ${d.file_name}`).join('\n')}
+${videoAnalysis ? `
+📹 ANÁLISE DE VÍDEO:
+${JSON.stringify(videoAnalysis, null, 2)}
+` : ''}
 
-INSTRUÇÕES:
-1. Use técnicas de PNL e persuasão
-2. Seja convincente mas direto  
-3. Fundamente com jurisprudências fornecidas
-4. Cite leis (Lei 8.213/91, Decreto 3.048/99)
-5. Linguagem técnica mas acessível
-6. **SEJA CONCISO**: Petição de no máximo 12 páginas
+⚠️ **VOCÊ DEVE USAR TODAS AS INFORMAÇÕES ACIMA** ⚠️
 
-**FORMATAÇÃO**:
-- Formatação ABNT para petições (mas SEM tags HTML)
-- Tópicos numerados e bem estruturados
-- Linguagem técnico-jurídica clara e direta
-- Argumentação persuasiva e objetiva
+**REGRAS OBRIGATÓRIAS:**
 
-ESTRUTURA (CONCISA):
+1. **CABEÇALHO E QUALIFICAÇÃO DA AUTORA:**
+   - Use o endereço COMPLETO da procuração
+   - Inclua RG e CPF conforme documentos extraídos
+   - Identifique automaticamente a VARA/SUBSEÇÃO pelo município
+   - Tribunal: ${trf}
+   - Exemplo: "SUBSEÇÃO JUDICIÁRIA DE [MUNICÍPIO] - [UF]"
+
+2. **QUALIFICAÇÃO DO INSS:**
+   - Identifique a agência INSS mais próxima do município
+   - Use endereço completo da agência
+   - Exemplo: "INSS - Agência de [Município], Rua [endereço], [Município]-[UF]"
+
+3. **DOS FATOS:**
+   - Use TODOS os dados de análise de vídeo (se houver)
+   - Mencione TODOS os documentos anexados
+   - Descreva cronologicamente com base nas datas dos documentos
+   - Cite números de protocolo, datas de negativas da procuração ou outros docs
+   - Se há RA negado, mencione protocolo e motivo
+
+4. **DAS PROVAS:**
+   - Liste TODOS os documentos enviados: ${documents?.map(d => d.document_type).join(', ')}
+   - Explique o que CADA documento comprova
+   - Referencie dados extraídos (datas, nomes, locais)
+
+5. **DO DIREITO:**
+   - Fundamentos legais completos (Lei 8.213/91, Decreto 3.048/99)
+   - Cite TODAS as jurisprudências fornecidas com número do processo
+   - Argumentação persuasiva com PNL
+
+6. **VALOR DA CAUSA:**
+   - R$ ${analysis?.valor_causa || 'a calcular'}
+
+**FORMATAÇÃO ABNT:**
+- Sem tags HTML
+- Tópicos numerados
+- Linguagem técnico-jurídica clara
+- Máximo 15 páginas
+
+**ESTRUTURA:**
 I. EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) FEDERAL DA [VARA]
 
-II. DOS FATOS
-- Narrativa detalhada, cronológica e persuasiva
-- Mencione o perfil (segurada especial/urbana)
-- Descreva o evento (parto/adoção/aborto) com data
-- Se há RA negado, mencione protocolo e motivo
-- Se há situação especial, explique com detalhes
+II. QUALIFICAÇÃO DAS PARTES
+- Autora com endereço completo, RG e CPF
+- INSS com endereço da agência local
 
-III. DO DIREITO
-- Fundamentos legais completos
-- Artigos específicos da Lei 8.213/91
-- Súmulas aplicáveis
-- Jurisprudências selecionadas (cite número do processo e tese)
-- Doutrinas (se houver)
-- Argumentação persuasiva com PNL
+III. DOS FATOS
+- Narrativa detalhada e cronológica
+- Perfil da segurada
+- Evento com data
+- RA (se houver) com protocolo e motivo da negativa
 
-IV. DAS PROVAS
-- Liste todos os documentos anexados
-- Explique o que cada documento comprova
+IV. DO DIREITO
+- Fundamentos legais
+- Jurisprudências citadas
+- Argumentação persuasiva
 
-V. DOS PEDIDOS
-- Concessão do benefício de salário-maternidade
-- Se gêmeos: pagamento em dobro
-- Tutela de urgência (se aplicável)
-- Valor da causa: R$ ${analysis?.valor_causa || 0}
+V. DAS PROVAS
+- Lista completa de documentos
+- O que cada um comprova
 
-VI. REQUERIMENTOS
+VI. DOS PEDIDOS
+- Concessão do benefício
+- Valor da causa
+
+VII. REQUERIMENTOS
 - Citação do INSS
-- Condenação em honorários
-- Justiça gratuita (se aplicável)
+- Honorários
+- Justiça gratuita
 
-Retorne apenas o texto da petição, sem JSON. Use formatação markdown para negrito e itálico.`;
+**IMPORTANTE:**
+- NÃO invente informações
+- Use APENAS dados fornecidos
+- Se faltar algo, mencione "a ser comprovado"
+
+Retorne apenas o texto da petição em markdown.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

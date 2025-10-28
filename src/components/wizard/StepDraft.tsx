@@ -56,6 +56,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [isProtocoling, setIsProtocoling] = useState(false);
   const [hasCache, setHasCache] = useState(false);
+  const [applyingJudgeCorrections, setApplyingJudgeCorrections] = useState(false);
+  const [applyingRegionalAdaptations, setApplyingRegionalAdaptations] = useState(false);
 
   // Carregar do cache ao entrar na aba
   useEffect(() => {
@@ -223,13 +225,96 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
+  const applyJudgeCorrections = async () => {
+    if (!petition || !judgeAnalysis) return;
+    
+    setApplyingJudgeCorrections(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: { petition, judgeAnalysis }
+      });
+
+      if (error) throw error;
+
+      if (result?.petition_corrigida) {
+        setPetition(result.petition_corrigida);
+        
+        // Salvar versão corrigida no banco
+        await supabase.from('drafts').insert({
+          case_id: data.caseId,
+          markdown_content: result.petition_corrigida,
+          payload: { corrected_by_judge: true, timestamp: new Date().toISOString() }
+        });
+        
+        toast.success("✅ Petição blindada com correções do juiz!");
+      }
+    } catch (error) {
+      console.error('Erro ao aplicar correções:', error);
+      toast.error('Erro ao aplicar correções do juiz');
+    } finally {
+      setApplyingJudgeCorrections(false);
+    }
+  };
+
+  const applyRegionalAdaptations = async () => {
+    if (!regionalAdaptation?.petition_adaptada) return;
+    
+    setApplyingRegionalAdaptations(true);
+    try {
+      setPetition(regionalAdaptation.petition_adaptada);
+      
+      // Salvar versão adaptada
+      await supabase.from('drafts').insert({
+        case_id: data.caseId,
+        markdown_content: regionalAdaptation.petition_adaptada,
+        payload: { adapted_for: regionalAdaptation.trf, timestamp: new Date().toISOString() }
+      });
+      
+      toast.success(`✅ Petição adaptada para ${regionalAdaptation.trf}!`);
+    } catch (error) {
+      console.error('Erro ao aplicar adaptações:', error);
+      toast.error('Erro ao aplicar adaptações regionais');
+    } finally {
+      setApplyingRegionalAdaptations(false);
+    }
+  };
+
+  const handleSaveFinal = async () => {
+    if (!petition || !data.caseId) return;
+    
+    try {
+      // Marcar como versão final
+      await supabase.from('drafts').insert({
+        case_id: data.caseId,
+        markdown_content: petition,
+        payload: { final_version: true, timestamp: new Date().toISOString() }
+      });
+      
+      toast.success("✅ Versão final salva com sucesso!");
+    } catch (error) {
+      console.error('Erro ao salvar versão final:', error);
+      toast.error("Erro ao salvar versão final");
+    }
+  };
+
   const handleProtocolar = async () => {
     if (!data.caseId) return;
     
     setIsProtocoling(true);
     try {
-      // Atualizar status do caso para "protocolada"
-      const { error } = await supabase
+      // 1. Buscar valor da causa da análise
+      const { data: analysisData } = await supabase
+        .from('case_analysis')
+        .select('valor_causa')
+        .eq('case_id', data.caseId)
+        .single();
+      
+      const valorCausa = analysisData?.valor_causa || 0;
+      const valorHonorarios = valorCausa * 0.30; // 30% de honorários
+      const valorCliente = valorCausa * 0.70; // 70% para cliente
+      
+      // 2. Atualizar status do caso
+      const { error: caseError } = await supabase
         .from('cases')
         .update({ 
           status: 'protocolada',
@@ -237,11 +322,27 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         })
         .eq('id', data.caseId);
       
-      if (error) throw error;
+      if (caseError) throw caseError;
+      
+      // 3. Criar registro financeiro
+      const { error: finError } = await supabase
+        .from('case_financial')
+        .insert({
+          case_id: data.caseId,
+          status: 'protocolada',
+          valor_causa: valorCausa,
+          percentual_honorarios: 30.0,
+          valor_honorarios: valorHonorarios,
+          valor_cliente: valorCliente,
+          data_protocolo: new Date().toISOString().split('T')[0],
+          observacoes: 'Protocolada via sistema'
+        });
+      
+      if (finError) throw finError;
       
       toast.success("✅ Ação protocolada com sucesso!");
       
-      // Aguardar um momento e navegar para a aba de protocoladas
+      // Redirecionar para aba de protocoladas
       setTimeout(() => {
         window.location.href = '/protocoladas';
       }, 1000);
@@ -285,11 +386,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             </>
           )}
         </Button>
-        {hasCache && (
-          <Badge variant="secondary" className="px-3 py-2">
-            Cache ativo - minuta salva
-          </Badge>
-        )}
         <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar DOCX (ABNT)
@@ -323,14 +419,14 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             <Button variant="outline" className="gap-2" asChild>
               <span>
                 <Upload className="h-4 w-4" />
-                Enviar Modelo com Placeholders
+                Enviar Modelo
               </span>
             </Button>
           </label>
         </div>
         {templateFile && (
           <Badge variant="secondary" className="px-3 py-2">
-            Template: {templateFile.name}
+            {templateFile.name}
           </Badge>
         )}
       </div>
@@ -400,6 +496,27 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
             {judgeAnalysis && (
               <CollapsibleContent className="mt-6 space-y-4">
+                {/* Botão Aplicar Correções */}
+                <div className="flex justify-end">
+                  <Button 
+                    onClick={applyJudgeCorrections}
+                    disabled={applyingJudgeCorrections}
+                    className="gap-2 bg-orange-600 hover:bg-orange-700"
+                  >
+                    {applyingJudgeCorrections ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Aplicando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCheck className="h-4 w-4" />
+                        Aplicar Correções Automaticamente
+                      </>
+                    )}
+                  </Button>
+                </div>
+
                 {/* Risco de Improcedência */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -510,6 +627,29 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
             {regionalAdaptation && (
               <CollapsibleContent className="mt-6 space-y-4">
+                {/* Botão Aplicar Adaptações */}
+                {regionalAdaptation.petition_adaptada && (
+                  <div className="flex justify-end">
+                    <Button 
+                      onClick={applyRegionalAdaptations}
+                      disabled={applyingRegionalAdaptations}
+                      className="gap-2 bg-blue-600 hover:bg-blue-700"
+                    >
+                      {applyingRegionalAdaptations ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Aplicando...
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="h-4 w-4" />
+                          Aplicar Adaptações Regionais
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
                 {/* Identificação do TRF */}
                 <div className="flex items-center gap-3">
                   <Badge variant="outline" className="text-lg px-4 py-2">
@@ -578,12 +718,25 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       {/* Ações Finais */}
       {petition && (
         <div className="flex gap-3">
-          <Button size="lg" className="gap-2">
+          <Button size="lg" onClick={handleSaveFinal} disabled={!petition} className="gap-2">
             <CheckCheck className="h-5 w-5" />
             Salvar Versão Final
           </Button>
-          <Button size="lg" variant="outline" className="gap-2">
-            Marcar como Protocolada
+          <Button 
+            size="lg" 
+            variant="outline" 
+            onClick={handleProtocolar} 
+            disabled={!petition || isProtocoling}
+            className="gap-2"
+          >
+            {isProtocoling ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Protocolando...
+              </>
+            ) : (
+              "Marcar como Protocolada"
+            )}
           </Button>
         </div>
       )}
