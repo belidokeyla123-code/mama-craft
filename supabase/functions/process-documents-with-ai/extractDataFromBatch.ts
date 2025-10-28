@@ -226,86 +226,89 @@ AGORA EXTRAIA TODAS AS INFORMAÇÕES DOS DOCUMENTOS FORNECIDOS!`;
     let docPrompt = `Documento: ${doc.fileName}\nTipo classificado: ${doc.docType}\n\nExtraia TODAS as informações visíveis neste documento com máxima precisão:`;
     
     if (doc.docType === 'certidao_nascimento') {
-      docPrompt = `🚨🚨🚨 CERTIDÃO DE NASCIMENTO - DOCUMENTO CRÍTICO! 🚨🚨🚨
+      console.log(`[CERTIDÃO] 🚨 Processando certidão de nascimento: ${doc.fileName}`);
+      docPrompt = `🚨🚨🚨 CERTIDÃO DE NASCIMENTO - LEIA COM EXTREMA ATENÇÃO! 🚨🚨🚨
 
-⚠️⚠️⚠️ ATENÇÃO MÁXIMA: NÃO CONFUNDA MÃE COM CRIANÇA! ⚠️⚠️⚠️
+⚠️ ESTE DOCUMENTO TEM 3 PESSOAS DIFERENTES. VOCÊ DEVE IDENTIFICAR CADA UMA!
 
-Este documento contém 3 PESSOAS DIFERENTES. Você DEVE identificar cada uma corretamente!
+═══════════════════════════════════════════════════════════════
+📍 ESTRUTURA VISUAL DE UMA CERTIDÃO DE NASCIMENTO:
+═══════════════════════════════════════════════════════════════
 
-🔍 INSTRUÇÕES ULTRA-ESPECÍFICAS:
-
-1️⃣ **NOME DA CRIANÇA** (childName) - OBRIGATÓRIO:
-   📍 LOCALIZAÇÃO: TOPO do documento, geralmente em DESTAQUE
-   📍 PROCURE POR:
-   - "NOME:" seguido do nome (no início do documento)
-   - "REGISTRADO(A):"
-   - "NOME DO REGISTRADO:"
-   - "NOME COMPLETO:"
-   - Geralmente está ANTES de qualquer menção aos pais
-   
-   ✅ EXEMPLO: "NOME: JOÃO PEDRO SILVA SANTOS"
-   ⚠️ Este é o BEBÊ que nasceu, NÃO é a mãe!
-
-2️⃣ **DATA DE NASCIMENTO DA CRIANÇA** (childBirthDate) - OBRIGATÓRIO:
-   📍 PROCURE POR:
-   - "DATA DE NASCIMENTO:" ou "DN:"
-   - "NASCIDO(A) EM:"
-   - "DATA DO NASCIMENTO:"
-   - Formato: DD/MM/AAAA → converter para YYYY-MM-DD
-   
-   ✅ EXEMPLO: "15/03/2023" → retornar "2023-03-15"
-
-3️⃣ **NOME DA MÃE** (motherName) - OBRIGATÓRIO:
-   📍 LOCALIZAÇÃO: Seção SEPARADA, DEPOIS dos dados da criança
-   📍 PROCURE POR:
-   - "FILIAÇÃO MATERNA:"
-   - "MÃE:"
-   - "NOME DA MÃE:"
-   - "DADOS DA MÃE:"
-   
-   ✅ EXEMPLO: "FILIAÇÃO MATERNA: MARIA APARECIDA SANTOS"
-   ⚠️ NUNCA use o nome que está no topo do documento!
-
-4️⃣ **NOME DO PAI** (fatherName) - OPCIONAL:
-   📍 PROCURE POR:
-   - "FILIAÇÃO PATERNA:"
-   - "PAI:"
-   - "NOME DO PAI:"
-   - "DADOS DO PAI:"
-
-5️⃣ **LOCAL DE NASCIMENTO** (childBirthPlace):
-   📍 PROCURE POR:
-   - "NATURAL DE:" + cidade/estado
-   - "NASCIDO(A) EM:" (quando seguido de cidade)
-   - "MUNICÍPIO:" + "ESTADO:"
-
-🚨 VALIDAÇÃO CRÍTICA:
-- childName DEVE SER DIFERENTE de motherName
-- Se você colocar o mesmo nome nos dois campos, ESTÁ ERRADO!
-- A criança é a pessoa que NASCEU
-- A mãe é quem DEU À LUZ à criança
-
-🔴 ESTRUTURA TÍPICA DE UMA CERTIDÃO:
-\`\`\`
-[TOPO DO DOCUMENTO]
-CERTIDÃO DE NASCIMENTO
-NOME: [NOME DA CRIANÇA] ← Este é childName!
-DATA DE NASCIMENTO: [DATA] ← Este é childBirthDate!
+[INÍCIO DO DOCUMENTO - TOPO]
+╔════════════════════════════════════════════════╗
+║ CERTIDÃO DE NASCIMENTO                         ║
+║                                                ║
+║ NOME: JOÃO PEDRO SILVA SANTOS    ← childName  ║
+║ DATA DE NASCIMENTO: 15/03/2023   ← childBirthDate ║
+║ NATURAL DE: SÃO PAULO/SP          ← childBirthPlace ║
+╚════════════════════════════════════════════════╝
 
 [MEIO DO DOCUMENTO - SEÇÃO DE FILIAÇÃO]
-FILIAÇÃO MATERNA: [NOME DA MÃE] ← Este é motherName!
-FILIAÇÃO PATERNA: [NOME DO PAI] ← Este é fatherName!
-\`\`\`
+╔════════════════════════════════════════════════╗
+║ FILIAÇÃO:                                      ║
+║                                                ║
+║ MÃE: MARIA APARECIDA SANTOS      ← motherName ║
+║ PAI: JOSÉ CARLOS SANTOS          ← fatherName ║
+╚════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════
+
+🔴 INSTRUÇÕES PASSO-A-PASSO:
+
+PASSO 1: PROCURE O NOME DA CRIANÇA (childName)
+▸ Onde está: NO TOPO do documento
+▸ Vem ANTES de qualquer menção aos pais
+▸ Palavras-chave: "NOME:", "REGISTRADO(A):", "NOME COMPLETO:"
+▸ Este é o BEBÊ que nasceu!
+▸ Exemplo: "NOME: JOÃO PEDRO SILVA SANTOS"
+▸ EXTRAIR: "JOÃO PEDRO SILVA SANTOS"
+
+PASSO 2: PROCURE A DATA DE NASCIMENTO (childBirthDate)
+▸ Está perto do nome da criança
+▸ Palavras-chave: "DATA DE NASCIMENTO:", "DN:", "NASCIDO EM:"
+▸ Formato comum: DD/MM/AAAA
+▸ Exemplo: "15/03/2023"
+▸ CONVERTER para: "2023-03-15"
+
+PASSO 3: PROCURE O NOME DA MÃE (motherName)
+▸ Onde está: SEÇÃO SEPARADA, depois dos dados da criança
+▸ Palavras-chave: "FILIAÇÃO MATERNA:", "MÃE:", "NOME DA MÃE:"
+▸ Este é DIFERENTE do nome da criança!
+▸ Exemplo: "MÃE: MARIA APARECIDA SANTOS"
+▸ EXTRAIR: "MARIA APARECIDA SANTOS"
+
+PASSO 4: PROCURE O NOME DO PAI (fatherName) - OPCIONAL
+▸ Palavras-chave: "FILIAÇÃO PATERNA:", "PAI:", "NOME DO PAI:"
+▸ Exemplo: "PAI: JOSÉ CARLOS SANTOS"
+
+═══════════════════════════════════════════════════════════════
+🚨 VALIDAÇÃO CRÍTICA - VERIFIQUE ANTES DE RESPONDER:
+═══════════════════════════════════════════════════════════════
+
+✅ childName é DIFERENTE de motherName?
+✅ childName é o nome que está no TOPO do documento?
+✅ motherName está na seção FILIAÇÃO ou MÃE?
+✅ childBirthDate está no formato YYYY-MM-DD?
+
+❌ SE você colocar o mesmo nome em childName e motherName = ERRO!
+❌ SE você colocar o nome da seção "MÃE:" em childName = ERRO!
+
+═══════════════════════════════════════════════════════════════
+🎯 AGORA EXTRAIA COM MÁXIMA ATENÇÃO:
+═══════════════════════════════════════════════════════════════
 
 Documento: ${doc.fileName}
 Tipo: certidao_nascimento
 
-AGORA LEIA COM MÁXIMA ATENÇÃO E EXTRAIA:
-- childName (nome no TOPO)
-- childBirthDate (data de nascimento)
-- motherName (seção FILIAÇÃO MATERNA)
-- fatherName (seção FILIAÇÃO PATERNA)
-- childBirthPlace (local de nascimento)`;
+CAMPOS OBRIGATÓRIOS:
+✓ childName (nome no TOPO)
+✓ childBirthDate (data de nascimento - formato YYYY-MM-DD)
+✓ motherName (seção FILIAÇÃO MATERNA/MÃE)
+✓ fatherName (seção FILIAÇÃO PATERNA/PAI) - opcional
+✓ childBirthPlace (local de nascimento) - opcional
+
+LEIA O DOCUMENTO INTEIRO E PREENCHA TODOS OS CAMPOS ACIMA!`;
     }
     
     if (doc.docType === 'autodeclaracao_rural') {
@@ -889,6 +892,18 @@ Agora extraia TODOS os dados de saúde listados acima:`;
   const extractedData = JSON.parse(functionCall.arguments);
   console.log("[IA BATCH] ===== DADOS EXTRAÍDOS =====");
   console.log("[IA BATCH] Dados completos:", JSON.stringify(extractedData, null, 2));
+  
+  // Log específico para dados críticos da certidão
+  console.log("[IA BATCH] 📊 CAMPOS CRÍTICOS:");
+  console.log(`[IA BATCH]   • childName: "${extractedData.childName || 'VAZIO'}" ${!extractedData.childName ? '❌ FALTANDO!' : '✅'}`);
+  console.log(`[IA BATCH]   • childBirthDate: "${extractedData.childBirthDate || 'VAZIO'}" ${!extractedData.childBirthDate ? '❌ FALTANDO!' : '✅'}`);
+  console.log(`[IA BATCH]   • motherName: "${extractedData.motherName || 'VAZIO'}" ${!extractedData.motherName ? '❌ FALTANDO!' : '✅'}`);
+  console.log(`[IA BATCH]   • motherCpf: "${extractedData.motherCpf || 'VAZIO'}" ${!extractedData.motherCpf ? '⚠️ OPCIONAL' : '✅'}`);
+  
+  if (!extractedData.childName || !extractedData.childBirthDate) {
+    console.error('[IA BATCH] ❌❌❌ ERRO CRÍTICO: childName ou childBirthDate estão vazios!');
+    console.error('[IA BATCH] Verifique se a certidão de nascimento foi enviada e processada');
+  }
   
   // Log específico para novos campos
   if (extractedData.schoolHistory && extractedData.schoolHistory.length > 0) {
