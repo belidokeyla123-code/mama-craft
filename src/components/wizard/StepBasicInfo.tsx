@@ -291,6 +291,10 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         .eq('id', data.caseId);
 
       if (error) throw error;
+      
+      // 🆕 Disparar pipeline completo após salvar
+      await triggerFullPipeline('Informações básicas atualizadas');
+      
     } catch (error) {
       console.error("Erro ao salvar:", error);
       toast.error("❌ Falha ao salvar informações");

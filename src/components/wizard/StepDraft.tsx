@@ -9,6 +9,8 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+import { extractPlaceholders, generatePlaceholderList } from "@/lib/templatePlaceholders";
+
 interface StepDraftProps {
   data: CaseData;
   updateData: (data: Partial<CaseData>) => void;
@@ -26,6 +28,13 @@ interface JudgeAnalysis {
   pontos_fracos: string[];
   risco_improcedencia: number;
   recomendacoes: string[];
+  validacao_abas?: {
+    validacao?: { status: string; problemas: string[] };
+    analise?: { status: string; problemas: string[] };
+    jurisprudencia?: { status: string; problemas: string[] };
+    teses?: { status: string; problemas: string[] };
+    peticao?: { status: string; problemas: string[] };
+  };
 }
 
 interface RegionalAdaptation {
@@ -254,6 +263,39 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     navigator.clipboard.writeText(petition);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadPlaceholders = async () => {
+    if (!data.caseId) {
+      toast.error("ID do caso não encontrado");
+      return;
+    }
+    
+    try {
+      // Buscar análise jurídica
+      const { data: analysis } = await supabase
+        .from('case_analysis')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+      
+      // Extrair placeholders
+      const placeholders = extractPlaceholders(data, analysis);
+      const content = generatePlaceholderList(placeholders);
+      
+      // Download
+      const blob = new Blob([content], { type: 'text/plain; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `placeholders_${data.authorName || 'caso'}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Erro ao gerar placeholders:', error);
+      toast.error('Erro ao gerar lista de placeholders');
+    }
   };
 
   const handleDownload = () => {
@@ -538,6 +580,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           <Download className="h-4 w-4" />
           Baixar DOCX (ABNT)
         </Button>
+        <Button onClick={handleDownloadPlaceholders} variant="outline" className="gap-2">
+          <FileText className="h-4 w-4" />
+          Baixar Lista de Placeholders
+        </Button>
         <Button 
           onClick={handleProtocolar}
           disabled={!petition || isProtocoling}
@@ -607,6 +653,44 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           <div className="bg-muted/30 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
             {petition}
           </div>
+
+          {/* 🆕 VALIDAÇÃO DE ABAS DO MÓDULO JUIZ */}
+          {judgeAnalysis?.validacao_abas && (
+            <Card className="p-6 mt-6">
+              <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                🔍 Controle de Qualidade - Todas as Abas
+              </h4>
+              <div className="space-y-4">
+                {Object.entries(judgeAnalysis.validacao_abas).map(([aba, info]: [string, any]) => {
+                  const statusColor = 
+                    info.status === 'OK' ? 'bg-green-100 text-green-800 border-green-300' : 
+                    info.status === 'ATENÇÃO' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : 
+                    'bg-red-100 text-red-800 border-red-300';
+                  
+                  return (
+                    <div key={aba} className="border-l-4 pl-4 py-2" style={{ borderColor: info.status === 'OK' ? '#22c55e' : info.status === 'ATENÇÃO' ? '#eab308' : '#ef4444' }}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <Badge className={statusColor}>
+                          {aba.toUpperCase()}
+                        </Badge>
+                        <span className="font-semibold text-sm">{info.status}</span>
+                      </div>
+                      {info.problemas && info.problemas.length > 0 && (
+                        <ul className="text-sm text-muted-foreground ml-2 space-y-1">
+                          {info.problemas.map((problema: string, i: number) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                              <span>{problema}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
         </Card>
       ) : (
         <Card className="p-8 text-center text-muted-foreground">

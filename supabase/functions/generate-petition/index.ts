@@ -161,9 +161,9 @@ Retorne apenas o texto da petição em markdown.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 30 segundos (otimizado)
+    // Timeout de 12 segundos (otimizado)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

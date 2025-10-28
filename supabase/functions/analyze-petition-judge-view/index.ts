@@ -79,7 +79,29 @@ ${petition}
   "pontos_fortes": ["Máximo 5 pontos"],
   "pontos_fracos": ["Máximo 5 pontos"],
   "risco_improcedencia": 20,
-  "recomendacoes": ["Máximo 3 recomendações PRÁTICAS"]
+  "recomendacoes": ["Máximo 3 recomendações PRÁTICAS"],
+  "validacao_abas": {
+    "validacao": {
+      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
+      "problemas": ["Problema específico 1", "Problema específico 2"]
+    },
+    "analise": {
+      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
+      "problemas": ["Ex: Carência não foi calculada corretamente", "RMI diverge dos dados"]
+    },
+    "jurisprudencia": {
+      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
+      "problemas": ["Ex: Jurisprudências genéricas", "Faltam casos específicos do TRF"]
+    },
+    "teses": {
+      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
+      "problemas": ["Ex: Teses não conectadas às jurisprudências", "Argumentação fraca"]
+    },
+    "peticao": {
+      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
+      "problemas": ["Ex: Dados das abas não incorporados", "Jurisprudências não citadas"]
+    }
+  }
 }
 
 **IMPORTANTE:**

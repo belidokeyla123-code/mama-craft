@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic, X } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
+import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
 interface Message {
   role: "assistant" | "user";
@@ -37,6 +38,12 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const { toast } = useToast();
+
+  // Sistema de orquestração para disparar pipeline completo
+  const { triggerFullPipeline } = useCaseOrchestration({ 
+    caseId: data.caseId || '', 
+    enabled: !!data.caseId 
+  });
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -397,6 +404,49 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         autoFilledFields: autoFilledFieldsList,
         documents: uploadedFiles.map(f => f.name),
       });
+
+      // 🆕 SALVAR NO BANCO DE DADOS
+      if (caseId) {
+        try {
+          await supabase
+            .from('cases')
+            .update({
+              author_name: extractedData.motherName || data.authorName,
+              author_cpf: extractedData.motherCpf || data.authorCpf,
+              author_rg: extractedData.motherRg || data.authorRg,
+              author_birth_date: extractedData.motherBirthDate || data.authorBirthDate,
+              author_address: extractedData.motherAddress || data.authorAddress,
+              author_marital_status: extractedData.maritalStatus || data.authorMaritalStatus,
+              child_name: extractedData.childName || data.childName,
+              child_birth_date: extractedData.childBirthDate || data.childBirthDate,
+              event_date: extractedData.childBirthDate || data.eventDate,
+              father_name: extractedData.fatherName || data.fatherName,
+              land_owner_name: extractedData.landOwnerName || data.landOwnerName,
+              land_owner_cpf: extractedData.landOwnerCpf || data.landOwnerCpf,
+              land_owner_rg: extractedData.landOwnerRg || data.landOwnerRg,
+              land_ownership_type: extractedData.landOwnershipType || data.landOwnershipType,
+              rural_activity_since: extractedData.ruralActivitySince || data.ruralActivitySince,
+              family_members: extractedData.familyMembers as any || data.familyMembers,
+              has_ra: !!extractedData.raProtocol || data.hasRa,
+              ra_protocol: extractedData.raProtocol || data.raProtocol,
+              ra_request_date: extractedData.raRequestDate || data.raRequestDate,
+              ra_denial_date: extractedData.raDenialDate || data.raDenialDate,
+              ra_denial_reason: extractedData.raDenialReason || data.raDenialReason,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', caseId);
+
+      console.log('[CHAT] Dados salvos no banco');
+      
+      // 🆕 DISPARAR PIPELINE COMPLETO
+      if (triggerFullPipeline) {
+        await triggerFullPipeline('Dados extraídos via chat');
+      }
+      
+    } catch (dbError) {
+          console.error('[CHAT] Erro ao salvar no banco:', dbError);
+        }
+      }
 
     } catch (error: any) {
       console.error("Erro ao processar documentos:", error);
