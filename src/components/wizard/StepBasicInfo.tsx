@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText } from "lucide-react";
 import { CaseData, RuralPeriod, UrbanPeriod } from "@/pages/NewCase";
 import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMinimo";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
@@ -41,6 +41,7 @@ const calcularTempo = (inicio: string, fim: string) => {
 export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const autoFilledFields = data.autoFilledFields || [];
   const missingFields = data.missingFields || [];
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sistema de orquestração para disparar pipeline completo
   const { triggerFullPipeline } = useCaseOrchestration({ 
@@ -246,6 +247,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       return;
     }
 
+    setIsSaving(true);
+    
     try {
       // Atualizar caso no banco
       const { error } = await supabase
@@ -292,12 +295,16 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
       if (error) throw error;
       
+      toast.success("✅ Dados salvos com sucesso!");
+      
       // 🆕 Disparar pipeline completo após salvar
       await triggerFullPipeline('Informações básicas atualizadas');
       
     } catch (error) {
       console.error("Erro ao salvar:", error);
       toast.error("❌ Falha ao salvar informações");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -445,8 +452,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         </div>
         
         <div className="flex justify-end mt-6 pt-4 border-t">
-          <Button onClick={handleSaveSection} className="gap-2">
-            💾 Salvar Identificação
+          <Button onClick={handleSaveSection} disabled={isSaving} className="gap-2">
+            {isSaving ? "⏳ Salvando..." : "💾 Salvar Identificação"}
           </Button>
         </div>
       </Card>
@@ -504,8 +511,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         </div>
         
         <div className="flex justify-end mt-6 pt-4 border-t">
-          <Button onClick={handleSaveSection} className="gap-2">
-            💾 Salvar Dados da Criança
+          <Button onClick={handleSaveSection} disabled={isSaving} className="gap-2">
+            {isSaving ? "⏳ Salvando..." : "💾 Salvar Dados da Criança"}
           </Button>
         </div>
       </Card>
@@ -656,8 +663,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         </RadioGroup>
         
         <div className="flex justify-end mt-6 pt-4 border-t">
-          <Button onClick={handleSaveSection} className="gap-2">
-            💾 Salvar Perfil
+          <Button onClick={handleSaveSection} disabled={isSaving} className="gap-2">
+            {isSaving ? "⏳ Salvando..." : "💾 Salvar Perfil"}
           </Button>
         </div>
       </Card>
@@ -1074,8 +1081,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </div>
           
           <div className="flex justify-end mt-6 pt-4 border-t">
-            <Button onClick={handleSaveSection} className="gap-2">
-              💾 Salvar Dados da Terra
+            <Button onClick={handleSaveSection} disabled={isSaving} className="gap-2">
+              {isSaving ? "⏳ Salvando..." : "💾 Salvar Dados da Terra"}
             </Button>
           </div>
         </Card>
@@ -1258,8 +1265,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </div>
           
           <div className="flex justify-end mt-6 pt-4 border-t">
-            <Button onClick={handleSaveSection} className="gap-2">
-              💾 Salvar Períodos Rurais
+            <Button onClick={handleSaveSection} disabled={isSaving} className="gap-2">
+              {isSaving ? "⏳ Salvando..." : "💾 Salvar Períodos Rurais"}
             </Button>
           </div>
         </Card>

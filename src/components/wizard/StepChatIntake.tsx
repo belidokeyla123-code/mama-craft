@@ -309,6 +309,14 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 role: "assistant",
                 content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})`
               }]);
+              
+              // 🆕 MOSTRAR TRANSCRIÇÃO DO PDF NO CHAT
+              if (analysisResult?.extractedText) {
+                setMessages(prev => [...prev, {
+                  role: "assistant",
+                  content: `📄 **Transcrição do documento "${pageFile.name}":**\n\n\`\`\`\n${analysisResult.extractedText}\n\`\`\`\n\n✅ Dados processados`
+                }]);
+              }
             }
           }
           

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,6 +166,26 @@ function getSchemaForDocType(docType: string) {
   };
 }
 
+// Função para extrair texto do PDF
+async function extractPdfText(pdfBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
+    let fullText = '';
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((item: any) => item.str).join(' ');
+      fullText += `\n=== Página ${i} ===\n${pageText}\n`;
+    }
+    
+    return fullText.trim();
+  } catch (error: any) {
+    console.error('[PDF EXTRACT] Erro ao extrair texto:', error);
+    return '';
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -203,6 +224,20 @@ serve(async (req) => {
 
     // 3. Converter para base64 usando biblioteca padrão do Deno (solução correta!)
     const arrayBuffer = await fileData.arrayBuffer();
+    
+    // 🆕 EXTRAIR TEXTO DO PDF (se for PDF)
+    let pdfText = '';
+    const mimeType = doc.mime_type || '';
+    if (mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf')) {
+      console.log(`[ANALYZE-SINGLE] 📄 Extraindo texto do PDF...`);
+      pdfText = await extractPdfText(arrayBuffer);
+      if (pdfText) {
+        console.log(`[ANALYZE-SINGLE] ✅ Texto extraído: ${pdfText.length} caracteres`);
+        console.log(`[ANALYZE-SINGLE] 📝 Preview do texto:\n${pdfText.substring(0, 300)}...`);
+      } else {
+        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto extraível (pode ser imagem escaneada)`);
+      }
+    }
     
     // Usar encode do Deno que é otimizado para arquivos grandes
     const base64 = base64Encode(arrayBuffer);
@@ -262,7 +297,27 @@ serve(async (req) => {
     const prompt = buildPromptForDocType(docType, doc.file_name);
 
     // 6. Chamar IA
-    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Gemini 2.5 Flash Lite - 10x mais rápido!)...`);
+    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (GPT-5 Mini - modelo premium)...`);
+    
+    // Construir mensagens com texto + imagem
+    const userMessages = [];
+    
+    if (pdfText) {
+      userMessages.push({
+        type: 'text',
+        text: `${prompt}\n\n📄 TEXTO EXTRAÍDO DO PDF:\n\n${pdfText}\n\n[Imagem anexada abaixo para validação visual]`
+      });
+    } else {
+      userMessages.push({
+        type: 'text',
+        text: prompt
+      });
+    }
+    
+    userMessages.push({
+      type: 'image_url',
+      image_url: { url: base64Image }
+    });
     
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -271,19 +326,16 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'openai/gpt-5-mini',
         max_completion_tokens: 2048,
         messages: [
           {
             role: 'system',
-            content: ESPECIALISTA_MATERNIDADE_PROMPT + '\n\nVocê é um especialista em OCR. Extraia TODAS as informações visíveis com máxima precisão.'
+            content: ESPECIALISTA_MATERNIDADE_PROMPT + '\n\nVocê é um especialista em OCR e extração de dados de documentos brasileiros. Extraia TODAS as informações visíveis com máxima precisão. Quando houver texto extraído do PDF, priorize-o sobre a análise visual da imagem.'
           },
           {
             role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: base64Image } }
-            ]
+            content: userMessages
           }
         ],
         tools: [{
@@ -412,7 +464,8 @@ serve(async (req) => {
         documentId,
         docType,
         extracted: extracted.extractedData,
-        confidence: extracted.extractionConfidence
+        confidence: extracted.extractionConfidence,
+        extractedText: pdfText ? pdfText.substring(0, 2000) : undefined // Primeiros 2000 chars
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
