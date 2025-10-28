@@ -241,6 +241,18 @@ ORDENE TUDO POR RELEVÂNCIA (score mais alto primeiro).`;
         }
       }
 
+      // Salvar no cache global para reutilização
+      await supabase
+        .from('jurisprudence_cache')
+        .insert({
+          query_hash: cacheKey,
+          profile: caseData.profile,
+          event_type: caseData.event_type,
+          results: results
+        });
+
+      console.log('[JURISPRUDENCE] Salvo no cache global');
+
       return new Response(JSON.stringify(results), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -57,12 +57,53 @@ interface LegalAnalysis {
 export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<LegalAnalysis | null>(null);
+  const [hasCache, setHasCache] = useState(false);
+  const [docsChanged, setDocsChanged] = useState(false);
 
+  // Carregar do cache ao entrar na aba
   useEffect(() => {
     if (data.caseId) {
-      performAnalysis();
+      loadCachedAnalysis();
     }
   }, [data.caseId]);
+
+  const loadCachedAnalysis = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: analysisData, error } = await supabase
+        .from('case_analysis')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('analyzed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (analysisData?.draft_payload) {
+        setAnalysis(analysisData.draft_payload as unknown as LegalAnalysis);
+        setHasCache(true);
+        
+        // Verificar se documentos mudaram
+        const { data: currentDocs } = await supabase
+          .from('documents')
+          .select('id, uploaded_at')
+          .eq('case_id', data.caseId);
+        
+        const currentHash = JSON.stringify(currentDocs);
+        
+        if (analysisData.last_document_hash && analysisData.last_document_hash !== currentHash) {
+          setDocsChanged(true);
+          toast.info('Novos documentos detectados. Clique em "Reanalisar" para atualizar.');
+        }
+        
+        console.log('[ANALYSIS] Carregado do cache');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cache:', error);
+    }
+  };
 
   const performAnalysis = async () => {
     if (!data.caseId) return;
@@ -97,6 +138,8 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
       
       if (analysisData?.draft_payload) {
         setAnalysis(analysisData.draft_payload as unknown as LegalAnalysis);
+        setHasCache(true);
+        setDocsChanged(false);
         toast.success("Análise jurídica concluída!");
       } else {
         toast.warning("Análise executada mas resultado não encontrado.");
@@ -130,16 +173,30 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
         </p>
       </div>
 
-      <Button onClick={performAnalysis} disabled={loading}>
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Analisando...
-          </>
-        ) : (
-          "Reanalisar"
+      <div className="flex gap-3">
+        <Button onClick={performAnalysis} disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Analisando...
+            </>
+          ) : hasCache ? (
+            "Reanalisar"
+          ) : (
+            "Analisar Caso"
+          )}
+        </Button>
+        {hasCache && !docsChanged && (
+          <Badge variant="secondary" className="px-3 py-2">
+            Cache ativo - análise salva
+          </Badge>
         )}
-      </Button>
+        {docsChanged && (
+          <Badge variant="destructive" className="px-3 py-2">
+            Novos documentos - reanálise recomendada
+          </Badge>
+        )}
+      </div>
 
       {loading ? (
         <Card className="p-12">

@@ -12,6 +12,7 @@ import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
+import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
 import type { CaseData } from "./NewCase";
 
@@ -22,7 +23,8 @@ const STEPS = [
   { id: 3, name: "Validação" },
   { id: 4, name: "Análise" },
   { id: 5, name: "Jurisprudência" },
-  { id: 6, name: "Minuta" },
+  { id: 6, name: "Tese Jurídica" },
+  { id: 7, name: "Minuta" },
 ];
 
 export default function CaseDetail() {
@@ -226,6 +228,8 @@ export default function CaseDetail() {
       case 5:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
       case 6:
+        return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
+      case 7:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;

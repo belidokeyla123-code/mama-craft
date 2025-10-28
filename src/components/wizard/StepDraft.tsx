@@ -55,6 +55,38 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [adaptingRegional, setAdaptingRegional] = useState(false);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [isProtocoling, setIsProtocoling] = useState(false);
+  const [hasCache, setHasCache] = useState(false);
+
+  // Carregar do cache ao entrar na aba
+  useEffect(() => {
+    if (data.caseId && !petition) {
+      loadCachedDraft();
+    }
+  }, [data.caseId]);
+
+  const loadCachedDraft = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: draftData, error } = await supabase
+        .from('drafts')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (draftData?.markdown_content) {
+        setPetition(draftData.markdown_content);
+        setHasCache(true);
+        console.log('[DRAFT] Carregado do cache');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cache:', error);
+    }
+  };
 
   // Atualizar status para "drafted" quando a minuta estiver pronta
   useEffect(() => {
@@ -72,12 +104,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     updateStatus();
   }, [data.caseId]);
 
-  useEffect(() => {
-    if (data.caseId && !petition) {
-      generatePetition();
-    }
-  }, [data.caseId]);
-
   const generatePetition = async () => {
     if (!data.caseId) return;
     
@@ -92,8 +118,11 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
       if (error) throw error;
 
-      if (result?.petition) {
-        setPetition(result.petition);
+      // Corrigir bug: aceitar tanto "petition" quanto "petitionText"
+      const petitionContent = result?.petition || result?.petitionText;
+      if (petitionContent) {
+        setPetition(petitionContent);
+        setHasCache(true);
         toast.success("Petição gerada com sucesso!");
       }
     } catch (error) {
@@ -244,13 +273,23 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
               <Loader2 className="h-4 w-4 animate-spin" />
               Gerando...
             </>
-          ) : (
+          ) : hasCache ? (
             <>
               <Sparkles className="h-4 w-4" />
               Gerar Nova Versão
             </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Gerar Petição
+            </>
           )}
         </Button>
+        {hasCache && (
+          <Badge variant="secondary" className="px-3 py-2">
+            Cache ativo - minuta salva
+          </Badge>
+        )}
         <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar DOCX (ABNT)

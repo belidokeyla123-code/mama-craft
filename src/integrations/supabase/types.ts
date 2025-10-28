@@ -114,6 +114,7 @@ export type Database = {
           fundamentos: string[] | null
           id: string
           lacunas: string[] | null
+          last_document_hash: string | null
           qualidade_segurada: string | null
           rmi: Json | null
           valor_causa: number | null
@@ -128,6 +129,7 @@ export type Database = {
           fundamentos?: string[] | null
           id?: string
           lacunas?: string[] | null
+          last_document_hash?: string | null
           qualidade_segurada?: string | null
           rmi?: Json | null
           valor_causa?: number | null
@@ -142,6 +144,7 @@ export type Database = {
           fundamentos?: string[] | null
           id?: string
           lacunas?: string[] | null
+          last_document_hash?: string | null
           qualidade_segurada?: string | null
           rmi?: Json | null
           valor_causa?: number | null
@@ -585,6 +588,7 @@ export type Database = {
           generated_at: string
           html_content: string | null
           id: string
+          last_analysis_hash: string | null
           markdown_content: string | null
           payload: Json
           version: number
@@ -595,6 +599,7 @@ export type Database = {
           generated_at?: string
           html_content?: string | null
           id?: string
+          last_analysis_hash?: string | null
           markdown_content?: string | null
           payload: Json
           version?: number
@@ -605,6 +610,7 @@ export type Database = {
           generated_at?: string
           html_content?: string | null
           id?: string
+          last_analysis_hash?: string | null
           markdown_content?: string | null
           payload?: Json
           version?: number
@@ -795,6 +801,41 @@ export type Database = {
         }
         Relationships: []
       }
+      jurisprudence_results: {
+        Row: {
+          case_id: string
+          created_at: string | null
+          id: string
+          last_case_hash: string | null
+          results: Json
+          selected_ids: Json | null
+        }
+        Insert: {
+          case_id: string
+          created_at?: string | null
+          id?: string
+          last_case_hash?: string | null
+          results: Json
+          selected_ids?: Json | null
+        }
+        Update: {
+          case_id?: string
+          created_at?: string | null
+          id?: string
+          last_case_hash?: string | null
+          results?: Json
+          selected_ids?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jurisprudence_results_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jurisprudencias: {
         Row: {
           created_at: string
@@ -934,6 +975,38 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      teses_juridicas: {
+        Row: {
+          case_id: string
+          created_at: string | null
+          id: string
+          selected_ids: string[] | null
+          teses: Json
+        }
+        Insert: {
+          case_id: string
+          created_at?: string | null
+          id?: string
+          selected_ids?: string[] | null
+          teses: Json
+        }
+        Update: {
+          case_id?: string
+          created_at?: string | null
+          id?: string
+          selected_ids?: string[] | null
+          teses?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teses_juridicas_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       timeline_events: {
         Row: {

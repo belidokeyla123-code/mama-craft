@@ -70,12 +70,61 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
   const [doutrinas, setDoutrinas] = useState<Doutrina[]>([]);
   const [teses, setTeses] = useState<TeseJuridica[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [hasCache, setHasCache] = useState(false);
 
+  // Carregar do cache ao entrar na aba
   useEffect(() => {
     if (data.caseId) {
-      searchJurisprudence();
+      loadCachedResults();
     }
   }, [data.caseId]);
+
+  // Salvar seleções automaticamente (debounced)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (data.caseId && selectedIds.size > 0 && hasCache) {
+        try {
+          await supabase
+            .from('jurisprudence_results')
+            .update({ selected_ids: Array.from(selectedIds) })
+            .eq('case_id', data.caseId);
+        } catch (error) {
+          console.error('Erro ao salvar seleções:', error);
+        }
+      }
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [selectedIds, data.caseId, hasCache]);
+
+  const loadCachedResults = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: cached, error } = await supabase
+        .from('jurisprudence_results')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (cached?.results) {
+        const results = cached.results as any;
+        setJurisprudencias(results.jurisprudencias || []);
+        setSumulas(results.sumulas || []);
+        setDoutrinas(results.doutrinas || []);
+        setTeses(results.teses_juridicas_aplicaveis || []);
+        setSelectedIds(new Set((cached.selected_ids as any) || []));
+        setHasCache(true);
+        console.log('[JURISPRUDENCE] Carregado do cache');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cache:', error);
+    }
+  };
 
   const searchJurisprudence = async () => {
     if (!data.caseId) return;
@@ -105,6 +154,18 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
       setSumulas(result.sumulas || []);
       setDoutrinas(result.doutrinas || []);
       setTeses(result.teses_juridicas_aplicaveis || []);
+      
+      // Salvar no cache
+      await supabase
+        .from('jurisprudence_results')
+        .upsert({
+          case_id: data.caseId,
+          results: result,
+          selected_ids: Array.from(selectedIds),
+          created_at: new Date().toISOString()
+        });
+      
+      setHasCache(true);
       
       const total = (result.jurisprudencias?.length || 0) + 
                    (result.sumulas?.length || 0) + 
@@ -360,13 +421,20 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               Buscando...
             </>
-          ) : (
+          ) : hasCache ? (
             "Buscar Novamente"
+          ) : (
+            "Buscar Jurisprudências"
           )}
         </Button>
         <Badge variant="outline" className="px-3 py-2">
           {selectedIds.size} selecionadas
         </Badge>
+        {hasCache && (
+          <Badge variant="secondary" className="px-3 py-2">
+            Cache ativo - resultados salvos
+          </Badge>
+        )}
       </div>
 
       {loading ? (
