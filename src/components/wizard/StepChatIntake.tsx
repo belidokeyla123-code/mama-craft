@@ -58,6 +58,24 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     childBirthDate: data.childBirthDate
   });
 
+  // Helper para labels de tipos de documentos
+  const getDocTypeLabel = (docType: string): string => {
+    const labels: Record<string, string> = {
+      'certidao_nascimento': '📄 Certidão de Nascimento',
+      'processo_administrativo': '📋 Processo INSS',
+      'autodeclaracao_rural': '🌾 Autodeclaração Rural',
+      'documento_terra': '🏡 Documento da Terra',
+      'identificacao': '🪪 Identificação',
+      'comprovante_residencia': '🏠 Comprovante de Residência',
+      'procuracao': '📝 Procuração',
+      'cnis': '📊 CNIS',
+      'historico_escolar': '📚 Histórico Escolar',
+      'declaracao_saude_ubs': '🏥 Declaração de Saúde',
+      'outro': '📎 Outro Documento'
+    };
+    return labels[docType] || '📎 Documento';
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const validFiles: File[] = [];
@@ -165,41 +183,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         }]);
       }
 
-      // Converter PDFs em imagens antes do upload
-      console.log("[UPLOAD] Processando arquivos...");
-      const processedFiles: File[] = [];
-      
-      for (const file of filesToUpload) {
-        if (isPDF(file)) {
-          console.log(`[UPLOAD] Arquivo é PDF, convertendo: ${file.name}`);
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: `🔄 Convertendo PDF "${file.name}" em imagens...`
-          }]);
-          
-          try {
-            const { images } = await convertPDFToImages(file, 10);
-            console.log(`[UPLOAD] PDF convertido em ${images.length} imagens`);
-            processedFiles.push(...images);
-            
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: `✓ PDF convertido: ${images.length} página(s)`
-            }]);
-          } catch (error: any) {
-            console.error("[UPLOAD] Erro ao converter PDF:", error);
-            toast({
-              title: "Erro ao converter PDF",
-              description: error.message,
-              variant: "destructive",
-            });
-            throw error;
-          }
-        } else {
-          // Arquivos não-PDF (imagens) vão direto
-          processedFiles.push(file);
-        }
-      }
+      // 🆕 PROCESSAMENTO SEQUENCIAL: Arquivo por arquivo
+      console.log("[SEQUENTIAL] 🚀 Iniciando processamento sequencial de", filesToUpload.length, "arquivos");
       
       // Buscar nome da autora para criar a pasta
       const { data: caseInfo, error: caseError } = await supabase
@@ -211,139 +196,140 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       if (caseError) throw caseError;
       
       const clientFolderName = caseInfo.author_name || `caso_${caseId.slice(0, 8)}`;
-      console.log(`[UPLOAD] Criando pasta para cliente: ${clientFolderName}`);
-
-      // Upload dos arquivos processados para o Storage
-      const uploadPromises = processedFiles.map(async (file) => {
-        const fileExt = file.name.split('.').pop();
-        const timestamp = Date.now();
-        const randomId = Math.random().toString(36).substring(7);
-        const fileName = `${clientFolderName}/${timestamp}_${randomId}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from("case-documents")
-          .upload(fileName, file);
-
-        if (uploadError) throw uploadError;
-
-        // Salvar registro do documento
-        const { data: doc, error: docError } = await supabase
-          .from("documents")
-          .insert({
-            case_id: caseId,
-            file_name: file.name,
-            file_path: fileName,
-            file_size: file.size,
-            mime_type: file.type,
-            document_type: "OUTROS",
-          })
-          .select()
-          .single();
-
-        if (docError) throw docError;
-        return doc;
-      });
-
-      const documents = await Promise.all(uploadPromises);
       
-      // Atualizar status do caso para "ready" (em análise)
+      let extractedData: any = {};
+      let processedCount = 0;
+      
+      // 🔄 LOOP SEQUENCIAL: Processar cada arquivo individualmente
+      for (const file of filesToUpload) {
+        try {
+          processedCount++;
+          console.log(`[SEQUENTIAL] 📄 Processando arquivo ${processedCount}/${filesToUpload.length}: ${file.name}`);
+          
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `📄 [${processedCount}/${filesToUpload.length}] Processando: ${file.name}...`
+          }]);
+          
+          // Se for PDF, converter em imagens (páginas)
+          const filesToProcess: File[] = [];
+          if (isPDF(file)) {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `🔄 Convertendo PDF em imagens...`
+            }]);
+            
+            const { images } = await convertPDFToImages(file, 10);
+            console.log(`[SEQUENTIAL] ✓ PDF convertido em ${images.length} página(s)`);
+            filesToProcess.push(...images);
+            
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `✓ ${images.length} página(s) detectada(s)`
+            }]);
+          } else {
+            filesToProcess.push(file);
+          }
+          
+          // Para cada página/imagem, processar IMEDIATAMENTE
+          for (let i = 0; i < filesToProcess.length; i++) {
+            const pageFile = filesToProcess[i];
+            const pageNum = filesToProcess.length > 1 ? ` (página ${i + 1}/${filesToProcess.length})` : '';
+            
+            console.log(`[SEQUENTIAL] 📤 Fazendo upload${pageNum}...`);
+            
+            // Upload para o Storage
+            const fileExt = pageFile.name.split('.').pop();
+            const timestamp = Date.now();
+            const randomId = Math.random().toString(36).substring(7);
+            const fileName = `${clientFolderName}/${timestamp}_${randomId}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+              .from("case-documents")
+              .upload(fileName, pageFile);
+
+            if (uploadError) throw uploadError;
+
+            // Salvar registro do documento
+            const { data: doc, error: docError } = await supabase
+              .from("documents")
+              .insert({
+                case_id: caseId,
+                file_name: pageFile.name,
+                file_path: fileName,
+                file_size: pageFile.size,
+                mime_type: pageFile.type,
+                document_type: "OUTROS",
+              })
+              .select()
+              .single();
+
+            if (docError) throw docError;
+            
+            console.log(`[SEQUENTIAL] ✓ Upload completo, ID: ${doc.id}`);
+            
+            // 🤖 ANÁLISE IMEDIATA deste documento
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `🔍 Analisando${pageNum}...`
+            }]);
+            
+            console.log(`[SEQUENTIAL] 🤖 Chamando IA para análise individual...`);
+            
+            const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
+              "analyze-single-document",
+              {
+                body: {
+                  documentId: doc.id,
+                  caseId: caseId
+                }
+              }
+            );
+            
+            if (analysisError) {
+              console.error(`[SEQUENTIAL] ⚠️ Erro na análise${pageNum}:`, analysisError);
+              setMessages(prev => [...prev, {
+                role: "assistant",
+                content: `⚠️ Erro ao analisar${pageNum}: ${analysisError.message}`
+              }]);
+            } else {
+              console.log(`[SEQUENTIAL] ✅ Análise concluída${pageNum}:`, analysisResult);
+              
+              // Merge dos dados extraídos
+              if (analysisResult?.extracted) {
+                extractedData = { ...extractedData, ...analysisResult.extracted };
+              }
+              
+              // Mostrar feedback específico
+              const docTypeLabel = getDocTypeLabel(analysisResult?.docType || 'outro');
+              const confidence = analysisResult?.confidence || 'medium';
+              const confidenceEmoji = confidence === 'high' ? '✅' : confidence === 'medium' ? '⚠️' : '❌';
+              
+              setMessages(prev => [...prev, {
+                role: "assistant",
+                content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})`
+              }]);
+            }
+          }
+          
+        } catch (error: any) {
+          console.error(`[SEQUENTIAL] ❌ Erro ao processar ${file.name}:`, error);
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `❌ Erro ao processar ${file.name}: ${error.message}`
+          }]);
+        }
+      }
+      
+      // Atualizar status do caso para "ready"
       await supabase
         .from("cases")
         .update({ status: "ready" })
         .eq("id", caseId);
-
-      console.log(`[UPLOAD] ✓ Pasta "${clientFolderName}" criada com ${documents.length} documento(s)`);
-
-      // ✅ CORREÇÃO CRÍTICA: Buscar TODOS os documentos do caso para processamento completo
-      console.log('[CHAT] 🔍 Buscando TODOS os documentos do caso para processamento completo...');
-      const { data: allDocuments, error: allDocsError } = await supabase
-        .from('documents')
-        .select('id')
-        .eq('case_id', caseId);
-
-      if (allDocsError) {
-        console.error('[CHAT] ❌ Erro ao buscar todos os documentos:', allDocsError);
-        throw allDocsError;
-      }
-
-      console.log(`[CHAT] 📋 Total de documentos no caso: ${allDocuments.length} (incluindo ${documents.length} novos)`);
-
-      // Chamar edge function para extrair informações de TODOS os documentos
-      console.log('[CHAT] 🤖 Chamando IA para processar TODOS os documentos do caso...');
-      const { data: extractionResult, error: extractionError } = await supabase.functions.invoke(
-        "process-documents-with-ai",
-        {
-          body: {
-            caseId,
-            documentIds: allDocuments.map(d => d.id), // ✅ TODOS os documentos
-          },
-        }
-      );
-
-      if (extractionError) throw extractionError;
-
-      console.log('[CHAT] Resposta da edge function:', extractionResult);
-
-      // Declarar variáveis para dados extraídos
-      let extractedData: any = {};
-
-      // A edge function processa em background, então vamos aguardar e buscar os dados
-      if (extractionResult?.status === 'processing') {
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: "🔄 Processando documentos com IA... Aguarde alguns segundos."
-        }]);
-
-        // Aguardar 5 segundos para o processamento em background terminar
-        console.log('[CHAT] Aguardando processamento em background...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-
-        // Buscar dados extraídos do banco
-        console.log('[CHAT] Buscando extrações do banco...');
-        const { data: extractions, error: extractionsError } = await supabase
-          .from('extractions')
-          .select('*')
-          .eq('case_id', caseId)
-          .order('extracted_at', { ascending: false })
-          .limit(1);
-
-        if (extractionsError) {
-          console.error('[CHAT] Erro ao buscar extrações:', extractionsError);
-          throw extractionsError;
-        }
-
-        console.log('[CHAT] Extrações encontradas:', extractions);
-
-        // Se não há extrações ainda, aguardar mais um pouco
-        if (!extractions || extractions.length === 0) {
-          console.log('[CHAT] Nenhuma extração encontrada, aguardando mais 3 segundos...');
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          
-          const { data: extractions2 } = await supabase
-            .from('extractions')
-            .select('*')
-            .eq('case_id', caseId)
-            .order('extracted_at', { ascending: false })
-            .limit(1);
-          
-          if (extractions2 && extractions2.length > 0) {
-            console.log('[CHAT] Extrações encontradas na segunda tentativa');
-            extractedData = extractions2[0].entities || {};
-          } else {
-            console.warn('[CHAT] Nenhuma extração encontrada após 8 segundos');
-            extractedData = {};
-          }
-        } else {
-          extractedData = extractions[0].entities || {};
-        }
-
-        console.log('[CHAT] Dados extraídos finais:', extractedData);
-      } else {
-        // Fallback: usar dados da resposta se houver
-        extractedData = extractionResult?.extractedData || {};
-      }
-
-      // Buscar também o caso atualizado do banco
+      
+      console.log(`[SEQUENTIAL] ✅ Processamento sequencial concluído!`);
+      
+      // Buscar caso atualizado
       const { data: updatedCase } = await supabase
         .from('cases')
         .select('*')
@@ -351,8 +337,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         .single();
 
       if (updatedCase) {
-        console.log('[CHAT] Caso atualizado encontrado:', updatedCase);
-        // Merge com dados extraídos
+        console.log('[SEQUENTIAL] Caso final:', updatedCase);
         if (updatedCase.author_name && updatedCase.author_name !== 'Processando...') {
           extractedData.motherName = updatedCase.author_name;
         }
@@ -377,7 +362,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       if (!extractedData.motherCpf) criticalMissing.push('CPF da mãe');
 
       let assistantMessage = `✅ **Documentos processados com sucesso!**\n\n`;
-      assistantMessage += `📄 **${allDocuments?.length || uploadedFiles.length} documento(s) analisado(s) (total no caso)**\n\n`;
+      assistantMessage += `📄 **${processedCount} documento(s) analisado(s)**\n\n`;
       
       if (Object.keys(extractedData).length > 0) {
         assistantMessage += "**📋 Informações extraídas dos documentos:**\n\n";
