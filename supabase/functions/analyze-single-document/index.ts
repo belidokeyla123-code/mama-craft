@@ -213,7 +213,7 @@ serve(async (req) => {
 
     console.log(`[ANALYZE-SINGLE] 📂 Documento: ${doc.file_name} (${doc.document_type})`);
 
-    // 2. Baixar imagem do Storage
+    // 2. Baixar arquivo do Storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('case-documents')
       .download(doc.file_path);
@@ -222,28 +222,54 @@ serve(async (req) => {
       throw new Error(`Erro ao baixar: ${downloadError?.message}`);
     }
 
-    // 3. Converter para base64 usando biblioteca padrão do Deno (solução correta!)
     const arrayBuffer = await fileData.arrayBuffer();
-    
-    // 🆕 EXTRAIR TEXTO DO PDF (se for PDF)
-    let pdfText = '';
     const mimeType = doc.mime_type || '';
-    if (mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf')) {
-      console.log(`[ANALYZE-SINGLE] 📄 Extraindo texto do PDF...`);
+    const isPdf = mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
+    
+    let pdfText = '';
+    let base64Image = '';
+    
+    // 3. PROCESSAR PDF: extrair texto + criar imagem da primeira página
+    if (isPdf) {
+      console.log(`[ANALYZE-SINGLE] 📄 PDF detectado - extraindo texto nativo...`);
+      
+      // Extrair texto do PDF
       pdfText = await extractPdfText(arrayBuffer);
       if (pdfText) {
         console.log(`[ANALYZE-SINGLE] ✅ Texto extraído: ${pdfText.length} caracteres`);
-        console.log(`[ANALYZE-SINGLE] 📝 Preview do texto:\n${pdfText.substring(0, 300)}...`);
+        console.log(`[ANALYZE-SINGLE] 📝 Primeiras 500 chars:\n${pdfText.substring(0, 500)}`);
       } else {
-        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto extraível (pode ser imagem escaneada)`);
+        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto (pode ser escaneado, usando OCR visual)`);
       }
+      
+      // Converter apenas PRIMEIRA página para imagem (contexto visual)
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+        
+        // Criar canvas com Deno Canvas
+        const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
+        const canvas = createCanvas(viewport.width, viewport.height);
+        const context = canvas.getContext('2d');
+        
+        await page.render({ canvasContext: context, viewport }).promise;
+        const dataUrl = canvas.toDataURL('image/png');
+        base64Image = dataUrl; // Já inclui "data:image/png;base64,"
+        
+        console.log(`[ANALYZE-SINGLE] 🖼️ Primeira página renderizada como imagem`);
+      } catch (renderError: any) {
+        console.error(`[ANALYZE-SINGLE] ⚠️ Erro ao renderizar página:`, renderError);
+        // Fallback: usar PDF inteiro como base64 (menos eficiente mas funciona)
+        const base64 = base64Encode(arrayBuffer);
+        base64Image = `data:application/pdf;base64,${base64}`;
+      }
+    } else {
+      // 3. PROCESSAR IMAGEM: converter para base64
+      const base64 = base64Encode(arrayBuffer);
+      base64Image = `data:${mimeType};base64,${base64}`;
+      console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida (${(base64.length / 1024).toFixed(1)} KB)`);
     }
-    
-    // Usar encode do Deno que é otimizado para arquivos grandes
-    const base64 = base64Encode(arrayBuffer);
-    const base64Image = `data:${doc.mime_type};base64,${base64}`;
-
-    console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida (${(base64.length / 1024).toFixed(1)} KB)`);
 
     // 4. Classificar tipo (se ainda não classificado)
     let docType = doc.document_type;
@@ -296,18 +322,20 @@ serve(async (req) => {
     // 5. Montar prompt específico
     const prompt = buildPromptForDocType(docType, doc.file_name);
 
-    // 6. Chamar IA
-    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (GPT-5 Mini - modelo premium)...`);
+    // 6. Chamar IA com texto + imagem
+    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (GPT-5 Mini)...`);
     
-    // Construir mensagens com texto + imagem
+    // Construir mensagens: priorizar texto extraído se disponível
     const userMessages = [];
     
-    if (pdfText) {
+    if (pdfText && pdfText.length > 50) {
+      // PDF com texto: enviar texto + imagem para validação
       userMessages.push({
         type: 'text',
-        text: `${prompt}\n\n📄 TEXTO EXTRAÍDO DO PDF:\n\n${pdfText}\n\n[Imagem anexada abaixo para validação visual]`
+        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF:\n\n${pdfText}\n\n---\n\n[Imagem da primeira página anexada abaixo para validação visual. Priorize o texto acima sobre a imagem.]`
       });
     } else {
+      // Imagem ou PDF escaneado: apenas prompt
       userMessages.push({
         type: 'text',
         text: prompt
@@ -465,7 +493,12 @@ serve(async (req) => {
         docType,
         extracted: extracted.extractedData,
         confidence: extracted.extractionConfidence,
-        extractedText: pdfText ? pdfText.substring(0, 2000) : undefined // Primeiros 2000 chars
+        extractedText: pdfText || null, // Texto completo do PDF (se disponível)
+        debug: {
+          textLength: pdfText.length,
+          modelUsed: 'openai/gpt-5-mini',
+          hadPdfText: !!pdfText
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
