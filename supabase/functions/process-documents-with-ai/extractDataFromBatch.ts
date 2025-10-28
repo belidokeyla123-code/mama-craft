@@ -7,7 +7,18 @@ export async function extractDataFromBatch(
   hasAutodeclaracao: boolean,
   lovableApiKey?: string
 ): Promise<any> {
-  console.log(`[IA BATCH] Chamando IA (Lovable AI Claude Sonnet 4.5 ou OpenAI GPT-4o) com ${processedBatch.length} imagens...`);
+  console.log(`[IA BATCH] Iniciando extração com ${processedBatch.length} documentos...`);
+  
+  // PRIORIZAR LOVABLE AI (Gemini Pro) se disponível - OCR SUPERIOR!
+  const useLovableAI = !!lovableApiKey;
+  const apiKey = useLovableAI ? lovableApiKey : openaiApiKey;
+  const apiUrl = useLovableAI 
+    ? "https://ai.gateway.lovable.dev/v1/chat/completions"
+    : "https://api.openai.com/v1/chat/completions";
+  const model = useLovableAI ? "google/gemini-2.5-pro" : "gpt-4o";
+  
+  console.log(`[IA BATCH] Usando: ${useLovableAI ? '🔥 Lovable AI (Gemini Pro)' : 'OpenAI (GPT-4o)'}`);
+  console.log(`[IA BATCH] Modelo: ${model}`);
   
   const systemPrompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
@@ -257,84 +268,93 @@ Agora extraia TODOS os dados listados acima:`;
     }
     
     if (doc.docType === 'documento_terra') {
-      docPrompt = `🔍 DOCUMENTO DA TERRA - ATENÇÃO MÁXIMA:
+      docPrompt = `🚨🚨🚨 ATENÇÃO MÁXIMA: DOCUMENTO DA TERRA 🚨🚨🚨
 
-Este documento define se a terra é PRÓPRIA ou de TERCEIRO.
+⚠️ ESTE É UM DOS DOCUMENTOS MAIS IMPORTANTES!
+⚠️ O CPF E RG DO PROPRIETÁRIO SÃO **OBRIGATÓRIOS**!
 
-🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
+🔍 INSTRUÇÕES ULTRA-ESPECÍFICAS DE EXTRAÇÃO:
 
-**PROPRIETÁRIO DA TERRA**:
-- landOwnerName: Nome COMPLETO do proprietário (OBRIGATÓRIO)
-- landOwnerCpf: CPF do proprietário SEM FORMATAÇÃO - só 11 números (OBRIGATÓRIO)
-- landOwnerRg: RG do proprietário com órgão expedidor
+1️⃣ **CPF DO PROPRIETÁRIO** (landOwnerCpf) - CAMPO OBRIGATÓRIO:
+   - Procure em TODO o documento por números no formato XXX.XXX.XXX-XX
+   - Procure nas seguintes seções:
+     * Cabeçalho do documento
+     * Primeiro parágrafo (geralmente tem: "FULANO DE TAL, CPF nº XXX.XXX.XXX-XX")
+     * Tabela de dados cadastrais
+     * Seção "Dados do Proprietário"
+     * Seção "Qualificação"
+     * Junto à assinatura no final
+   - REMOVA toda formatação: apenas 11 números
+   - Exemplo: se vir "123.456.789-10" → retorne "12345678910"
 
-**DADOS DA PROPRIEDADE**:
-- landArea: Área cedida em hectares - procure por "ha" ou "hectare" (número decimal)
-- landTotalArea: Área total do imóvel em hectares (número decimal)
-- landExploitedArea: Área explorada em hectares (número decimal)
-- landPropertyName: Nome da propriedade (Sítio X, Fazenda Y)
+2️⃣ **RG DO PROPRIETÁRIO** (landOwnerRg) - CAMPO OBRIGATÓRIO:
+   - Procure por: "RG:", "Identidade:", "Registro Geral:", "Doc. Identidade:"
+   - Pode estar em qualquer lugar do documento
+   - Inclua o órgão expedidor: "12.345.678-9 SSP/MG"
+
+3️⃣ **NOME DO PROPRIETÁRIO** (landOwnerName):
+   - Geralmente está no primeiro parágrafo
+   - Exemplo: "CLAUDIONOR CORDEIRO DA SILVA, CPF..."
+   - Extraia o nome COMPLETO
+
+🚨 SE VOCÊ NÃO ENCONTRAR O CPF E RG, SIGNIFICA QUE VOCÊ NÃO LEU O DOCUMENTO INTEIRO!
+🚨 LEIA PALAVRA POR PALAVRA, LINHA POR LINHA!
+🚨 NÃO DEIXE ESSES CAMPOS EM BRANCO!
+
+**Dados da terra:**
+- landOwnerCpf: CPF do proprietário da terra (formato: apenas números, sem formatação)
+- landOwnerRg: RG do proprietário
+- landOwnerName: Nome completo do proprietário da terra
+- landArea: Área cedida em hectares
+- landPropertyName: Nome da propriedade
 - landMunicipality: Município/UF
-- landITR: Número do registro ITR (se houver)
-- landCessionType: Tipo de cessão - procure palavras como "COMODATO", "Arrendamento", "Parceria", "Cessão"
-
-**TIPO DE PROPRIEDADE** (landOwnershipType):
-- Se for ESCRITURA ou ITR em nome da autora → "propria"
-- Se for COMODATO, ARRENDAMENTO, CESSÃO → "terceiro"
-- DICA: Procure nos parágrafos iniciais do documento
-
-⚠️ PROCURE EM:
-- Cabeçalho do documento
-- Parágrafos iniciais (geralmente tem "FULANO DE TAL, CPF XXX, proprietário...")
-- Tabelas com dados cadastrais
-- Assinaturas no final
 
 Documento: ${doc.fileName}
-Tipo: ${doc.docType}
+Tipo: documento_terra
 
-Agora extraia TODOS os campos listados acima COM MÁXIMA ATENÇÃO:`;
+Agora EXTRAIA com MÁXIMA ATENÇÃO os campos obrigatórios acima:`;
     }
     
     if (doc.docType === 'processo_administrativo') {
-      docPrompt = `📄 PROCESSO ADMINISTRATIVO / INDEFERIMENTO INSS - CRÍTICO!
+      docPrompt = `🚨🚨🚨 INDEFERIMENTO DO INSS - DOCUMENTO CRÍTICO! 🚨🚨🚨
 
-Este documento é ESSENCIAL para a ação judicial e deve ser lido COM MÁXIMA ATENÇÃO!
+⚠️ ESTE É O DOCUMENTO MAIS IMPORTANTE PARA A AÇÃO JUDICIAL!
+⚠️ TODOS OS CAMPOS ABAIXO SÃO **OBRIGATÓRIOS**!
 
-🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
+🔍 INSTRUÇÕES DETALHADAS:
 
-1. **raProtocol** - NÚMERO DO PROTOCOLO/BENEFÍCIO (OBRIGATÓRIO):
-   → Procure por palavras-chave: "NB", "Número do Benefício", "Protocolo", "Requerimento nº"
-   → Formato comum: "187.654.321-0", "NB 187654321", "Protocolo: 123456789"
-   → Localização: PRIMEIRA PÁGINA, geralmente no TOPO ou no CABEÇALHO
-   → COPIE EXATAMENTE COMO ESTÁ ESCRITO
+1️⃣ **NÚMERO DO PROTOCOLO/NB** (raProtocol) - OBRIGATÓRIO:
+   - Procure na PRIMEIRA PÁGINA, geralmente no TOPO
+   - Formatos comuns:
+     * "NB: 187.654.321-0"
+     * "Benefício Nº: 123456789"
+     * "Protocolo: 98765432"
+   - Se encontrar, COPIE EXATAMENTE como está escrito
 
-2. **raRequestDate** - DATA DO REQUERIMENTO (OBRIGATÓRIA):
-   → Procure por: "Data do Requerimento", "Data da Solicitação", "DER", "Data de Entrada do Requerimento"
-   → É a data em que a segurada PEDIU o benefício ao INSS
-   → Formato: YYYY-MM-DD (exemplo: 2023-05-15)
+2️⃣ **DATA DO REQUERIMENTO** (raRequestDate) - OBRIGATÓRIO:
+   - Procure por: "Data do Requerimento:", "Data da Solicitação:", "DER:"
+   - Formato: DD/MM/YYYY
+   - Converter para: YYYY-MM-DD
 
-3. **raDenialDate** - DATA DO INDEFERIMENTO (OBRIGATÓRIA):
-   → Procure por: "Data da Decisão", "Data do Despacho", "Data do Indeferimento", "Data da Negativa"
-   → É a data em que o INSS NEGOU o benefício
-   → Formato: YYYY-MM-DD
+3️⃣ **DATA DO INDEFERIMENTO** (raDenialDate) - OBRIGATÓRIO:
+   - Procure por: "Data da Decisão:", "Data do Despacho:", "Indeferido em:"
+   - Formato: DD/MM/YYYY
+   - Converter para: YYYY-MM-DD
 
-4. **raDenialReason** - MOTIVO DO INDEFERIMENTO (LITERAL E COMPLETO - OBRIGATÓRIO):
-   → Procure por seções com títulos: "FUNDAMENTAÇÃO", "MOTIVO", "RAZÕES", "ANÁLISE", "DESPACHO"
-   → COPIE PALAVRA POR PALAVRA TODO o texto explicando por que foi negado
-   → NÃO resuma, NÃO parafraseie, NÃO omita nada
-   → Inclua: fundamentação jurídica completa, artigos de lei citados, análise técnica
-   → Se houver múltiplas páginas de texto, copie TODAS elas
-   → Exemplo esperado: "Não restou comprovada a qualidade de segurado especial, tendo em vista que os documentos apresentados não são suficientes para comprovar o exercício de atividade rural em regime de economia familiar no período de carência exigido pela Lei 8.213/91, art. 39..."
+4️⃣ **MOTIVO DO INDEFERIMENTO** (raDenialReason) - OBRIGATÓRIO E LITERAL:
+   - Procure seções: "FUNDAMENTAÇÃO", "MOTIVO", "RAZÕES DO INDEFERIMENTO"
+   - COPIE PALAVRA POR PALAVRA TODO O TEXTO
+   - NÃO resuma, NÃO parafraseie!
+   - Se tiver múltiplas páginas de fundamentação, copie TODAS!
+   - Exemplo: "Não comprovada a qualidade de segurado especial conforme art. 39 da Lei 8.213/91..."
 
-⚠️ IMPORTANTE:
-- Leia TODAS as páginas deste documento
-- Páginas iniciais geralmente têm protocolo e datas
-- Páginas intermediárias/finais têm a fundamentação completa
-- NÃO OMITA NENHUMA INFORMAÇÃO!
+🚨 SE VOCÊ NÃO ENCONTRAR ESSES DADOS, VOCÊ NÃO LEU O DOCUMENTO INTEIRO!
+🚨 LEIA TODAS AS PÁGINAS DO INÍCIO AO FIM!
 
 Documento: ${doc.fileName}
-Tipo: ${doc.docType}
+Tipo: processo_administrativo
 
-Agora extraia TODOS os 4 campos listados acima COM MÁXIMA PRECISÃO:`;
+Agora EXTRAIA com MÁXIMA PRECISÃO todos os 4 campos obrigatórios:`;
     }
     
     if (doc.docType === 'historico_escolar') {
@@ -367,32 +387,41 @@ AGORA EXTRAIA TODOS OS DADOS ESCOLARES COM MÁXIMA ATENÇÃO:`;
     }
     
     if (doc.docType === 'declaracao_saude_ubs') {
-      docPrompt = `🏥 DECLARAÇÃO DE SAÚDE / UBS - PROVA MATERIAL!
+      docPrompt = `🩺🩺🩺 DECLARAÇÃO DE SAÚDE UBS - PROVA MATERIAL RURAL! 🩺🩺🩺
 
-⚠️⚠️⚠️ ESTE DOCUMENTO É EXTREMAMENTE IMPORTANTE! ⚠️⚠️⚠️
+⚠️ ESTE DOCUMENTO PROVA RESIDÊNCIA EM ZONA RURAL!
+⚠️ É ACEITO PELA JUSTIÇA COMO PROVA MATERIAL!
 
-Você DEVE extrair TODOS os dados da UBS neste documento!
+🔍 INSTRUÇÕES ESPECÍFICAS:
 
-🔴 OBRIGATÓRIO EXTRAIR (campo healthDeclarationUbs):
+1️⃣ **NOME DA UBS** (unidade_saude) - OBRIGATÓRIO:
+   - Procure no cabeçalho do documento
+   - Exemplos: "UBS Rural São João", "Posto de Saúde da Família"
 
-- unidade_saude: Nome COMPLETO da UBS/Posto (ex: "UBS Rural da Fazenda Esperança")  
-- tratamento_desde: Desde quando recebe atendimento (formato YYYY-MM-DD)
-- tipo_tratamento: Tipo (ex: "Pré-natal", "Acompanhamento gestacional")
-- localizacao: CRÍTICO - dizer se é "ZONA RURAL" ou "ZONA URBANA" + município/UF
-- profissional_responsavel: Nome do médico/enfermeiro + CRM
-- observacoes_medicas: Qualquer observação relevante
+2️⃣ **DESDE QUANDO RECEBE ATENDIMENTO** (tratamento_desde) - OBRIGATÓRIO:
+   - Procure por: "Desde:", "A partir de:", "Acompanhamento desde:"
+   - Formato: YYYY-MM-DD
 
-🔍 ONDE PROCURAR:
-- Nome da UBS: topo do documento, cabeçalho
-- Datas: procure por "desde", "acompanhamento desde", datas
-- Localização: procure por "RURAL", "ÁREA RURAL", nome da localidade
+3️⃣ **TIPO DE TRATAMENTO** (tipo_tratamento):
+   - Exemplos: "Pré-natal", "Consultas de rotina", "Acompanhamento pediátrico"
 
-⚠️ SE A UBS É EM ZONA RURAL = PROVA QUE A AUTORA MORA/TRABALHA NA ZONA RURAL!
+4️⃣ **LOCALIZAÇÃO DA UBS** (localizacao) - CRÍTICO:
+   - PROCURE POR: "Zona Rural", "Área Rural", "Zona Urbana"
+   - Se não mencionar explicitamente, infira do endereço
+   - Sempre incluir município/UF
+   - Exemplo: "Zona Rural, São João do Paraíso/MG"
+
+5️⃣ **OBSERVAÇÕES MÉDICAS** (observacoes_medicas):
+   - Qualquer texto sobre a condição da paciente
+   - Copie literalmente se houver
+
+🚨 ATENÇÃO: Este documento geralmente é uma DECLARAÇÃO SIMPLES, não um laudo!
+🚨 Pode ter apenas 1 página com poucas linhas, mas TODAS as informações são importantes!
 
 Documento: ${doc.fileName}
 Tipo: declaracao_saude_ubs
 
-AGORA EXTRAIA TODOS OS DADOS DA UBS COM MÁXIMA ATENÇÃO:`;
+AGORA EXTRAIA TODOS OS DADOS COM MÁXIMA ATENÇÃO:`;
     }
     
     if (doc.docType === 'documento_terra') {
@@ -525,17 +554,10 @@ Agora extraia TODOS os dados de saúde listados acima:`;
     });
   }
 
-  const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openaiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
+    // Preparar body da requisição com parâmetros específicos por modelo
+    const requestBody: any = {
+      model,
       messages,
-      max_tokens: 4096,
-      temperature: 0,
       functions: [
         {
           name: "extract_case_info",
@@ -742,9 +764,26 @@ Agora extraia TODOS os dados de saúde listados acima:`;
           },
         },
       ],
-      function_call: { name: "extract_case_info" },
-    }),
-  });
+        function_call: { name: "extract_case_info" },
+    };
+
+    // Adicionar parâmetros específicos por modelo
+    if (useLovableAI) {
+      requestBody.max_completion_tokens = 8000; // Gemini suporta mais tokens
+      // NÃO adicionar temperature (Gemini não suporta)
+    } else {
+      requestBody.max_tokens = 4096;
+      requestBody.temperature = 0;
+    }
+
+    const aiResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
 
   if (!aiResponse.ok) {
     const errorText = await aiResponse.text();
