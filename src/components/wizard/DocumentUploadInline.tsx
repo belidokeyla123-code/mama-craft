@@ -75,12 +75,7 @@ export const DocumentUploadInline = ({
   return (
     <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-2 border-blue-300">
       <div className="flex items-center justify-between">
-        <div className="flex-1">
-          {suggestedDocType && (
-            <p className="text-sm font-medium mb-2">
-              Adicione: {suggestedDocType}
-            </p>
-          )}
+      <div className="flex-1">
           {uploadedFiles.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-green-600 mb-2">
               <CheckCircle className="h-4 w-4" />

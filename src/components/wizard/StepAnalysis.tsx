@@ -69,58 +69,42 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
     
     setLoading(true);
     try {
-      // Adicionar à fila ao invés de chamar direto
-      const { data: result, error } = await supabase.functions.invoke('queue-analysis', {
+      // Chamar análise diretamente (sem fila)
+      const { data: result, error } = await supabase.functions.invoke('analyze-case-legal', {
         body: { caseId: data.caseId }
       });
 
-      if (error) throw error;
-
-      toast.success("Análise adicionada à fila. Processando em background...");
-      
-      // Polling para verificar status
-      const pollInterval = setInterval(async () => {
-        const { data: queue } = await supabase
-          .from('processing_queue')
-          .select('analysis_status, analysis_completed_at')
-          .eq('case_id', data.caseId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (queue?.analysis_status === 'completed') {
-          clearInterval(pollInterval);
-          
-          // Buscar resultado da análise
-          const { data: analysisData } = await supabase
-            .from('case_analysis')
-            .select('draft_payload')
-            .eq('case_id', data.caseId)
-            .single();
-          
-          if (analysisData?.draft_payload) {
-            setAnalysis(analysisData.draft_payload as unknown as LegalAnalysis);
-            toast.success("Análise jurídica concluída!");
-          }
-          setLoading(false);
-        } else if (queue?.analysis_status === 'failed') {
-          clearInterval(pollInterval);
+      if (error) {
+        // Tratar erros específicos
+        if (error.message?.includes('429')) {
+          toast.error('Limite de requisições atingido. Tente novamente em alguns minutos.');
+        } else if (error.message?.includes('402')) {
+          toast.error('Créditos insuficientes. Adicione créditos na sua conta.');
+        } else if (error.message?.includes('timeout')) {
+          toast.error('Análise demorou muito. Tente novamente.');
+        } else {
           toast.error('Erro ao realizar análise jurídica');
-          setLoading(false);
         }
-      }, 3000);
-      
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (loading) {
-          toast.error('Timeout: análise demorou muito');
-          setLoading(false);
-        }
-      }, 120000);
+        throw error;
+      }
 
-    } catch (error) {
+      // Buscar resultado da análise no banco
+      const { data: analysisData } = await supabase
+        .from('case_analysis')
+        .select('draft_payload')
+        .eq('case_id', data.caseId)
+        .single();
+      
+      if (analysisData?.draft_payload) {
+        setAnalysis(analysisData.draft_payload as unknown as LegalAnalysis);
+        toast.success("Análise jurídica concluída!");
+      } else {
+        toast.warning("Análise executada mas resultado não encontrado.");
+      }
+
+    } catch (error: any) {
       console.error('Erro ao analisar caso:', error);
-      toast.error('Erro ao adicionar análise à fila');
+    } finally {
       setLoading(false);
     }
   };
