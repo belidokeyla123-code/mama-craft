@@ -38,6 +38,17 @@ serve(async (req) => {
       .select('*')
       .eq('case_id', caseId);
 
+    // Buscar histórico de benefícios e exceções
+    const { data: benefitHistory } = await supabase
+      .from('benefit_history')
+      .select('*')
+      .eq('case_id', caseId);
+
+    const { data: caseExceptions } = await supabase
+      .from('case_exceptions')
+      .select('*')
+      .eq('case_id', caseId);
+
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
 ⚠️⚠️⚠️ AGORA VOCÊ VAI FAZER ANÁLISE JURÍDICA ⚠️⚠️⚠️
@@ -98,14 +109,28 @@ TAREFA: Faça uma análise jurídica completa e retorne JSON com:
   "recomendacoes": ["Recomendação 1"]
 }
 
+**SITUAÇÕES ESPECIAIS DETECTADAS:**
+${caseExceptions && caseExceptions.length > 0 ? 
+  caseExceptions.map(ex => `- ${ex.exception_type}: ${ex.description}`).join('\n') : 
+  'Nenhuma situação especial identificada'}
+
+**HISTÓRICO DE BENEFÍCIOS:**
+${benefitHistory && benefitHistory.length > 0 ?
+  benefitHistory.map(b => `- NB ${b.nb}: ${b.benefit_type} (${b.start_date} a ${b.end_date}) - Status: ${b.status}`).join('\n') :
+  'Nenhum benefício anterior identificado'}
+
 Considere:
 - Para segurada especial: carência dispensada
-- RMI = salário mínimo vigente (${caseData.salario_minimo_ref})
+- Para segurada urbana: 10 meses de carência
+- RMI segurada especial = salário mínimo vigente (${caseData.salario_minimo_ref})
+- RMI segurada urbana = média das últimas 12 remunerações
 - Valor da causa = 4 meses × RMI
-- Analise CNIS para identificar períodos reconhecidos pelo INSS
-- Se há benefícios anteriores de maternidade = reconhecimento de atividade rural
+- Se há benefício CONCEDIDO anteriormente → Caso de RESTABELECIMENTO (Art. 71, §4º, Lei 8.213/91)
+- Se há múltiplos indeferimentos → Analisar razões e fundamentar recurso
+- Se CNIS mostra remuneração urbana recente → Avaliar qualidade de segurada urbana
 - A requerente é ${caseData.author_name || 'a mãe'} (MÃE), não a criança
-- Verifique idade e qualidade da MÃE na data do evento (child_birth_date)`;
+- Verifique idade e qualidade da MÃE na data do evento (child_birth_date)
+- Jurisprudência aplicável: TNU, Pedido 0502723-87.2015.4.05.8300 (restabelecimento)`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

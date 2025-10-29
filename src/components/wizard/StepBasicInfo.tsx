@@ -250,20 +250,64 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     setIsSaving(true);
     
     try {
-      // Atualizar caso no banco
+      // 🆕 Função de limpeza robusta de datas
+      const cleanDateField = (dateValue: string | undefined | null): string | null => {
+        if (!dateValue || dateValue === '') return null;
+        
+        // Lista de valores inválidos conhecidos
+        const invalidValues = [
+          'N/A', 'n/a', 'Não identificado', 'não identificado',
+          'Não disponível', 'não disponível', 'Não encontrado', 'não encontrado'
+        ];
+        
+        if (invalidValues.some(invalid => dateValue.includes(invalid))) {
+          console.warn(`[SAVE] Removendo valor inválido: "${dateValue}"`);
+          return null;
+        }
+        
+        // Detectar textos explicativos
+        const lowerValue = dateValue.toLowerCase();
+        const invalidPhrases = [
+          'não é possível', 'não foi possível', 'não consta',
+          'vazio', 'indisponível', 'não está', 'documento não contém'
+        ];
+        
+        if (invalidPhrases.some(phrase => lowerValue.includes(phrase))) {
+          console.warn(`[SAVE] Removendo texto explicativo: "${dateValue}"`);
+          return null;
+        }
+        
+        // Validar formato YYYY-MM-DD
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dateValue)) {
+          console.warn(`[SAVE] Formato inválido: "${dateValue}"`);
+          return null;
+        }
+        
+        // Validar se é uma data real
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) {
+          console.warn(`[SAVE] Data inválida: "${dateValue}"`);
+          return null;
+        }
+        
+        return dateValue;
+      };
+
+      // Atualizar caso no banco COM VALIDAÇÃO
       const { error } = await supabase
         .from('cases')
         .update({
           author_name: data.authorName,
           author_cpf: data.authorCpf,
           author_rg: data.authorRg,
-          author_birth_date: data.authorBirthDate,
+          author_birth_date: cleanDateField(data.authorBirthDate),
           author_marital_status: data.authorMaritalStatus,
           author_address: data.authorAddress,
           child_name: data.childName,
-          child_birth_date: data.childBirthDate,
+          child_birth_date: cleanDateField(data.childBirthDate),
           father_name: data.fatherName,
-          event_date: data.eventDate,
+          event_date: cleanDateField(data.eventDate),
           profile: data.profile,
           rural_periods: data.ruralPeriods as any,
           urban_periods: data.urbanPeriods as any,
@@ -280,14 +324,20 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           land_itr: data.landITR,
           rural_activities_planting: data.ruralActivitiesPlanting,
           rural_activities_breeding: data.ruralActivitiesBreeding,
-          rural_activity_since: data.ruralActivitySince,
+          rural_activity_since: cleanDateField(data.ruralActivitySince),
           school_history: data.schoolHistory as any,
           health_declaration_ubs: data.healthDeclarationUbs as any,
           has_ra: data.hasRa,
           ra_protocol: data.raProtocol,
-          ra_request_date: data.raRequestDate,
-          ra_denial_date: data.raDenialDate,
+          ra_request_date: cleanDateField(data.raRequestDate),
+          ra_denial_date: cleanDateField(data.raDenialDate),
           ra_denial_reason: data.raDenialReason,
+          spouse_name: data.spouseName,
+          spouse_cpf: data.spouseCpf,
+          marriage_date: cleanDateField(data.marriageDate),
+          nit: data.nit,
+          birth_city: data.birthCity,
+          birth_state: data.birthState,
           special_notes: data.specialNotes,
           updated_at: new Date().toISOString()
         })

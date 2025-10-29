@@ -104,6 +104,47 @@ export type Database = {
         }
         Relationships: []
       }
+      benefit_history: {
+        Row: {
+          benefit_type: string
+          case_id: string | null
+          created_at: string | null
+          end_date: string | null
+          id: string
+          nb: string
+          start_date: string | null
+          status: string
+        }
+        Insert: {
+          benefit_type: string
+          case_id?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          id?: string
+          nb: string
+          start_date?: string | null
+          status: string
+        }
+        Update: {
+          benefit_type?: string
+          case_id?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          id?: string
+          nb?: string
+          start_date?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "benefit_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_analysis: {
         Row: {
           analyzed_at: string
@@ -344,6 +385,8 @@ export type Database = {
           author_phone: string | null
           author_rg: string | null
           author_whatsapp: string | null
+          birth_city: string | null
+          birth_state: string | null
           child_birth_date: string | null
           child_name: string | null
           created_at: string
@@ -368,7 +411,9 @@ export type Database = {
           land_ownership_type: string | null
           land_property_name: string | null
           land_total_area: number | null
+          marriage_date: string | null
           mother_cpf: string | null
+          nit: string | null
           profile: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date: string | null
           ra_denial_reason: string | null
@@ -383,6 +428,8 @@ export type Database = {
           salario_minimo_ref: number | null
           school_history: Json | null
           special_notes: string | null
+          spouse_cpf: string | null
+          spouse_name: string | null
           started_with_chat: boolean | null
           status: Database["public"]["Enums"]["case_status"]
           updated_at: string
@@ -399,6 +446,8 @@ export type Database = {
           author_phone?: string | null
           author_rg?: string | null
           author_whatsapp?: string | null
+          birth_city?: string | null
+          birth_state?: string | null
           child_birth_date?: string | null
           child_name?: string | null
           created_at?: string
@@ -423,7 +472,9 @@ export type Database = {
           land_ownership_type?: string | null
           land_property_name?: string | null
           land_total_area?: number | null
+          marriage_date?: string | null
           mother_cpf?: string | null
+          nit?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
@@ -438,6 +489,8 @@ export type Database = {
           salario_minimo_ref?: number | null
           school_history?: Json | null
           special_notes?: string | null
+          spouse_cpf?: string | null
+          spouse_name?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string
@@ -454,6 +507,8 @@ export type Database = {
           author_phone?: string | null
           author_rg?: string | null
           author_whatsapp?: string | null
+          birth_city?: string | null
+          birth_state?: string | null
           child_birth_date?: string | null
           child_name?: string | null
           created_at?: string
@@ -478,7 +533,9 @@ export type Database = {
           land_ownership_type?: string | null
           land_property_name?: string | null
           land_total_area?: number | null
+          marriage_date?: string | null
           mother_cpf?: string | null
+          nit?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
@@ -493,6 +550,8 @@ export type Database = {
           salario_minimo_ref?: number | null
           school_history?: Json | null
           special_notes?: string | null
+          spouse_cpf?: string | null
+          spouse_name?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
           updated_at?: string

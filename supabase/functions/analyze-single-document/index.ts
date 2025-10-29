@@ -95,6 +95,64 @@ function getSchemaForDocType(docType: string) {
       },
       required: ['fullName']
     },
+    certidao_casamento: {
+      type: 'object',
+      properties: {
+        spouseName: { type: 'string', description: 'Nome completo do cônjuge' },
+        spouseCpf: { type: 'string', description: 'CPF do cônjuge (apenas números)' },
+        marriageDate: { type: 'string', description: 'Data do casamento (formato YYYY-MM-DD)' },
+        marriageLocation: { type: 'string', description: 'Local/cartório do casamento' },
+        propertyRegime: { type: 'string', description: 'Regime de bens' },
+        authorMaritalStatus: { type: 'string', description: 'Estado civil (casada/casado)' }
+      },
+      required: ['spouseName', 'marriageDate']
+    },
+    cnis: {
+      type: 'object',
+      properties: {
+        nit: { type: 'string', description: 'Número de Identificação do Trabalhador (NIT)' },
+        currentSalary: { type: 'number', description: 'Salário/remuneração atual ou mais recente (valor numérico)' },
+        lastEmploymentDate: { type: 'string', description: 'Data do último vínculo empregatício (YYYY-MM-DD)' },
+        hasUrbanEmployment: { type: 'boolean', description: 'Possui vínculos urbanos ativos ou recentes?' },
+        previousBenefits: {
+          type: 'array',
+          description: 'Benefícios anteriores identificados',
+          items: {
+            type: 'object',
+            properties: {
+              nb: { type: 'string', description: 'Número do benefício' },
+              benefitType: { type: 'string', description: 'Tipo (ex: Salário-Maternidade)' },
+              startDate: { type: 'string', description: 'Data início (YYYY-MM-DD)' },
+              endDate: { type: 'string', description: 'Data fim (YYYY-MM-DD)' },
+              status: { type: 'string', description: 'Status: ATIVO, CESSADO, INDEFERIDO' }
+            }
+          }
+        },
+        hasMaternityBenefitSameEvent: { type: 'boolean', description: 'Há auxílio-maternidade concedido para o mesmo evento?' }
+      }
+    },
+    cartao_vacina: {
+      type: 'object',
+      properties: {
+        childName: { type: 'string', description: 'Nome completo da criança' },
+        childBirthDate: { type: 'string', description: 'Data de nascimento (YYYY-MM-DD)' },
+        birthCity: { type: 'string', description: 'Cidade onde nasceu' },
+        birthState: { type: 'string', description: 'Estado onde nasceu (sigla, ex: MG)' },
+        vaccinations: {
+          type: 'array',
+          description: 'Histórico de vacinas',
+          items: {
+            type: 'object',
+            properties: {
+              vaccine: { type: 'string' },
+              date: { type: 'string' },
+              dose: { type: 'string' }
+            }
+          }
+        }
+      },
+      required: ['childName', 'childBirthDate']
+    },
     comprovante_residencia: {
       type: 'object',
       properties: {
@@ -104,26 +162,6 @@ function getSchemaForDocType(docType: string) {
         state: { type: 'string', description: 'Estado (UF)' },
         zipCode: { type: 'string', description: 'CEP' },
         referenceDate: { type: 'string', description: 'Data de referência do comprovante (YYYY-MM-DD)' }
-      }
-    },
-    cnis: {
-      type: 'object',
-      properties: {
-        fullName: { type: 'string', description: 'Nome completo do segurado' },
-        cpf: { type: 'string', description: 'CPF (apenas números)' },
-        contributionRecords: {
-          type: 'array',
-          description: 'Registros de vínculos/contribuições',
-          items: {
-            type: 'object',
-            properties: {
-              employer: { type: 'string' },
-              startDate: { type: 'string' },
-              endDate: { type: 'string' },
-              cnpj: { type: 'string' }
-            }
-          }
-        }
       }
     },
     historico_escolar: {
@@ -419,8 +457,8 @@ Você é um especialista altamente experiente em análise de documentos previden
       console.error('[ANALYZE-SINGLE] ⚠️ Erro ao salvar:', saveError);
     }
 
-    // 9. Atualizar campos do caso se for certidão
-    if (docType === 'certidao_nascimento' && extracted.extractedData) {
+    // 9. Atualizar campos do caso conforme tipo de documento
+    if ((docType === 'certidao_nascimento' || docType === 'cartao_vacina') && extracted.extractedData) {
       const updates: any = {};
       
       // Helper: validar se é uma data válida no formato YYYY-MM-DD
@@ -486,6 +524,16 @@ Você é um especialista altamente experiente em análise de documentos previden
       if (extracted.extractedData.fatherCpf && /^\d{11}$/.test(extracted.extractedData.fatherCpf)) {
         updates.father_cpf = extracted.extractedData.fatherCpf;
         console.log(`[ANALYZE-SINGLE] ✅ fatherCpf: ${extracted.extractedData.fatherCpf}`);
+      }
+      
+      // Extrair birthCity e birthState (cartão de vacina)
+      if (extracted.extractedData.birthCity && !isExplanationText(extracted.extractedData.birthCity)) {
+        updates.birth_city = extracted.extractedData.birthCity;
+        console.log(`[ANALYZE-SINGLE] ✅ birthCity: ${extracted.extractedData.birthCity}`);
+      }
+      if (extracted.extractedData.birthState && !isExplanationText(extracted.extractedData.birthState)) {
+        updates.birth_state = extracted.extractedData.birthState;
+        console.log(`[ANALYZE-SINGLE] ✅ birthState: ${extracted.extractedData.birthState}`);
       }
 
       if (Object.keys(updates).length > 0) {

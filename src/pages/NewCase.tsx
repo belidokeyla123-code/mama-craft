@@ -59,6 +59,16 @@ export interface CaseData {
   childBirthDate?: string;
   fatherName?: string;
   
+  // Dados do cônjuge
+  spouseName?: string;
+  spouseCpf?: string;
+  marriageDate?: string;
+  
+  // Dados previdenciários
+  nit?: string;
+  birthCity?: string;
+  birthState?: string;
+  
   // Evento
   eventType: "parto" | "adocao" | "guarda";
   eventDate: string;
