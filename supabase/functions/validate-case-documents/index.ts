@@ -281,6 +281,17 @@ Use "medium" para documentos complementares.`;
           }
         }
         
+        // Verificação especial para documento da terra (verifica se campos foram preenchidos)
+        if (itemType === 'documento_terra') {
+          const hasDocumentoTerra = documents.some(d => normalizeDocType(d.document_type) === 'documento_terra');
+          const hasLandOwnerData = caseData.land_owner_cpf && caseData.land_owner_name;
+          
+          if (hasDocumentoTerra && hasLandOwnerData) {
+            matchingDoc = documents.find(d => normalizeDocType(d.document_type) === 'documento_terra');
+            console.log(`[VALIDAÇÃO] ✅ Documento da Terra OK - CPF proprietário: ${caseData.land_owner_cpf}`);
+          }
+        }
+        
         // Fallback: buscar por document_type
         if (!matchingDoc) {
           matchingDoc = documents.find(d => {

@@ -855,15 +855,37 @@ Agora extraia TODOS os dados de saúde listados acima:`;
   const aiResult = await aiResponse.json();
   console.log("[IA BATCH] Resposta recebida com sucesso");
 
-  // Extrair dados do function call
+  // Extrair dados do function call OU do content com markdown
   const functionCall = aiResult.choices?.[0]?.message?.function_call;
-  if (!functionCall || functionCall.name !== 'extract_case_info') {
-    console.error("[IA BATCH] Resposta não contém function call esperado");
-    console.error("[IA BATCH] Resposta completa:", JSON.stringify(aiResult, null, 2));
-    throw new Error('A IA não retornou os dados no formato esperado');
+  let extractedData;
+
+  if (functionCall && functionCall.name === 'extract_case_info') {
+    // Formato OpenAI com function_call
+    extractedData = JSON.parse(functionCall.arguments);
+    console.log("[IA BATCH] ✅ Dados extraídos via function_call");
+  } else {
+    // Formato Gemini com JSON em markdown no content
+    const content = aiResult.choices?.[0]?.message?.content || '';
+    
+    // Tentar extrair JSON de bloco markdown
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      extractedData = JSON.parse(jsonMatch[1].trim());
+      console.log("[IA BATCH] ✅ Dados extraídos via content markdown");
+    } else {
+      // Tentar parse direto
+      try {
+        extractedData = JSON.parse(content.trim());
+        console.log("[IA BATCH] ✅ Dados extraídos via content direto");
+      } catch (e) {
+        console.error("[IA BATCH] Resposta não contém function call nem JSON válido");
+        console.error("[IA BATCH] Content:", content.substring(0, 500));
+        console.error("[IA BATCH] Resposta completa:", JSON.stringify(aiResult, null, 2));
+        throw new Error('A IA não retornou os dados no formato esperado');
+      }
+    }
   }
   
-  const extractedData = JSON.parse(functionCall.arguments);
   console.log("[IA BATCH] ===== DADOS EXTRAÍDOS =====");
   console.log("[IA BATCH] Dados completos:", JSON.stringify(extractedData, null, 2));
   
@@ -902,6 +924,22 @@ Agora extraia TODOS os dados de saúde listados acima:`;
     console.log("[IA BATCH] ✅ Área da terra extraída:", extractedData.landArea, "ha");
   } else {
     console.log("[IA BATCH] ⚠️ Área da terra NÃO extraída");
+  }
+  
+  // Mapear campos do documento da terra para o formato do banco
+  if (extractedData.landOwnerCpf) {
+    console.log("[IA BATCH] 📄 Documento da Terra detectado, mapeando campos...");
+    
+    // Campos que vão para a tabela 'cases'
+    if (!extractedData.land_owner_cpf) extractedData.land_owner_cpf = extractedData.landOwnerCpf;
+    if (!extractedData.land_owner_name) extractedData.land_owner_name = extractedData.landOwnerName;
+    if (!extractedData.land_owner_rg) extractedData.land_owner_rg = extractedData.landOwnerRg;
+    if (!extractedData.land_cession_type) extractedData.land_cession_type = extractedData.landCessionType;
+    if (!extractedData.land_area) extractedData.land_area = extractedData.landArea;
+    if (!extractedData.land_property_name) extractedData.land_property_name = extractedData.landPropertyName;
+    if (!extractedData.land_municipality) extractedData.land_municipality = extractedData.landMunicipality;
+    
+    console.log("[IA BATCH] ✅ Campos do documento da terra mapeados com sucesso");
   }
   
   console.log("[IA BATCH] ================================");

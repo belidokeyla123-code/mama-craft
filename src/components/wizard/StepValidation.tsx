@@ -301,56 +301,76 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         <Card className="p-6">
           <h3 className="text-lg font-semibold mb-4">Checklist Documental</h3>
           <div className="space-y-2">
-            {checklist.map((item: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between gap-3 p-3 border rounded">
-                <div className="flex items-center gap-3 flex-1">
-                  {item.document ? (
-                    <CheckCircle className="h-5 w-5 text-success flex-shrink-0" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                  )}
-                  <div className="flex-1">
-                    <p className="font-medium">{item.item}</p>
-                    {item.document && (
-                      <p className="text-xs text-muted-foreground">
-                        {item.document.file_name}
-                      </p>
+            {checklist.map((item: any, idx: number) => {
+              const isOk = !!item.document;
+              const isCritical = item.importance === 'critical';
+              const hasDocumentId = !!item.document?.id;
+              
+              return (
+                <div 
+                  key={idx} 
+                  className={`flex items-center justify-between gap-3 p-3 border-l-4 rounded transition-all ${
+                    isOk 
+                      ? 'border-success bg-success/5' 
+                      : isCritical 
+                        ? 'border-destructive bg-destructive/5' 
+                        : 'border-warning bg-warning/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    {isOk ? (
+                      <CheckCircle className="h-5 w-5 text-success flex-shrink-0" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
                     )}
+                    <div className="flex-1">
+                      <p className="font-medium">{item.item}</p>
+                      {item.document && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.document.file_name}
+                        </p>
+                      )}
+                      {hasDocumentId && (
+                        <p className="text-xs text-success mt-1">
+                          ✓ Documento processado com sucesso
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant={isOk ? "outline" : isCritical ? "destructive" : "secondary"} className={isOk ? "text-success border-success" : ""}>
+                      {isOk ? "✓ Enviado" : "Faltante"}
+                    </Badge>
+                    <Badge variant={isCritical ? 'destructive' : 'secondary'}>
+                      {item.importance}
+                    </Badge>
                   </div>
-                  <Badge variant={item.document ? "outline" : "destructive"} className={item.document ? "text-success border-success" : ""}>
-                    {item.document ? "OK" : "Faltante"}
-                  </Badge>
-                  <Badge variant={item.importance === 'critical' ? 'destructive' : 'secondary'}>
-                    {item.importance}
-                  </Badge>
+                
+                  {/* Botão de exclusão se documento presente */}
+                  {item.document && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteDocument(item.document.id)}
+                      className="flex-shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  
+                  {/* Botão de upload se documento faltante */}
+                  {!item.document && (item.importance === 'critical' || item.importance === 'high') && data.caseId && (
+                    <DocumentUploadInline 
+                      caseId={data.caseId}
+                      suggestedDocType={item.item}
+                      onUploadComplete={async () => {
+                        sonnerToast.info('Documento processado! Revalidando...');
+                        await handleValidate();
+                        sonnerToast.success('Checklist atualizado!');
+                      }}
+                    />
+                  )}
                 </div>
-                
-                {/* Botão de exclusão se documento presente */}
-                {item.document && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteDocument(item.document.id)}
-                    className="flex-shrink-0"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-                
-                {/* Botão de upload se documento faltante */}
-                {!item.document && (item.importance === 'critical' || item.importance === 'high') && data.caseId && (
-                  <DocumentUploadInline 
-                    caseId={data.caseId}
-                    suggestedDocType={item.item}
-                    onUploadComplete={async () => {
-                      sonnerToast.info('Documento processado! Revalidando...');
-                      await handleValidate();
-                      sonnerToast.success('Checklist atualizado!');
-                    }}
-                  />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
