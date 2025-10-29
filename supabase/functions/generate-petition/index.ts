@@ -27,9 +27,20 @@ serve(async (req) => {
       .select('*, extractions(*)')
       .eq('case_id', caseId);
 
-    // Buscar procuração especificamente
+    // Buscar procuração especificamente e extrair TODOS os dados
     const procuracao = documents?.find(d => d.document_type === 'procuracao');
     const procuracaoData = procuracao?.extractions?.[0]?.entities || {};
+
+    // EXTRAIR TODOS OS DADOS DA PROCURAÇÃO COM FALLBACKS PARA CASEDATA
+    const autoraNome = caseData.author_name || procuracaoData.author_name || procuracaoData.name || '';
+    const autoraRG = caseData.author_rg || procuracaoData.rg || procuracaoData.author_rg || procuracaoData.identidade || '';
+    const autoraCPF = caseData.author_cpf || procuracaoData.cpf || procuracaoData.author_cpf || '';
+    const autoraCivil = caseData.author_marital_status || procuracaoData.marital_status || procuracaoData.estado_civil || '';
+    const autoraNacionalidade = procuracaoData.nationality || procuracaoData.nacionalidade || 'brasileira';
+    const autoraEndereco = caseData.author_address || procuracaoData.address || procuracaoData.endereco || '';
+    const autoraDataNasc = caseData.author_birth_date || procuracaoData.birth_date || procuracaoData.data_nascimento || '';
+    const autoraPhone = caseData.author_phone || procuracaoData.phone || procuracaoData.telefone || '';
+    const autoraWhatsApp = caseData.author_whatsapp || procuracaoData.whatsapp || '';
 
     // Buscar benefícios anteriores
     const { data: benefitHistory } = await supabase
@@ -37,12 +48,9 @@ serve(async (req) => {
       .select('*')
       .eq('case_id', caseId);
 
-    // Buscar análise de vídeo (se houver)
-    const videoAnalysis = caseData.video_analysis;
-
     // Extrair cidade do endereço ou usar procuração
-    const addressMatch = caseData.author_address?.match(/([A-ZÁÉÍÓÚÂÊÔÃÕ\s]+)\s*-\s*([A-Z]{2})/i);
-    const city = addressMatch?.[1]?.trim() || procuracaoData.city || 'a ser informada';
+    const addressMatch = autoraEndereco?.match(/([A-ZÁÉÍÓÚÂÊÔÃÕ\s]+)\s*-\s*([A-Z]{2})/i);
+    const city = addressMatch?.[1]?.trim() || procuracaoData.city || 'São Paulo';
     const uf = addressMatch?.[2] || caseData.birth_state || 'SP';
     
     // Mapear tribunal por UF
@@ -58,10 +66,26 @@ serve(async (req) => {
     const trf = trfMap[uf] || 'TRF3';
     const trfNumber = trf.replace('TRF', '');
 
+    // BANCO DE ENDEREÇOS DO INSS POR CIDADE
+    const inssAddresses: Record<string, string> = {
+      'SÃO PAULO': 'Rua da Consolação, 1875 - Consolação, São Paulo/SP, CEP 01416-001',
+      'RIO DE JANEIRO': 'Avenida Presidente Vargas, 417 - Centro, Rio de Janeiro/RJ, CEP 20071-003',
+      'BELO HORIZONTE': 'Avenida Afonso Pena, 1007 - Centro, Belo Horizonte/MG, CEP 30130-002',
+      'CURITIBA': 'Rua Marechal Deodoro, 344 - Centro, Curitiba/PR, CEP 80010-010',
+      'PORTO ALEGRE': 'Avenida Loureiro da Silva, 515 - Centro, Porto Alegre/RS, CEP 90010-420',
+      'BRASÍLIA': 'Setor de Autarquias Sul, Quadra 3, Bloco N - Brasília/DF, CEP 70070-030',
+      'SALVADOR': 'Avenida Estados Unidos, 57 - Comércio, Salvador/BA, CEP 40010-020',
+      'FORTALEZA': 'Rua Barão do Rio Branco, 1594 - Centro, Fortaleza/CE, CEP 60025-061',
+      'RECIFE': 'Rua do Imperador, 206 - Santo Antônio, Recife/PE, CEP 50010-240',
+      'MANAUS': 'Avenida André Araújo, 901 - Aleixo, Manaus/AM, CEP 69060-000',
+      'BELÉM': 'Avenida Presidente Vargas, 350 - Campina, Belém/PA, CEP 66010-000',
+      'GOIÂNIA': 'Rua 82, nº 102 - Centro, Goiânia/GO, CEP 74055-100',
+    };
+    const inssEndereco = inssAddresses[city.toUpperCase()] || `Procuradoria Federal em ${city}/${uf} (endereço a ser notificado nos autos)`;
+
     // Preparar dados completos da autora
-    const autoraCivil = caseData.author_marital_status || 'não informado';
-    const autoraProfissao = caseData.profile === 'especial' ? 'Trabalhadora Rural' : 
-                            caseData.profile === 'individual' ? 'Trabalhadora Autônoma' : 'Trabalhadora';
+    const autoraProfissao = caseData.profile === 'especial' ? 'trabalhadora rural' : 
+                            caseData.profile === 'individual' ? 'trabalhadora autônoma' : 'trabalhadora';
 
     // Preparar histórico de benefícios para o prompt
     let benefitHistoryText = '';
@@ -70,33 +94,115 @@ serve(async (req) => {
       benefitHistory.forEach(b => {
         benefitHistoryText += `- NB ${b.nb}: ${b.benefit_type} (${b.start_date} a ${b.end_date || 'atual'}) - ${b.status}\n`;
       });
-      benefitHistoryText += 'IMPORTANTE: Estes benefícios PROVAM que o INSS já reconheceu a qualidade de segurada especial!\n';
+      benefitHistoryText += '🚨 CRÍTICO: Estes benefícios PROVAM que o INSS já reconheceu a qualidade de segurada especial!\n';
     }
 
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
-DADOS COMPLETOS DO CASO:
+🚨🚨🚨 INSTRUÇÕES OBRIGATÓRIAS - NÃO IGNORE 🚨🚨🚨
 
-**AUTORA (Qualificação Completa):**
-- Nome: ${caseData.author_name}
-- CPF: ${caseData.author_cpf}
-- RG: ${caseData.author_rg || 'não informado'}
-- Data de Nascimento: ${caseData.author_birth_date || 'não informada'}
-- Estado Civil: ${autoraCivil}
+Você DEVE gerar uma petição inicial seguindo EXATAMENTE este formato. PREENCHA TODOS OS CAMPOS. NÃO deixe NADA em branco ou com placeholders tipo [inserir], [preencher], etc.
+
+═══════════════════════════════════════════════════════════════
+
+**I. ENDEREÇAMENTO (PRIMEIRA LINHA DA PETIÇÃO):**
+
+EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA ${trfNumber}ª REGIÃO
+JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}
+
+═══════════════════════════════════════════════════════════════
+
+**II. QUALIFICAÇÃO COMPLETA DA AUTORA:**
+
+Escreva EXATAMENTE assim (usando os dados fornecidos):
+
+"**${autoraNome}**, ${autoraNacionalidade}, ${autoraCivil}, ${autoraProfissao}, portadora do RG nº **${autoraRG || 'RG a ser apresentado'}**, inscrita no CPF sob o nº **${autoraCPF}**, nascida em ${autoraDataNasc || 'data a ser informada'}, residente e domiciliada em ${autoraEndereco || 'endereço a ser informado'}, telefone ${autoraPhone || 'a ser informado'}, por sua advogada que esta subscreve (procuração anexa), vem, com o devido respeito e acatamento, perante Vossa Excelência, propor a presente"
+
+═══════════════════════════════════════════════════════════════
+
+**III. TÍTULO DA AÇÃO (CENTRALIZADO E EM NEGRITO):**
+
+**AÇÃO DE CONCESSÃO DE SALÁRIO-MATERNIDADE (SEGURADA ESPECIAL RURAL)**
+c/c PEDIDO DE TUTELA DE URGÊNCIA
+
+═══════════════════════════════════════════════════════════════
+
+**IV. QUALIFICAÇÃO COMPLETA DO RÉU:**
+
+Escreva EXATAMENTE assim:
+
+"em face do **INSTITUTO NACIONAL DO SEGURO SOCIAL – INSS**, autarquia federal, inscrita no CNPJ sob o nº **29.979.036/0001-40**, representada por sua Procuradoria Federal, com endereço em **${inssEndereco}**, pelos fatos e fundamentos jurídicos a seguir expostos."
+
+═══════════════════════════════════════════════════════════════
+
+**V. DOS FATOS**
+
+Redija uma narrativa completa dos fatos incluindo:
+- Perfil da segurada: ${caseData.profile === 'especial' ? 'Segurada Especial Rural' : caseData.profile}
+- Evento gerador: ${caseData.event_type === 'parto' ? 'Nascimento' : caseData.event_type} em ${caseData.child_birth_date || caseData.event_date}
+- Nome da criança: ${caseData.child_name || 'nome da criança'}
+${caseData.ra_protocol ? `- Requerimento administrativo NB ${caseData.ra_protocol} INDEFERIDO em ${caseData.ra_denial_date}
+- Motivo do indeferimento: ${caseData.ra_denial_reason}` : '- Requerimento administrativo ainda não realizado ou em andamento'}
+${benefitHistoryText}
+
+═══════════════════════════════════════════════════════════════
+
+**VI. DO DIREITO**
+
+Fundamente juridicamente com:
+- Lei 8.213/91, Arts. 11, VII e 39 (segurada especial)
+- IN 128/2022 do INSS
+- Jurisprudências do STJ, TRF e TNU
+- Súmulas aplicáveis
+
+═══════════════════════════════════════════════════════════════
+
+**VII. DAS PROVAS**
+
+Liste os ${documents?.length || 0} documentos anexados.
+
+═══════════════════════════════════════════════════════════════
+
+**VIII. DOS PEDIDOS**
+
+1. **TUTELA DE URGÊNCIA** (Art. 300 CPC): Implantação imediata do benefício
+2. **PEDIDO PRINCIPAL**: Concessão de salário-maternidade
+   - DIB: ${caseData.child_birth_date || caseData.event_date}
+   - RMI: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
+   - Duração: 4 meses (120 dias)
+3. **HONORÁRIOS ADVOCATÍCIOS**: 15% a 20% sobre o valor da condenação
+4. **JUSTIÇA GRATUITA**: Deferimento dos benefícios da assistência judiciária gratuita
+
+═══════════════════════════════════════════════════════════════
+
+**IX. DO VALOR DA CAUSA**
+
+R$ ${analysis?.valor_causa || (parseFloat(analysis?.rmi?.valor || caseData.salario_minimo_ref) * 4).toFixed(2)}
+
+═══════════════════════════════════════════════════════════════
+
+**DADOS COMPLETOS DO CASO PARA VOCÊ USAR:**
+
+**AUTORA:**
+- Nome: ${autoraNome}
+- CPF: ${autoraCPF}
+- RG: ${autoraRG || 'a ser apresentado'}
+- Data de Nascimento: ${autoraDataNasc || 'não informada'}
+- Estado Civil: ${autoraCivil || 'não informado'}
+- Nacionalidade: ${autoraNacionalidade}
 - Profissão: ${autoraProfissao}
-- Endereço: ${caseData.author_address || 'não informado'}
-- Telefone: ${caseData.author_phone || ''}
-- WhatsApp: ${caseData.author_whatsapp || ''}
+- Endereço: ${autoraEndereco || 'não informado'}
+- Telefone: ${autoraPhone || 'não informado'}
+- WhatsApp: ${autoraWhatsApp || 'não informado'}
 
-**RÉU (INSS - Qualificação Completa):**
+**RÉU (INSS):**
 - Nome: Instituto Nacional do Seguro Social - INSS
-- Natureza Jurídica: Autarquia Federal
-- CNPJ: 00.394.429/9999-06
-- Representação: Por sua Procuradoria Federal
-- Endereço: Procuradoria Federal em ${city}/${uf}
+- CNPJ: 29.979.036/0001-40 (USE SEMPRE ESTE CNPJ)
+- Endereço: ${inssEndereco}
 
-**CIDADE/COMARCA:** ${city}/${uf}
-**TRIBUNAL:** ${trf} (Terceira Região)
+**JURISDIÇÃO:**
+- Cidade/Comarca: ${city}/${uf}
+- Tribunal: ${trf} (${trfNumber}ª Região)
 
 **EVENTO:**
 - Tipo: ${caseData.event_type === 'parto' ? 'Nascimento' : caseData.event_type}
@@ -107,68 +213,38 @@ DADOS COMPLETOS DO CASO:
 ${caseData.ra_protocol ? `- NB/Protocolo: ${caseData.ra_protocol}
 - Data do Requerimento: ${caseData.ra_request_date || 'não informada'}
 - Data do Indeferimento: ${caseData.ra_denial_date || 'não informada'}
-- Motivo do Indeferimento: ${caseData.ra_denial_reason || 'não informado'}` : '- Nenhum requerimento administrativo prévio'}
+- Motivo: ${caseData.ra_denial_reason || 'não informado'}` : '- Sem RA prévio'}
 ${benefitHistoryText}
 
 **ANÁLISE JURÍDICA:**
-${JSON.stringify(analysis?.resumo_executivo || {}, null, 2)}
+${JSON.stringify(analysis || {}, null, 2)}
 
 **CÁLCULOS:**
-- RMI Calculada: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
+- RMI: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
 - Valor da Causa: R$ ${analysis?.valor_causa || 'a calcular'}
+- Carência: ${analysis?.carencia ? JSON.stringify(analysis.carencia) : 'a analisar'}
 
-**DOCUMENTOS ANEXADOS:** ${documents?.length || 0} documento(s)
+**DOCUMENTOS:** ${documents?.length || 0} documento(s) anexados
 
-**ESTRUTURA OBRIGATÓRIA DA PETIÇÃO:**
+═══════════════════════════════════════════════════════════════
 
-I. **ENDEREÇAMENTO**
-"EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA ${trfNumber}ª REGIÃO
-JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}"
+🚨 **REGRAS CRÍTICAS - LEIA COM ATENÇÃO:**
 
-II. **QUALIFICAÇÃO DA AUTORA** (use TODOS os dados acima)
-Nome completo, CPF, RG, estado civil, profissão, endereço completo
-
-III. **TÍTULO DA AÇÃO** (entre as qualificações)
-"AÇÃO DE CONCESSÃO DE SALÁRIO-MATERNIDADE"
-
-IV. **QUALIFICAÇÃO DO RÉU** (use dados completos do INSS)
-Instituto Nacional do Seguro Social - INSS
-Autarquia Federal, CNPJ 00.394.429/9999-06
-Representado por sua Procuradoria Federal
-Endereço: Procuradoria Federal em ${city}/${uf}
-
-V. **DOS FATOS**
-- Perfil da segurada (${caseData.profile})
-- Evento gerador (nascimento em ${caseData.child_birth_date})
-- ${caseData.ra_protocol ? 'Requerimento administrativo indeferido' : 'Ausência de RA'}
-${benefitHistory && benefitHistory.length > 0 ? '- INSS já reconheceu qualidade de segurada em benefícios anteriores' : ''}
-
-VI. **DO DIREITO**
-- Lei 8.213/91
-- IN 128/2022
-- Jurisprudências
-
-VII. **DAS PROVAS**
-- ${documents?.length || 0} documentos anexados
-
-VIII. **DOS PEDIDOS**
-1. Tutela de Urgência (Art. 300 CPC)
-2. Pedido Principal: Concessão de salário-maternidade
-   - DIB: ${caseData.child_birth_date}
-   - RMI: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
-3. Honorários advocatícios (15-20%)
-4. Justiça Gratuita
-
-IX. **DO VALOR DA CAUSA**
-R$ ${analysis?.valor_causa}
-
-**REGRAS IMPORTANTES:**
-✅ Use TODOS os dados fornecidos (CPF, RG, endereço completo)
-✅ INSS com CNPJ 00.394.429/9999-06
-✅ Cidade e tribunal corretos: ${city}/${uf} - ${trf}
-✅ Se houver benefícios anteriores, ENFATIZE que o INSS já reconheceu a qualidade de segurada
+✅ USE OS DADOS FORNECIDOS - não invente, não deixe vazios
+✅ RG: ${autoraRG || 'RG a ser apresentado'} - USE ESTE EXATO TEXTO
+✅ Estado Civil: ${autoraCivil || 'não informado'} - USE ESTE EXATO TEXTO
+✅ CNPJ do INSS: **29.979.036/0001-40** (SEMPRE este CNPJ, não outro)
+✅ Endereço do INSS: ${inssEndereco}
+✅ Cidade: ${city}/${uf}
+✅ Tribunal: ${trf} (${trfNumber}ª Região)
+✅ Siga EXATAMENTE a estrutura acima com os separadores ═══
+✅ NÃO use placeholders tipo [inserir], [preencher], [estado civil], [RG], etc.
+✅ Se houver benefícios anteriores, DESTAQUE MUITO isso como prova da qualidade de segurada
 ✅ Seja técnica, persuasiva e completa
-✅ Markdown bem formatado
+✅ Retorne em markdown bem formatado com negrito, itálico onde couber
+✅ Numere os tópicos corretamente (I, II, III, etc.)
+
+🚨 **SE VOCÊ DEIXAR QUALQUER CAMPO VAZIO OU COM PLACEHOLDER, A PETIÇÃO SERÁ REJEITADA!**
 
 Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.`;
     
@@ -221,7 +297,50 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
       }
 
       const aiData = await aiResponse.json();
-      const petitionText = aiData.choices[0].message.content;
+      let petitionText = aiData.choices[0].message.content;
+
+      // VALIDAÇÃO PÓS-GERAÇÃO - Verificar campos obrigatórios
+      console.log('📋 Validando petição gerada...');
+      
+      const missingFields = [];
+      
+      // Verificar se tem endereçamento correto
+      if (!petitionText.includes('EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL')) {
+        console.warn('⚠️ Falta endereçamento correto');
+        missingFields.push('Endereçamento do Juízo');
+      }
+      
+      // Verificar se tem CNPJ correto do INSS
+      if (!petitionText.includes('29.979.036/0001-40')) {
+        console.warn('⚠️ CNPJ do INSS incorreto ou ausente');
+        petitionText = petitionText.replace(/00\.394\.429\/9999-06/g, '29.979.036/0001-40');
+      }
+      
+      // Substituir placeholders comuns se ainda existirem
+      if (autoraRG && autoraRG !== '') {
+        petitionText = petitionText.replace(/\[RG\]/gi, autoraRG);
+        petitionText = petitionText.replace(/RG não informado/gi, `RG nº ${autoraRG}`);
+      }
+      
+      if (autoraCivil && autoraCivil !== '') {
+        petitionText = petitionText.replace(/\[estado civil\]/gi, autoraCivil);
+      }
+      
+      if (autoraNacionalidade) {
+        petitionText = petitionText.replace(/\[nacionalidade\]/gi, autoraNacionalidade);
+      }
+      
+      petitionText = petitionText
+        .replace(/\[cidade\]/gi, city)
+        .replace(/\[UF\]/gi, uf)
+        .replace(/\[inserir\]/gi, '')
+        .replace(/\[preencher\]/gi, '');
+      
+      if (missingFields.length > 0) {
+        console.error('❌ Campos obrigatórios faltantes:', missingFields);
+      } else {
+        console.log('✅ Petição validada com sucesso');
+      }
 
       // Salvar draft no banco
       await supabase
