@@ -239,10 +239,34 @@ serve(async (req) => {
         console.log(`[ANALYZE-SINGLE] ✅ Texto extraído: ${pdfText.length} caracteres`);
         console.log(`[ANALYZE-SINGLE] 📝 Primeiras 500 chars:\n${pdfText.substring(0, 500)}`);
       } else {
-        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto (escaneado) - convertendo para imagem`);
-        // Para PDFs escaneados, enviar como base64 para OCR
-        const base64 = base64Encode(arrayBuffer);
-        base64Image = `data:application/pdf;base64,${base64}`;
+        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto (escaneado) - convertendo primeira página em imagem PNG`);
+        
+        // Converter primeira página do PDF em PNG para OCR
+        try {
+          // Usar biblioteca de conversão de PDF para imagem
+          const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const page = await pdfDoc.getPage(1);
+          const viewport = page.getViewport({ scale: 2.0 }); // Escala alta para melhor OCR
+          
+          // Renderizar em canvas (usando node-canvas no Deno)
+          const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
+          const canvas = createCanvas(viewport.width, viewport.height);
+          const context = canvas.getContext('2d');
+          
+          await page.render({
+            canvasContext: context as any,
+            viewport: viewport
+          }).promise;
+          
+          // Converter canvas para PNG base64
+          const pngDataUrl = canvas.toDataURL('image/png');
+          base64Image = pngDataUrl;
+          
+          console.log(`[ANALYZE-SINGLE] ✅ PDF escaneado convertido em PNG (${(pngDataUrl.length / 1024).toFixed(1)} KB)`);
+        } catch (renderError: any) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao converter PDF em imagem:`, renderError);
+          throw new Error(`PDF escaneado não pôde ser convertido em imagem: ${renderError.message}`);
+        }
       }
     } else {
       // 3. PROCESSAR IMAGEM: converter para base64
