@@ -19,12 +19,44 @@ export const DocumentUploadInline = ({
 }: DocumentUploadInlineProps) => {
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'processing' | 'done'>('idle');
+
+  // Polling para aguardar extrações serem criadas
+  const pollForExtractions = async (
+    docIds: string[], 
+    maxWaitMs: number = 30000
+  ): Promise<boolean> => {
+    const startTime = Date.now();
+    const pollInterval = 2000; // Verificar a cada 2s
+    
+    setUploadState('processing');
+    
+    while (Date.now() - startTime < maxWaitMs) {
+      const { data: extractions } = await supabase
+        .from('extractions')
+        .select('id')
+        .in('document_id', docIds);
+      
+      // ✅ Todas as extrações criadas!
+      if (extractions && extractions.length === docIds.length) {
+        console.log('✅ Processamento concluído');
+        setUploadState('done');
+        return true;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+    
+    console.warn('⚠️ Timeout aguardando extrações');
+    return false;
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     setUploading(true);
+    setUploadState('uploading');
     try {
       const insertedDocIds: string[] = [];
       
@@ -77,17 +109,23 @@ export const DocumentUploadInline = ({
         toast.warning("Documentos enviados mas processamento falhou. Tente reprocessar.");
       }
 
-      // Aguardar processamento antes de chamar callback
-      if (onUploadComplete) {
-        setTimeout(() => {
+      // Aguardar extrações serem criadas antes de chamar callback
+      if (onUploadComplete && insertedDocIds.length > 0) {
+        const success = await pollForExtractions(insertedDocIds);
+        if (success) {
+          toast.success('Documentos processados com sucesso!');
           onUploadComplete();
-        }, 5000);
+        } else {
+          toast.warning('Processamento demorou mais que o esperado');
+          onUploadComplete(); // Chama mesmo assim para não travar UX
+        }
       }
     } catch (error: any) {
       console.error('Erro no upload:', error);
       toast.error(error.message || 'Erro ao enviar documentos');
     } finally {
       setUploading(false);
+      setUploadState('idle');
     }
   };
 
@@ -95,7 +133,13 @@ export const DocumentUploadInline = ({
     <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-2 border-blue-300">
       <div className="flex items-center justify-between">
       <div className="flex-1">
-          {uploadedFiles.length > 0 && (
+          {uploadState === 'processing' && (
+            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 mb-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processando com IA...
+            </div>
+          )}
+          {uploadedFiles.length > 0 && uploadState !== 'processing' && (
             <div className="flex items-center gap-2 text-sm text-green-600 mb-2">
               <CheckCircle className="h-4 w-4" />
               {uploadedFiles.length} arquivo(s) enviado(s)

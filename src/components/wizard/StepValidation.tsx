@@ -234,7 +234,11 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                   <DocumentUploadInline 
                     caseId={data.caseId}
                     suggestedDocType={item.item}
-                    onUploadComplete={handleValidate}
+                    onUploadComplete={async () => {
+                      sonnerToast.info('Documento processado! Revalidando...');
+                      await handleValidate();
+                      sonnerToast.success('Checklist atualizado!');
+                    }}
                   />
                 )}
               </div>
@@ -260,20 +264,9 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           caseId={data.caseId}
           suggestedDocType={doc.doc_type}
           onUploadComplete={async () => {
-            // Revalidar documentos
+            sonnerToast.info('Documento processado! Revalidando...');
             await handleValidate();
-            
-            // Buscar dados atualizados do caso
-            const { data: updatedCase } = await supabase
-              .from('cases')
-              .select('*')
-              .eq('id', data.caseId)
-              .single();
-            
-            if (updatedCase) {
-              // Atualizar dados no formulário principal
-              updateData(updatedCase);
-            }
+            sonnerToast.success('Checklist atualizado!');
           }}
         />
       )}
