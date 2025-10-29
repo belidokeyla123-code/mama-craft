@@ -143,72 +143,16 @@ TAREFA: Faça uma análise jurídica completa e retorne JSON com:
   "recomendacoes": ["Recomendação 1"]
 }
 
-**REGRAS CRÍTICAS PARA RECOMENDAÇÕES:**
+**REGRAS CRÍTICAS - RECOMENDAÇÕES:**
 
-1. ✅ **NUNCA RECOMENDAR DOCUMENTOS JÁ ENVIADOS:**
-   
-   Documentos que JÁ FORAM ENVIADOS (verifique a lista acima):
-   ${documents?.map(d => `   - ✅ ${d.document_type} → JÁ POSSUI, NÃO RECOMENDE`).join('\n') || '   - Nenhum documento enviado'}
-   
-   Se autodeclaração_rural JÁ está na lista → NÃO recomende "juntar autodeclaração"
-   Se documento_terra JÁ está na lista → NÃO recomende "juntar documento da terra"
-   Se comprovante_residencia JÁ está na lista → NÃO recomende "juntar comprovante"
-   Se certidao_nascimento JÁ está na lista → NÃO recomende "juntar certidão de nascimento"
-   Se cnis JÁ está na lista → NÃO recomende "solicitar CNIS"
-   E assim por diante...
+Documentos JÁ ENVIADOS (NÃO recomende novamente):
+${documents?.map(d => `✅ ${d.document_type}`).join(', ') || 'Nenhum'}
 
-2. ✅ **RECOMENDAR APENAS DOCUMENTOS QUE FALTAM:**
-   
-   Documentos necessários mas NÃO enviados:
-   - Compare a lista de documentos NECESSÁRIOS com os documentos JÁ ENVIADOS
-   - Recomende APENAS os que NÃO aparecem na lista acima
-   - Exemplo: Se falta "declaracao_saude_ubs" → "Juntar declaração de UBS comprovando atendimentos durante gravidez"
-   - Exemplo: Se falta "historico_escolar" → "Juntar histórico escolar em escola rural para reforçar prova de residência"
-
-3. ❌ **NUNCA RECOMENDAR "PEDIDOS PROCESSUAIS" COMO SE FOSSEM DOCUMENTOS:**
-   
-   PEDIDOS (vão na minuta, NÃO são recomendações):
-   - ❌ "Tutela de urgência" → PEDIDO para minuta
-   - ❌ "Inversão do ônus da prova" → PEDIDO para minuta
-   - ❌ "Citação do INSS" → PEDIDO para minuta
-   - ❌ "Honorários advocatícios" → PEDIDO para minuta
-   - ❌ "Justiça gratuita" → PEDIDO para minuta
-   
-   Recomendações devem ser APENAS sobre:
-   - ✅ Juntar documentos faltantes
-   - ✅ Buscar testemunhas
-   - ✅ Orientar cliente sobre audiência/procedimentos
-   - ✅ Solicitar documentos ao INSS (via ofício judicial)
-
-4. ✅ **FORMATO CORRETO DE RECOMENDAÇÕES:**
-   
-   ✅ BOM: "Juntar histórico escolar em escola rural para reforçar prova de residência no período"
-   ✅ BOM: "Buscar testemunhas vizinhos/familiares para confirmar atividade rural"
-   ✅ BOM: "Orientar cliente sobre importância de comparecer à audiência"
-   ✅ BOM: "Solicitar ao juiz ofício à escola rural para confirmar matrícula no período"
-   
-   ❌ RUIM: "Solicitar tutela de urgência" (isso é pedido da minuta)
-   ❌ RUIM: "Juntar autodeclaração rural" (se JÁ foi enviada)
-   ❌ RUIM: "Requerer inversão do ônus da prova" (isso é pedido da minuta)
-
-5. 🎯 **PRIORIZAR RECOMENDAÇÕES POR IMPORTÂNCIA:**
-   
-   CRÍTICO (documentos obrigatórios faltantes):
-   - Certidão de nascimento (se não tiver)
-   - RG/CPF (se não tiver)
-   - Autodeclaração rural (se não tiver)
-   - Comprovante de residência (se não tiver)
-   
-   ALTO (documentos que fortalecem muito a prova):
-   - Histórico escolar em escola rural
-   - Declaração de UBS/posto de saúde rural
-   - Fotos da propriedade
-   - Documentos da terra (ITR, CCIR, escritura)
-   
-   MÉDIO (orientações processuais):
-   - Preparar testemunhas
-   - Comparecer à audiência
-   - Acompanhar andamento do processo
+⚠️ REGRAS:
+1. NÃO recomende documentos da lista acima
+2. NÃO recomende "pedidos processuais" (tutela urgência, inversão ônus, etc) - isso vai na minuta
+3. Recomende APENAS: documentos faltantes, buscar testemunhas, orientações
+4. Priorize: CRÍTICO (docs obrigatórios) > ALTO (reforçam prova) > MÉDIO (orientações)
 
 **SITUAÇÕES ESPECIAIS DETECTADAS:**
 ${caseExceptions && caseExceptions.length > 0 ? 
@@ -235,9 +179,9 @@ Considere:
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 10 segundos (otimizado)
+    // Timeout de 20 segundos (aumentado para processar regras complexas)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
