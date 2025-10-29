@@ -239,9 +239,12 @@ serve(async (req) => {
       docType = classifyDocument(doc.file_name);
       console.log(`[ANALYZE-SINGLE] 🏷️ Tipo detectado por filename: ${docType}`);
       
-      // 🔥 FALLBACK VISUAL: Se ainda for 'outro', pedir IA para classificar pela imagem
-      if (docType === 'outro') {
-        console.log(`[ANALYZE-SINGLE] 🤖 Classificação visual iniciando...`);
+      // 🔥 FALLBACK VISUAL: Se filename deu tipo específico mas pode ser ambíguo, usar IA para confirmar
+      // Especialmente para nomes truncados como CERT~1.PDF que podem ser vários tipos
+      const isAmbiguousName = /^[A-Z0-9~]{1,8}\.(pdf|png|jpg)/i.test(doc.file_name);
+      
+      if (isAmbiguousName || docType === 'outro') {
+        console.log(`[ANALYZE-SINGLE] 🤖 Classificação visual iniciando (nome ambíguo: ${isAmbiguousName})...`);
         
         const classifyResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',
@@ -267,7 +270,7 @@ serve(async (req) => {
           const visualType = classifyResult.choices?.[0]?.message?.content?.trim().toLowerCase();
           if (visualType && visualType !== 'outro') {
             docType = visualType;
-            console.log(`[ANALYZE-SINGLE] 👁️ Tipo detectado VISUALMENTE: ${docType}`);
+            console.log(`[ANALYZE-SINGLE] 👁️ Tipo detectado VISUALMENTE: ${docType} (sobrescreveu classificação por nome)`);
           }
         }
       }
@@ -331,7 +334,7 @@ Você é um especialista altamente experiente em análise de documentos previden
             content: [
               {
                 type: 'text',
-                text: `${prompt}\n\n⚠️ **INSTRUÇÕES:**\n- Esta é uma IMAGEM de documento\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD\n- Para CPF, extraia apenas números (sem pontos/traços)\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
+                text: `${prompt}\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Esta é uma IMAGEM de documento\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD (exemplo: "2022-11-19")\n- Para CPF, extraia apenas números (sem pontos/traços)\n- **IMPORTANTE:** Se uma informação NÃO estiver visível no documento, deixe o campo VAZIO ou omita-o completamente\n- **NUNCA** retorne mensagens explicativas como valor de um campo (exemplo: "Não é possível extrair...")\n- **NUNCA** retorne texto descritivo no lugar de valores estruturados\n- Se o documento não corresponder ao tipo esperado, ajuste o documentType e extraia apenas o que é visível\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
               },
               {
                 type: 'image_url',
@@ -420,30 +423,67 @@ Você é um especialista altamente experiente em análise de documentos previden
     if (docType === 'certidao_nascimento' && extracted.extractedData) {
       const updates: any = {};
       
-      if (extracted.extractedData.childName) {
+      // Helper: validar se é uma data válida no formato YYYY-MM-DD
+      const isValidDate = (dateStr: string | undefined | null): boolean => {
+        if (!dateStr || typeof dateStr !== 'string') return false;
+        // Regex para YYYY-MM-DD
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dateStr)) return false;
+        // Verificar se é uma data real
+        const date = new Date(dateStr);
+        return date instanceof Date && !isNaN(date.getTime());
+      };
+      
+      // Helper: validar se é texto explicativo (não é um valor extraído)
+      const isExplanationText = (value: string | undefined | null): boolean => {
+        if (!value || typeof value !== 'string') return false;
+        // Se contém frases explicativas, não é um valor válido
+        const explanationPhrases = [
+          'não é possível',
+          'não foi possível',
+          'não consta',
+          'não está',
+          'não é uma certidão',
+          'documento não contém',
+          'informação não disponível'
+        ];
+        const lowerValue = value.toLowerCase();
+        return explanationPhrases.some(phrase => lowerValue.includes(phrase));
+      };
+      
+      // Extrair childName (validar se não é texto explicativo)
+      if (extracted.extractedData.childName && !isExplanationText(extracted.extractedData.childName)) {
         updates.child_name = extracted.extractedData.childName;
         console.log(`[ANALYZE-SINGLE] ✅ childName: ${extracted.extractedData.childName}`);
       }
       
-      if (extracted.extractedData.childBirthDate) {
+      // Extrair childBirthDate (validar formato de data)
+      if (extracted.extractedData.childBirthDate && isValidDate(extracted.extractedData.childBirthDate)) {
         updates.child_birth_date = extracted.extractedData.childBirthDate;
+        console.log(`[ANALYZE-SINGLE] ✅ childBirthDate: ${extracted.extractedData.childBirthDate}`);
+      } else if (extracted.extractedData.childBirthDate) {
+        console.log(`[ANALYZE-SINGLE] ⚠️ childBirthDate inválida (ignorada): ${extracted.extractedData.childBirthDate.substring(0, 100)}`);
       }
       
-      if (extracted.extractedData.motherName) {
+      // Extrair motherName (validar se não é texto explicativo)
+      if (extracted.extractedData.motherName && !isExplanationText(extracted.extractedData.motherName)) {
         updates.author_name = extracted.extractedData.motherName;
         console.log(`[ANALYZE-SINGLE] ✅ motherName: ${extracted.extractedData.motherName}`);
       }
       
-      if (extracted.extractedData.motherCpf) {
+      // Extrair motherCpf (validar formato numérico)
+      if (extracted.extractedData.motherCpf && /^\d{11}$/.test(extracted.extractedData.motherCpf)) {
         updates.mother_cpf = extracted.extractedData.motherCpf;
         console.log(`[ANALYZE-SINGLE] ✅ motherCpf: ${extracted.extractedData.motherCpf}`);
       }
       
-      if (extracted.extractedData.fatherName) {
+      // Extrair fatherName (validar se não é texto explicativo)
+      if (extracted.extractedData.fatherName && !isExplanationText(extracted.extractedData.fatherName)) {
         updates.father_name = extracted.extractedData.fatherName;
       }
       
-      if (extracted.extractedData.fatherCpf) {
+      // Extrair fatherCpf (validar formato numérico)
+      if (extracted.extractedData.fatherCpf && /^\d{11}$/.test(extracted.extractedData.fatherCpf)) {
         updates.father_cpf = extracted.extractedData.fatherCpf;
         console.log(`[ANALYZE-SINGLE] ✅ fatherCpf: ${extracted.extractedData.fatherCpf}`);
       }
