@@ -31,6 +31,9 @@ interface LegalAnalysis {
     periodos_rurais: Array<any>;
     beneficios_anteriores: Array<any>;
     tempo_reconhecido_inss: { anos: number; meses: number };
+    interpretacao?: string;
+    analise_prospectiva?: string;
+    impacto_futuro?: string;
   };
   timeline: Array<{
     periodo: string;
@@ -346,8 +349,38 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                   <Badge variant="secondary" className="text-base">
                     {analysis.cnis_analysis.tempo_reconhecido_inss.anos} anos e {analysis.cnis_analysis.tempo_reconhecido_inss.meses} meses
                   </Badge>
+                  
+                  {/* Interpretação */}
+                  {analysis.cnis_analysis.interpretacao && (
+                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                        ✅ {analysis.cnis_analysis.interpretacao}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
+                {/* Análise Prospectiva */}
+                {analysis.cnis_analysis.analise_prospectiva && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                    <h4 className="font-semibold mb-2 text-blue-700 dark:text-blue-300">
+                      📈 Análise Prospectiva
+                    </h4>
+                    <p className="text-sm">{analysis.cnis_analysis.analise_prospectiva}</p>
+                  </div>
+                )}
+
+                {/* Impacto Futuro */}
+                {analysis.cnis_analysis.impacto_futuro && (
+                  <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                    <h4 className="font-semibold mb-2 text-purple-700 dark:text-purple-300">
+                      🎯 Impacto Estratégico
+                    </h4>
+                    <p className="text-sm">{analysis.cnis_analysis.impacto_futuro}</p>
+                  </div>
+                )}
+
+                {/* Benefícios anteriores */}
                 {analysis.cnis_analysis.beneficios_anteriores && analysis.cnis_analysis.beneficios_anteriores.length > 0 && (
                   <div>
                     <p className="font-medium mb-2">Benefícios Anteriores</p>

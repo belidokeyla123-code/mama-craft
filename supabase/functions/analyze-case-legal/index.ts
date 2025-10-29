@@ -61,6 +61,34 @@ IMPORTANTE SOBRE O BENEFÍCIO:
 - Salário-maternidade é benefício pago à MÃE por ter dado à luz
 - Verifique a idade e qualidade de segurada da MÃE na data do parto
 
+**REGRA CRÍTICA PARA TIMELINE:**
+- Se há documentos comprovantes (autodeclaracao_rural, documento_terra, declaracao_saude_ubs) E o período é descrito como "comprovado por documentos" → use status: "reconhecido"
+- Se NÃO há documentos ou descrição indica "a comprovar" → use status: "a_comprovar"
+- NUNCA use "a_comprovar" quando há documentos válidos anexados
+
+**REGRA PARA PONTOS FRACOS:**
+- NUNCA liste "falta data de início de atividade rural" se há documentos rurais (autodeclaração, documento da terra, UBS) comprovando o período
+- SEMPRE priorize análise de documentos sobre campos vazios no formulário
+- Se há autodeclaração rural detalhada + documento da terra + declaração UBS → período rural está COMPROVADO, mesmo que 'rural_activity_since' esteja vazio
+- Ponto fraco só é válido se REALMENTE faltar prova documental
+
+**ANÁLISE AVANÇADA DO CNIS:**
+Ao analisar o CNIS, você deve:
+
+1. **Interpretar ausência de vínculos:**
+   - Se CNIS mostra 0 anos e 0 meses E perfil é "especial" → isso é POSITIVO
+   - Significa: sem vínculos urbanos = reforça qualidade de segurada especial rural
+   - Inclua em "pontos_fortes": "CNIS sem vínculos urbanos reforça perfil de segurada especial rural"
+
+2. **Análise prospectiva:**
+   - Calcular: Da data do parto (${caseData.child_birth_date}) até hoje (2025-10-29)
+   - Adicionar em cnis_analysis.analise_prospectiva: "Se a ação for procedente, o período de [data parto] até a presente data (~X anos) será reconhecido como tempo de contribuição rural, gerando direito a futuros benefícios previdenciários"
+
+3. **Benefícios futuros:**
+   - Explicar impacto: Reconhecimento desse tempo pode facilitar aposentadoria por idade rural no futuro
+   - Adicionar em cnis_analysis.impacto_futuro: "O reconhecimento desse período é estratégico para futuros benefícios previdenciários, especialmente aposentadoria por idade rural"
+   - Adicionar em recomendacoes: "Orientar a cliente que o reconhecimento desse período é estratégico para futuros benefícios previdenciários"
+
 DADOS DO CASO:
 ${JSON.stringify(caseData, null, 2)}
 
@@ -87,7 +115,10 @@ TAREFA: Faça uma análise jurídica completa e retorne JSON com:
     "periodos_urbanos": [{"inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "empregador": "Nome"}],
     "periodos_rurais": [{"inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "detalhes": "Descrição"}],
     "beneficios_anteriores": [{"tipo": "auxilio-maternidade", "data": "YYYY-MM-DD"}],
-    "tempo_reconhecido_inss": {"anos": 0, "meses": 0}
+    "tempo_reconhecido_inss": {"anos": 0, "meses": 0},
+    "interpretacao": "CNIS sem vínculos urbanos - FAVORÁVEL ao perfil rural",
+    "analise_prospectiva": "Se procedente, período de [data parto] até [data atual] (~X anos) será reconhecido como tempo rural",
+    "impacto_futuro": "Tempo reconhecido facilitará aposentadoria por idade rural no futuro"
   },
   "timeline": [
     {"periodo": "2015-2020", "tipo": "rural", "status": "reconhecido", "detalhes": "Atividade rural comprovada"}
