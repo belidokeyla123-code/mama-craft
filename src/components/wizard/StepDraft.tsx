@@ -72,13 +72,93 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [applyingIndividualSuggestion, setApplyingIndividualSuggestion] = useState<number | null>(null);
   const [applyingIndividualAdaptation, setApplyingIndividualAdaptation] = useState<number | null>(null);
 
-  // Carregar do cache ao entrar na aba
+  // ✅ CORREÇÃO #1: Verificar e regeração automática de petição com placeholders
   useEffect(() => {
+    const checkAndRegeneratePetition = async () => {
+      if (!data.caseId) return;
+      
+      try {
+        // Buscar petição do cache
+        const { data: draft } = await supabase
+          .from('drafts')
+          .select('markdown_content, generated_at')
+          .eq('case_id', data.caseId)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (draft?.markdown_content) {
+          // Verificar se tem placeholders
+          const hasPlaceholders = 
+            draft.markdown_content.includes('[CIDADE/UF]') ||
+            draft.markdown_content.includes('[estado civil]') ||
+            draft.markdown_content.includes('[RG]') ||
+            draft.markdown_content.includes('[número]') ||
+            draft.markdown_content.includes('[endereço]') ||
+            draft.markdown_content.includes('[A SER DISTRIBUÍDO]');
+          
+          if (hasPlaceholders) {
+            console.warn('🔴 [DRAFT] PETIÇÃO DESATUALIZADA COM PLACEHOLDERS - Regerando automaticamente...');
+            toast.warning('⚠️ Petição desatualizada detectada. Regerando automaticamente...', { 
+              id: 'regen',
+              duration: 5000 
+            });
+            
+            // Limpar cache e forçar regeração
+            setPetition('');
+            setHasCache(false);
+            
+            // Regerar
+            await generatePetition();
+            toast.success('✅ Petição regerada com sucesso!', { id: 'regen' });
+          } else {
+            // Cache válido, carregar
+            setPetition(draft.markdown_content);
+            setHasCache(true);
+            console.log('[DRAFT] ✅ Carregado do cache (sem placeholders)');
+          }
+        }
+      } catch (error) {
+        console.error('[DRAFT] Erro ao verificar cache:', error);
+      }
+      
+      // Carregar template também
+      await loadExistingTemplate();
+    };
+    
     if (data.caseId && !petition) {
-      loadCachedDraft();
-      loadExistingTemplate();
+      checkAndRegeneratePetition();
     }
   }, [data.caseId]);
+
+  // ✅ CORREÇÃO #5: Função para limpar cache e regerar tudo
+  const clearCacheAndRegenerate = async () => {
+    if (!data.caseId) return;
+    
+    setLoading(true);
+    try {
+      console.log('[DRAFT] 🗑️ Limpando cache de petição...');
+      
+      // Deletar petição antiga
+      await supabase
+        .from('drafts')
+        .delete()
+        .eq('case_id', data.caseId);
+      
+      setPetition('');
+      setHasCache(false);
+      toast.success('🗑️ Cache limpo. Regerando...', { id: 'clear' });
+      
+      // Gerar nova
+      await generatePetition();
+      toast.success('✅ Petição regerada com sucesso!', { id: 'clear' });
+    } catch (error) {
+      console.error('[DRAFT] Erro ao limpar cache:', error);
+      toast.error('❌ Erro ao limpar cache');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadCachedDraft = async () => {
     if (!data.caseId) return;
@@ -97,10 +177,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (draftData?.markdown_content) {
         setPetition(draftData.markdown_content);
         setHasCache(true);
-        console.log('[DRAFT] Carregado do cache');
+        console.log('[DRAFT] ✅ Carregado do cache');
       }
     } catch (error) {
-      console.error('Erro ao carregar cache:', error);
+      console.error('[DRAFT] Erro ao carregar cache:', error);
     }
   };
 

@@ -43,6 +43,9 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const missingFields = data.missingFields || [];
   const [isSaving, setIsSaving] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
+  
+  // ✅ CORREÇÃO #7: Detectar campos críticos faltantes
+  const hasCriticalMissingFields = !data.authorRg || !data.authorCpf || !data.authorAddress;
 
   // Sistema de orquestração para disparar pipeline completo
   const { triggerFullPipeline } = useCaseOrchestration({ 
