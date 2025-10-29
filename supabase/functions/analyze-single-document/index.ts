@@ -4,6 +4,9 @@ import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/b
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs';
 
+// ✅ Configurar worker do PDF.js para Deno
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.worker.mjs';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -260,9 +263,8 @@ serve(async (req) => {
         console.log(`[ANALYZE-SINGLE] 🖼️ Primeira página renderizada como imagem`);
       } catch (renderError: any) {
         console.error(`[ANALYZE-SINGLE] ⚠️ Erro ao renderizar página:`, renderError);
-        // Fallback: usar PDF inteiro como base64 (menos eficiente mas funciona)
-        const base64 = base64Encode(arrayBuffer);
-        base64Image = `data:application/pdf;base64,${base64}`;
+        // ⚠️ Se falhar, usar apenas o texto extraído (sem imagem)
+        console.log(`[ANALYZE-SINGLE] ℹ️ Continuando análise apenas com texto extraído`);
       }
     } else {
       // 3. PROCESSAR IMAGEM: converter para base64
@@ -329,10 +331,10 @@ serve(async (req) => {
     const userMessages = [];
     
     if (pdfText && pdfText.length > 50) {
-      // PDF com texto: enviar texto + imagem para validação
+      // PDF com texto: enviar texto + imagem para validação (se disponível)
       userMessages.push({
         type: 'text',
-        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF:\n\n${pdfText}\n\n---\n\n[Imagem da primeira página anexada abaixo para validação visual. Priorize o texto acima sobre a imagem.]`
+        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF:\n\n${pdfText}\n\n---\n\n${base64Image ? '[Imagem da primeira página anexada abaixo para validação visual. Priorize o texto acima sobre a imagem.]' : '[Sem imagem - análise baseada apenas no texto extraído]'}`
       });
     } else {
       // Imagem ou PDF escaneado: apenas prompt
@@ -342,10 +344,13 @@ serve(async (req) => {
       });
     }
     
-    userMessages.push({
-      type: 'image_url',
-      image_url: { url: base64Image }
-    });
+    // Adicionar imagem apenas se disponível (não vazia)
+    if (base64Image) {
+      userMessages.push({
+        type: 'image_url',
+        image_url: { url: base64Image }
+      });
+    }
     
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
