@@ -462,19 +462,33 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         hasPetition: !!petition, 
         hasJudgeAnalysis: !!judgeAnalysis 
       });
+      toast.error('Dados insuficientes. Gere a petição e analise com o Módulo Juiz primeiro.');
       return;
     }
     
     console.log('[APPLY-CORRECTIONS] Iniciando aplicação de correções...');
+    console.log('[APPLY-CORRECTIONS] Petition length:', petition?.length);
+    console.log('[APPLY-CORRECTIONS] Petition preview:', petition?.substring(0, 100));
+    console.log('[APPLY-CORRECTIONS] JudgeAnalysis:', JSON.stringify(judgeAnalysis, null, 2).substring(0, 500));
+    console.log('[APPLY-CORRECTIONS] Número de brechas:', judgeAnalysis?.brechas?.length || 0);
+    
     setApplyingJudgeCorrections(true);
     
     try {
+      console.log('[APPLY-CORRECTIONS] Chamando edge function apply-judge-corrections...');
+      const startTime = Date.now();
+      
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
         body: {
           petition,
           judgeAnalysis
         }
       });
+      
+      const endTime = Date.now();
+      console.log('[APPLY-CORRECTIONS] Resposta recebida em', endTime - startTime, 'ms');
+      console.log('[APPLY-CORRECTIONS] Error?', error);
+      console.log('[APPLY-CORRECTIONS] Result?', result);
 
       if (error) {
         console.error('[APPLY-CORRECTIONS] Erro da função:', error);
@@ -506,14 +520,26 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         
         setPetition(result.petition_corrigida);
         
-        // Salvar versão corrigida no banco
-        await supabase.from('drafts').insert({
+        // Salvar versão corrigida no banco com judge_analysis para integração com Módulo Tribunal
+        const { error: upsertError } = await supabase.from('drafts').upsert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
-          payload: { corrected_by_judge: true, timestamp: new Date().toISOString() }
+          payload: { 
+            corrected_by_judge: true, 
+            judge_analysis: judgeAnalysis,
+            timestamp: new Date().toISOString() 
+          } as any
         });
         
-        toast.success(`✅ Correções aplicadas! ${judgeAnalysis.brechas?.length || 0} brechas corrigidas. Petição ${diff > 0 ? 'ampliada' : 'otimizada'} em ${Math.abs(diff)} caracteres.`);
+        if (upsertError) {
+          console.error('[APPLY-CORRECTIONS] Erro ao salvar draft:', upsertError);
+        }
+        
+        // Reduzir risco após aplicar correções
+        const newRisk = Math.max(0, (judgeAnalysis.risco_improcedencia || 0) - 15);
+        setJudgeAnalysis(prev => prev ? { ...prev, risco_improcedencia: newRisk } : prev);
+        
+        toast.success(`✅ ${judgeAnalysis.brechas?.length || 0} correções aplicadas! Petição ${diff > 0 ? 'ampliada' : 'otimizada'} em ${Math.abs(diff)} caracteres. Risco reduzido para ${newRisk}%.`);
 
         // Scroll para o topo da petição corrigida
         setTimeout(() => {
@@ -538,6 +564,26 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const analyzeWithAppellateModule = async () => {
     setAnalyzingAppellate(true);
     try {
+      // Buscar petição corrigida do banco (se existir)
+      const { data: latestDraft } = await supabase
+        .from('drafts')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      // Usar petição corrigida se disponível
+      const draftPayload = latestDraft?.payload as any;
+      const petitionToUse = draftPayload?.corrected_by_judge 
+        ? latestDraft.markdown_content 
+        : petition;
+      
+      const judgeAnalysisToUse = draftPayload?.judge_analysis || judgeAnalysis;
+      
+      console.log('[TRIBUNAL] Usando petição:', draftPayload?.corrected_by_judge ? 'CORRIGIDA' : 'ORIGINAL');
+      console.log('[TRIBUNAL] Judge analysis disponível:', !!judgeAnalysisToUse);
+      
       // Buscar TODOS os dados contextuais
       const { data: caseInfo } = await supabase
         .from('cases')
@@ -574,13 +620,13 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         'analyze-petition-appellate',
         {
           body: {
-            petition,
+            petition: petitionToUse,
             caseInfo,
             documents: documents || [],
             analysis: analysis || null,
             jurisprudence: jurisprudence || null,
             tese: tese || null,
-            judgeAnalysis: judgeAnalysis || null
+            judgeAnalysis: judgeAnalysisToUse
           }
         }
       );
@@ -905,7 +951,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             {judgeAnalysis && (
               <CollapsibleContent className="mt-6 space-y-4">
                 {/* Botão Aplicar Correções */}
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
                   <Button 
                     onClick={applyJudgeCorrections}
                     disabled={applyingJudgeCorrections}
@@ -914,12 +960,12 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                     {applyingJudgeCorrections ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Aplicando...
+                        Aplicando {judgeAnalysis?.brechas?.length || 0} correções...
                       </>
                     ) : (
                       <>
                         <CheckCheck className="h-4 w-4" />
-                        Aplicar Correções Automaticamente
+                        Aplicar {judgeAnalysis?.brechas?.length || 0} Correções Automaticamente
                       </>
                     )}
                   </Button>

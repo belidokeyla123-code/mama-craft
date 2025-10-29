@@ -6,12 +6,19 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('[EDGE] apply-judge-corrections INICIADA');
+  
   if (req.method === 'OPTIONS') {
+    console.log('[EDGE] OPTIONS request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('[EDGE] Parsing request body...');
     const { petition, judgeAnalysis } = await req.json();
+    console.log('[EDGE] Petition length:', petition?.length);
+    console.log('[EDGE] JudgeAnalysis exists:', !!judgeAnalysis);
+    console.log('[EDGE] JudgeAnalysis brechas:', judgeAnalysis?.brechas?.length || 0);
 
     const prompt = `Você é um advogado especialista em petições previdenciárias.
 
@@ -42,11 +49,13 @@ INSTRUÇÕES:
 Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    console.log('[EDGE] LOVABLE_API_KEY exists:', !!LOVABLE_API_KEY);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
+      console.log('[EDGE] Chamando Lovable AI Gateway...');
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -61,6 +70,7 @@ Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
       });
 
       clearTimeout(timeoutId);
+      console.log('[EDGE] AI Response status:', aiResponse.status);
 
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ 
@@ -90,6 +100,7 @@ Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
 
       const aiData = await aiResponse.json();
       const petition_corrigida = aiData.choices[0].message.content;
+      console.log('[EDGE] Petition corrigida gerada, length:', petition_corrigida?.length);
 
       return new Response(JSON.stringify({ petition_corrigida }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

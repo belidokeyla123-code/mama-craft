@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.reconvert-failed-pdfs]
 verify_jwt = false
+
+[functions.process-chat-message]
+verify_jwt = false
