@@ -859,6 +859,17 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
       {/* Ações da Petição */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* ✅ CORREÇÃO #5: Botão para limpar cache e regerar */}
+        <Button 
+          onClick={clearCacheAndRegenerate} 
+          variant="destructive" 
+          disabled={loading || !petition} 
+          className="gap-2"
+        >
+          <X className="h-4 w-4" />
+          Limpar Cache & Regerar Tudo
+        </Button>
+        
         <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar DOCX

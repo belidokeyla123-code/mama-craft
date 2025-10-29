@@ -71,6 +71,7 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
   const [teses, setTeses] = useState<TeseJuridica[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [hasCache, setHasCache] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Carregar do cache ao entrar na aba
   useEffect(() => {
@@ -89,30 +90,53 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
     }
   }, [jurisprudencias, data.caseId, loading, hasCache]);
 
-  // Salvar seleções automaticamente (debounced)
+  // ✅ CORREÇÃO #2: Salvar seleções com UPSERT (não .update())
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (data.caseId && selectedIds.size > 0) {
+        setIsSaving(true);
         try {
-          console.log('[JURISPRUDENCE] Salvando seleções:', Array.from(selectedIds));
-          await supabase
+          console.log('[JURISPRUDENCE AUTO-SAVE] 💾 Salvando:', Array.from(selectedIds));
+          
+          // USAR UPSERT EM VEZ DE UPDATE - Type casting correto
+          const { error } = await supabase
             .from('jurisprudence_results')
-            .update({ selected_ids: Array.from(selectedIds) })
-            .eq('case_id', data.caseId);
-          console.log('[JURISPRUDENCE] Seleções salvas com sucesso');
+            .upsert({
+              case_id: data.caseId,
+              selected_ids: Array.from(selectedIds) as any,
+              results: {
+                jurisprudencias: jurisprudencias,
+                sumulas: sumulas,
+                doutrinas: doutrinas,
+                teses_juridicas_aplicaveis: teses
+              } as any
+            } as any, {
+              onConflict: 'case_id'
+            });
+          
+          if (error) {
+            console.error('[JURISPRUDENCE AUTO-SAVE] ❌ Erro:', error);
+            toast.error('❌ Erro ao salvar seleções');
+          } else {
+            console.log('[JURISPRUDENCE AUTO-SAVE] ✅ Salvo com sucesso!');
+          }
         } catch (error) {
-          console.error('Erro ao salvar seleções:', error);
+          console.error('[JURISPRUDENCE AUTO-SAVE] ⚠️ Exceção:', error);
+        } finally {
+          setIsSaving(false);
         }
       }
     }, 2000);
     
     return () => clearTimeout(timer);
-  }, [selectedIds, data.caseId]);
+  }, [selectedIds, data.caseId, jurisprudencias, sumulas, doutrinas, teses]);
 
   const loadCachedResults = async () => {
     if (!data.caseId) return;
     
     try {
+      console.log('[JURISPRUDENCE LOAD] 🔍 Carregando cache para case:', data.caseId);
+      
       const { data: cached, error } = await supabase
         .from('jurisprudence_results')
         .select('*')
@@ -129,12 +153,28 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
         setSumulas(results.sumulas || []);
         setDoutrinas(results.doutrinas || []);
         setTeses(results.teses_juridicas_aplicaveis || []);
-        setSelectedIds(new Set((cached.selected_ids as any) || []));
+        
+        // GARANTIR que selected_ids é um array de strings
+        const rawSelection = cached.selected_ids;
+        const savedSelections: string[] = Array.isArray(rawSelection) 
+          ? rawSelection.map(id => String(id))
+          : [];
+        
+        console.log('[JURISPRUDENCE LOAD] ✅ Restaurando seleções:', savedSelections);
+        setSelectedIds(new Set<string>(savedSelections));
         setHasCache(true);
-        console.log('[JURISPRUDENCE] Carregado do cache');
+        
+        console.log('[JURISPRUDENCE LOAD] ✅ Cache carregado:', {
+          jurisprudencias: results.jurisprudencias?.length || 0,
+          sumulas: results.sumulas?.length || 0,
+          doutrinas: results.doutrinas?.length || 0,
+          selecionadas: savedSelections.length
+        });
+      } else {
+        console.log('[JURISPRUDENCE LOAD] ℹ️ Nenhum cache encontrado');
       }
     } catch (error) {
-      console.error('Erro ao carregar cache:', error);
+      console.error('[JURISPRUDENCE LOAD] ❌ Erro ao carregar cache:', error);
     }
   };
 
@@ -433,8 +473,10 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
             "Buscar Jurisprudências"
           )}
         </Button>
-        <Badge variant="outline" className="px-3 py-2">
+        <Badge variant="outline" className="px-3 py-2 flex items-center gap-2">
           {selectedIds.size} selecionadas
+          {isSaving && <Loader2 className="h-3 w-3 animate-spin" />}
+          {!isSaving && selectedIds.size > 0 && <CheckCircle2 className="h-3 w-3 text-green-600" />}
         </Badge>
       </div>
 

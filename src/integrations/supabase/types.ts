@@ -911,7 +911,7 @@ export type Database = {
           {
             foreignKeyName: "jurisprudence_results_case_id_fkey"
             columns: ["case_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },

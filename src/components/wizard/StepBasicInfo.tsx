@@ -549,6 +549,21 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           Identificação da Autora (Mãe)
         </h3>
         
+        {/* ✅ CORREÇÃO #7: Alerta visual para campos críticos faltantes */}
+        {hasCriticalMissingFields && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>⚠️ Dados críticos não encontrados!</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc ml-4 mt-2 space-y-1">
+                {!data.authorRg && <li><strong>RG da autora:</strong> Verifique se a procuração foi enviada e re-processe os documentos</li>}
+                {!data.authorCpf && <li><strong>CPF da autora:</strong> Campo obrigatório não preenchido</li>}
+                {!data.authorAddress && <li><strong>Endereço da autora:</strong> Necessário para a petição</li>}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex items-center">
