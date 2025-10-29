@@ -48,10 +48,56 @@ serve(async (req) => {
       .select('*')
       .eq('case_id', caseId);
 
-    // Extrair cidade do endereço ou usar procuração
-    const addressMatch = autoraEndereco?.match(/([A-ZÁÉÍÓÚÂÊÔÃÕ\s]+)\s*-\s*([A-Z]{2})/i);
-    const city = addressMatch?.[1]?.trim() || procuracaoData.city || 'São Paulo';
-    const uf = addressMatch?.[2] || caseData.birth_state || 'SP';
+    // ✅ CORREÇÃO #1: Extração robusta de cidade e UF
+    let city = '';
+    let uf = '';
+
+    // Estratégia 1: Tentar extrair do endereço completo (aceita hífen, barra, vírgula)
+    const addressMatch = autoraEndereco?.match(/([A-ZÁÉÍÓÚÂÊÔÃÕ\s]+)[\s,/-]+([A-Z]{2})/i);
+
+    if (addressMatch) {
+      city = addressMatch[1]?.trim();
+      uf = addressMatch[2]?.toUpperCase();
+      console.log(`[ENDEREÇAMENTO] Extraído do endereço: ${city}/${uf}`);
+    } else {
+      // Estratégia 2: Tentar extrair do birth_city (formato: "Cidade-UF" ou "Cidade")
+      if (caseData.birth_city) {
+        const birthCityMatch = caseData.birth_city.match(/([^-/]+)[-/]?([A-Z]{2})?/i);
+        if (birthCityMatch) {
+          city = birthCityMatch[1]?.trim();
+          uf = birthCityMatch[2]?.toUpperCase() || caseData.birth_state || '';
+          console.log(`[ENDEREÇAMENTO] Extraído de birth_city: ${city}/${uf}`);
+        }
+      }
+      
+      // Estratégia 3: Fallback para birth_state se ainda não tiver UF
+      if (!uf && caseData.birth_state) {
+        uf = caseData.birth_state;
+      }
+      
+      // Estratégia 4: Tentar procuração
+      if (!city && procuracaoData.city) {
+        city = procuracaoData.city;
+      }
+    }
+
+    // ❌ NUNCA usar fallback genérico para São Paulo
+    // Se ainda não tiver cidade/UF, avisar no log e deixar erro aparecer
+    if (!city || !uf) {
+      console.error('🔴 ERRO CRÍTICO: Cidade ou UF não identificados!', {
+        autoraEndereco,
+        birth_city: caseData.birth_city,
+        birth_state: caseData.birth_state,
+        city,
+        uf
+      });
+      
+      // Último recurso: usar birth_city/birth_state mesmo que incompleto
+      city = city || caseData.birth_city || 'CIDADE_NAO_IDENTIFICADA';
+      uf = uf || caseData.birth_state || 'UF_NAO_IDENTIFICADA';
+    }
+
+    console.log(`[ENDEREÇAMENTO FINAL] Cidade: ${city} | UF: ${uf}`);
     
     // Mapear tribunal por UF
     const trfMap: Record<string, string> = {
@@ -106,6 +152,8 @@ Você DEVE gerar uma petição inicial seguindo EXATAMENTE este formato. PREENCH
 ═══════════════════════════════════════════════════════════════
 
 **I. ENDEREÇAMENTO (PRIMEIRA LINHA DA PETIÇÃO):**
+
+🚨 ATENÇÃO: A autora mora em ${city}/${uf}, NÃO em São Paulo!
 
 EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA ${trfNumber}ª REGIÃO
 JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}
@@ -248,6 +296,17 @@ ${JSON.stringify(analysis || {}, null, 2)}
 
 Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.`;
     
+    // ✅ CORREÇÃO #3: Log detalhado antes de chamar IA
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📍 DADOS DE ENDEREÇAMENTO PARA IA:');
+    console.log(`   Autora: ${autoraNome}`);
+    console.log(`   Endereço: ${autoraEndereco}`);
+    console.log(`   Cidade extraída: ${city}`);
+    console.log(`   UF extraída: ${uf}`);
+    console.log(`   TRF: ${trf} (${trfNumber}ª Região)`);
+    console.log(`   Endereço INSS: ${inssEndereco}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     // Timeout de 60 segundos
@@ -298,6 +357,23 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
 
       const aiData = await aiResponse.json();
       let petitionText = aiData.choices[0].message.content;
+
+      // ✅ CORREÇÃO #4: Validação pós-geração - Verificar cidade incorreta
+      if (petitionText.includes('SÃO PAULO/SP') && city.toUpperCase() !== 'SÃO PAULO') {
+        console.error('🔴 ERRO CRÍTICO: IA gerou petição para São Paulo mas deveria ser', city, uf);
+        console.error('Substituindo automaticamente...');
+        
+        // Corrigir automaticamente
+        petitionText = petitionText.replace(
+          /JUIZADO ESPECIAL FEDERAL DE SÃO PAULO\/SP/g,
+          `JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}`
+        );
+        
+        petitionText = petitionText.replace(
+          /São Paulo\/SP/g,
+          `${city}/${uf}`
+        );
+      }
 
       // VALIDAÇÃO PÓS-GERAÇÃO - Verificar campos obrigatórios
       console.log('📋 Validando petição gerada...');

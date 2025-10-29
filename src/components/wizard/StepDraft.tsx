@@ -97,6 +97,20 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             draft.markdown_content.includes('[endereço]') ||
             draft.markdown_content.includes('[A SER DISTRIBUÍDO]');
           
+          // ✅ CORREÇÃO #5: Verificar se a cidade está errada
+          const wrongCity = 
+            draft.markdown_content.includes('SÃO PAULO/SP') && 
+            !data.authorAddress?.toUpperCase().includes('SÃO PAULO');
+
+          if (wrongCity) {
+            console.error('🔴 PETIÇÃO COM CIDADE ERRADA - Porto Velho → São Paulo');
+            toast.error('Cidade incorreta na petição! Regerando automaticamente...');
+            setPetition('');
+            setHasCache(false);
+            await generatePetition();
+            return;
+          }
+          
           if (hasPlaceholders) {
             console.warn('🔴 [DRAFT] PETIÇÃO DESATUALIZADA COM PLACEHOLDERS - Regerando automaticamente...');
             toast.warning('⚠️ Petição desatualizada detectada. Regerando automaticamente...', { 
