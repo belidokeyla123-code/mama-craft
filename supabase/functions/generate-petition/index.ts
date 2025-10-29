@@ -31,11 +31,21 @@ serve(async (req) => {
     const procuracao = documents?.find(d => d.document_type === 'procuracao');
     const procuracaoData = procuracao?.extractions?.[0]?.entities || {};
 
+    // Buscar benefícios anteriores
+    const { data: benefitHistory } = await supabase
+      .from('benefit_history')
+      .select('*')
+      .eq('case_id', caseId);
+
     // Buscar análise de vídeo (se houver)
     const videoAnalysis = caseData.video_analysis;
 
+    // Extrair cidade do endereço ou usar procuração
+    const addressMatch = caseData.author_address?.match(/([A-ZÁÉÍÓÚÂÊÔÃÕ\s]+)\s*-\s*([A-Z]{2})/i);
+    const city = addressMatch?.[1]?.trim() || procuracaoData.city || 'a ser informada';
+    const uf = addressMatch?.[2] || caseData.birth_state || 'SP';
+    
     // Mapear tribunal por UF
-    const uf = caseData.author_address?.match(/[A-Z]{2}$/)?.[0] || 'SP';
     const trfMap: Record<string, string> = {
       'AC': 'TRF1', 'AM': 'TRF1', 'AP': 'TRF1', 'BA': 'TRF1', 'DF': 'TRF1', 'GO': 'TRF1',
       'MA': 'TRF1', 'MG': 'TRF1', 'MT': 'TRF1', 'PA': 'TRF1', 'PI': 'TRF1', 'RO': 'TRF1',
@@ -46,37 +56,121 @@ serve(async (req) => {
       'AL': 'TRF5', 'CE': 'TRF5', 'PB': 'TRF5', 'PE': 'TRF5', 'RN': 'TRF5', 'SE': 'TRF5'
     };
     const trf = trfMap[uf] || 'TRF3';
+    const trfNumber = trf.replace('TRF', '');
+
+    // Preparar dados completos da autora
+    const autoraCivil = caseData.author_marital_status || 'não informado';
+    const autoraProfissao = caseData.profile === 'especial' ? 'Trabalhadora Rural' : 
+                            caseData.profile === 'individual' ? 'Trabalhadora Autônoma' : 'Trabalhadora';
+
+    // Preparar histórico de benefícios para o prompt
+    let benefitHistoryText = '';
+    if (benefitHistory && benefitHistory.length > 0) {
+      benefitHistoryText = '\n\nBENEFÍCIOS ANTERIORES (já reconhecidos pelo INSS):\n';
+      benefitHistory.forEach(b => {
+        benefitHistoryText += `- NB ${b.nb}: ${b.benefit_type} (${b.start_date} a ${b.end_date || 'atual'}) - ${b.status}\n`;
+      });
+      benefitHistoryText += 'IMPORTANTE: Estes benefícios PROVAM que o INSS já reconheceu a qualidade de segurada especial!\n';
+    }
 
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
-DADOS DO CASO:
-Autora: ${caseData.author_name} | CPF: ${caseData.author_cpf}
-Perfil: ${caseData.profile} | Evento: ${caseData.child_birth_date || caseData.event_date}
-${caseData.ra_protocol ? `RA Indeferido: ${caseData.ra_protocol}` : ''}
+DADOS COMPLETOS DO CASO:
 
-ANÁLISE: ${JSON.stringify(analysis?.resumo_executivo || {}, null, 2)}
-RMI: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
-Valor da Causa: R$ ${analysis?.valor_causa || 'a calcular'}
+**AUTORA (Qualificação Completa):**
+- Nome: ${caseData.author_name}
+- CPF: ${caseData.author_cpf}
+- RG: ${caseData.author_rg || 'não informado'}
+- Data de Nascimento: ${caseData.author_birth_date || 'não informada'}
+- Estado Civil: ${autoraCivil}
+- Profissão: ${autoraProfissao}
+- Endereço: ${caseData.author_address || 'não informado'}
+- Telefone: ${caseData.author_phone || ''}
+- WhatsApp: ${caseData.author_whatsapp || ''}
 
-ESTRUTURA OBRIGATÓRIA:
-I. Endereçamento ao ${trf}
-II. Qualificação (Autora + INSS)
-III. Fatos (perfil segurada + evento gerador + ${caseData.ra_protocol ? 'RA indeferido' : 'nenhum RA'})
-IV. Direito (Lei 8.213/91 + IN 128/2022 + jurisprudências)
-V. Provas (${documents?.length || 0} documentos)
-VI. Pedidos:
-   - Tutela Urgência (Art. 300 CPC)
-   - Principal: salário-maternidade | DIB: ${caseData.child_birth_date}
-   - Honorários (15-20%)
-   - Justiça Gratuita
-VII. Valor da Causa: R$ ${analysis?.valor_causa}
+**RÉU (INSS - Qualificação Completa):**
+- Nome: Instituto Nacional do Seguro Social - INSS
+- Natureza Jurídica: Autarquia Federal
+- CNPJ: 00.394.429/9999-06
+- Representação: Por sua Procuradoria Federal
+- Endereço: Procuradoria Federal em ${city}/${uf}
 
-REGRAS:
-✅ Use APENAS dados fornecidos
-✅ Seja técnica e persuasiva
-✅ Markdown formatado
+**CIDADE/COMARCA:** ${city}/${uf}
+**TRIBUNAL:** ${trf} (Terceira Região)
 
-Retorne petição completa em markdown.`;
+**EVENTO:**
+- Tipo: ${caseData.event_type === 'parto' ? 'Nascimento' : caseData.event_type}
+- Data: ${caseData.child_birth_date || caseData.event_date}
+- Nome da Criança: ${caseData.child_name || 'não informado'}
+
+**PROCESSO ADMINISTRATIVO:**
+${caseData.ra_protocol ? `- NB/Protocolo: ${caseData.ra_protocol}
+- Data do Requerimento: ${caseData.ra_request_date || 'não informada'}
+- Data do Indeferimento: ${caseData.ra_denial_date || 'não informada'}
+- Motivo do Indeferimento: ${caseData.ra_denial_reason || 'não informado'}` : '- Nenhum requerimento administrativo prévio'}
+${benefitHistoryText}
+
+**ANÁLISE JURÍDICA:**
+${JSON.stringify(analysis?.resumo_executivo || {}, null, 2)}
+
+**CÁLCULOS:**
+- RMI Calculada: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
+- Valor da Causa: R$ ${analysis?.valor_causa || 'a calcular'}
+
+**DOCUMENTOS ANEXADOS:** ${documents?.length || 0} documento(s)
+
+**ESTRUTURA OBRIGATÓRIA DA PETIÇÃO:**
+
+I. **ENDEREÇAMENTO**
+"EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA ${trfNumber}ª REGIÃO
+JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}"
+
+II. **QUALIFICAÇÃO DA AUTORA** (use TODOS os dados acima)
+Nome completo, CPF, RG, estado civil, profissão, endereço completo
+
+III. **TÍTULO DA AÇÃO** (entre as qualificações)
+"AÇÃO DE CONCESSÃO DE SALÁRIO-MATERNIDADE"
+
+IV. **QUALIFICAÇÃO DO RÉU** (use dados completos do INSS)
+Instituto Nacional do Seguro Social - INSS
+Autarquia Federal, CNPJ 00.394.429/9999-06
+Representado por sua Procuradoria Federal
+Endereço: Procuradoria Federal em ${city}/${uf}
+
+V. **DOS FATOS**
+- Perfil da segurada (${caseData.profile})
+- Evento gerador (nascimento em ${caseData.child_birth_date})
+- ${caseData.ra_protocol ? 'Requerimento administrativo indeferido' : 'Ausência de RA'}
+${benefitHistory && benefitHistory.length > 0 ? '- INSS já reconheceu qualidade de segurada em benefícios anteriores' : ''}
+
+VI. **DO DIREITO**
+- Lei 8.213/91
+- IN 128/2022
+- Jurisprudências
+
+VII. **DAS PROVAS**
+- ${documents?.length || 0} documentos anexados
+
+VIII. **DOS PEDIDOS**
+1. Tutela de Urgência (Art. 300 CPC)
+2. Pedido Principal: Concessão de salário-maternidade
+   - DIB: ${caseData.child_birth_date}
+   - RMI: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
+3. Honorários advocatícios (15-20%)
+4. Justiça Gratuita
+
+IX. **DO VALOR DA CAUSA**
+R$ ${analysis?.valor_causa}
+
+**REGRAS IMPORTANTES:**
+✅ Use TODOS os dados fornecidos (CPF, RG, endereço completo)
+✅ INSS com CNPJ 00.394.429/9999-06
+✅ Cidade e tribunal corretos: ${city}/${uf} - ${trf}
+✅ Se houver benefícios anteriores, ENFATIZE que o INSS já reconheceu a qualidade de segurada
+✅ Seja técnica, persuasiva e completa
+✅ Markdown bem formatado
+
+Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.`;
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

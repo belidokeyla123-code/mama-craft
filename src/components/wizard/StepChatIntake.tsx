@@ -1056,16 +1056,70 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const handleSendMessage = async () => {
     if (!userInput.trim()) return;
 
-    setMessages(prev => [...prev, { role: "user", content: userInput }]);
-    
-    // Detectar situação especial
-    await detectSpecialSituation(userInput);
-    
-    let response = "Obrigado pela informação! ";
-    response += "Há mais alguma informação que você gostaria de adicionar?";
-    
-    setMessages(prev => [...prev, { role: "assistant", content: response }]);
+    const messageText = userInput;
+    setMessages(prev => [...prev, { role: "user", content: messageText }]);
     setUserInput("");
+    setIsProcessing(true);
+    
+    try {
+      // Detectar situação especial
+      await detectSpecialSituation(messageText);
+      
+      // Se há um caseId, processar a mensagem com IA
+      if (data.caseId) {
+        console.log('[CHAT] Processando mensagem com IA...');
+        
+        const { data: result, error } = await supabase.functions.invoke(
+          'process-chat-message',
+          { body: { caseId: data.caseId, messageText } }
+        );
+
+        if (error) {
+          console.error('[CHAT] Erro ao processar mensagem:', error);
+          setMessages(prev => [...prev, { 
+            role: "assistant", 
+            content: `⚠️ Erro ao processar: ${error.message}` 
+          }]);
+        } else if (result?.extracted) {
+          console.log('[CHAT] Informações extraídas:', result.extracted);
+          
+          // Mostrar resumo amigável
+          setMessages(prev => [...prev, { 
+            role: "assistant", 
+            content: `✅ ${result.extracted.summary}\n\n📊 Campos atualizados: ${result.updatedFields?.length || 0}\n📝 Registros criados: ${result.insertedRecords || 0}` 
+          }]);
+
+          // Se houver mudanças significativas, disparar pipeline
+          if (result.updatedFields?.length > 0 || result.insertedRecords > 0) {
+            console.log('[CHAT] Disparando pipeline completo...');
+            toast({
+              title: "Informações atualizadas",
+              description: "Reprocessando análise com novos dados...",
+            });
+            
+            await triggerFullPipeline('Informação manual adicionada no chat');
+          }
+        } else {
+          setMessages(prev => [...prev, { 
+            role: "assistant", 
+            content: "Obrigado pela informação! Há mais alguma informação que você gostaria de adicionar?" 
+          }]);
+        }
+      } else {
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: "Obrigado pela informação! Por favor, adicione documentos para criar o caso." 
+        }]);
+      }
+    } catch (error: any) {
+      console.error('[CHAT] Erro:', error);
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: `❌ Erro: ${error.message}` 
+      }]);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (

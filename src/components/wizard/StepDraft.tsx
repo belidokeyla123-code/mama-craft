@@ -457,17 +457,53 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   };
 
   const applyJudgeCorrections = async () => {
-    if (!petition || !judgeAnalysis) return;
+    if (!petition || !judgeAnalysis) {
+      console.log('[APPLY-CORRECTIONS] Faltam dados:', { 
+        hasPetition: !!petition, 
+        hasJudgeAnalysis: !!judgeAnalysis 
+      });
+      return;
+    }
     
+    console.log('[APPLY-CORRECTIONS] Iniciando aplicação de correções...');
     setApplyingJudgeCorrections(true);
+    
     try {
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
-        body: { petition, judgeAnalysis }
+        body: {
+          petition,
+          judgeAnalysis
+        }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[APPLY-CORRECTIONS] Erro da função:', error);
+        
+        // Tratamento específico de erros
+        if (error.message?.includes('timeout') || error.message?.includes('408')) {
+          toast.error("Timeout: A aplicação das correções demorou muito. Tente novamente.");
+        } else if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+          toast.error("Rate Limit: Muitas requisições. Aguarde alguns segundos.");
+        } else if (error.message?.includes('credits') || error.message?.includes('402')) {
+          toast.error("Créditos Lovable AI esgotados. Adicione mais créditos.");
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      console.log('[APPLY-CORRECTIONS] Resultado recebido:', { 
+        hasResult: !!result, 
+        hasPetitionCorrigida: !!result?.petition_corrigida 
+      });
 
       if (result?.petition_corrigida) {
+        const oldLength = petition.length;
+        const newLength = result.petition_corrigida.length;
+        const diff = newLength - oldLength;
+        
+        console.log('[APPLY-CORRECTIONS] Aplicando correções...', { oldLength, newLength, diff });
+        
         setPetition(result.petition_corrigida);
         
         // Salvar versão corrigida no banco
@@ -476,12 +512,26 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           markdown_content: result.petition_corrigida,
           payload: { corrected_by_judge: true, timestamp: new Date().toISOString() }
         });
+        
+        toast.success(`✅ Correções aplicadas! ${judgeAnalysis.brechas?.length || 0} brechas corrigidas. Petição ${diff > 0 ? 'ampliada' : 'otimizada'} em ${Math.abs(diff)} caracteres.`);
+
+        // Scroll para o topo da petição corrigida
+        setTimeout(() => {
+          const petitionElement = document.querySelector('[data-petition-content]');
+          if (petitionElement) {
+            petitionElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 300);
+      } else {
+        console.warn('[APPLY-CORRECTIONS] Resposta sem petition_corrigida:', result);
+        toast.error("A função retornou, mas sem conteúdo de petição corrigida.");
       }
-    } catch (error) {
-      console.error('Erro ao aplicar correções:', error);
-      toast.error('Erro ao aplicar correções do juiz');
+    } catch (error: any) {
+      console.error('[APPLY-CORRECTIONS] Erro geral:', error);
+      toast.error(`Erro ao aplicar correções: ${error.message || "Erro desconhecido"}`);
     } finally {
       setApplyingJudgeCorrections(false);
+      console.log('[APPLY-CORRECTIONS] Processo finalizado');
     }
   };
 
@@ -773,7 +823,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
               {copied ? "Copiado!" : "Copiar Petição"}
             </Button>
           </div>
-          <div className="bg-muted/30 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+          <div 
+            className="bg-muted/30 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto"
+            data-petition-content
+          >
             {petition}
           </div>
 
