@@ -239,34 +239,9 @@ serve(async (req) => {
         console.log(`[ANALYZE-SINGLE] ✅ Texto extraído: ${pdfText.length} caracteres`);
         console.log(`[ANALYZE-SINGLE] 📝 Primeiras 500 chars:\n${pdfText.substring(0, 500)}`);
       } else {
-        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto (escaneado) - convertendo primeira página em imagem PNG`);
-        
-        // Converter primeira página do PDF em PNG para OCR
-        try {
-          // Usar biblioteca de conversão de PDF para imagem
-          const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          const page = await pdfDoc.getPage(1);
-          const viewport = page.getViewport({ scale: 2.0 }); // Escala alta para melhor OCR
-          
-          // Renderizar em canvas (usando node-canvas no Deno)
-          const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
-          const canvas = createCanvas(viewport.width, viewport.height);
-          const context = canvas.getContext('2d');
-          
-          await page.render({
-            canvasContext: context as any,
-            viewport: viewport
-          }).promise;
-          
-          // Converter canvas para PNG base64
-          const pngDataUrl = canvas.toDataURL('image/png');
-          base64Image = pngDataUrl;
-          
-          console.log(`[ANALYZE-SINGLE] ✅ PDF escaneado convertido em PNG (${(pngDataUrl.length / 1024).toFixed(1)} KB)`);
-        } catch (renderError: any) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao converter PDF em imagem:`, renderError);
-          throw new Error(`PDF escaneado não pôde ser convertido em imagem: ${renderError.message}`);
-        }
+        // PDF escaneado (sem texto) - não suportado
+        console.error(`[ANALYZE-SINGLE] ❌ PDF escaneado detectado (sem texto extraível)`);
+        throw new Error('PDF escaneado detectado. Por favor, converta o PDF em imagens JPG ou PNG antes de fazer upload para análise mais precisa.');
       }
     } else {
       // 3. PROCESSAR IMAGEM: converter para base64
@@ -326,20 +301,20 @@ serve(async (req) => {
     // 5. Montar prompt específico
     const prompt = buildPromptForDocType(docType, doc.file_name);
 
-    // 6. Chamar IA com texto + imagem
-    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (GPT-5 Mini)...`);
+    // 6. Chamar IA com texto extraído (sem imagem para PDFs)
+    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Gemini 2.5 Flash)...`);
     
-    // Construir mensagens: priorizar texto extraído
+    // Construir mensagens: apenas texto para PDFs
     const userMessages = [];
     
     if (pdfText && pdfText.length > 50) {
-      // ✅ PDF com texto nativo: análise RÁPIDA como ChatGPT
+      // ✅ PDF com texto nativo: análise RÁPIDA e PRECISA (como ChatGPT)
       userMessages.push({
         type: 'text',
-        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF (NATIVO):\n\n${pdfText}\n\n---\n\nAnalise o texto acima e extraia as informações solicitadas com precisão máxima.`
+        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF (NATIVO):\n\n${pdfText}\n\n---\n\nAnalise o texto acima e extraia as informações solicitadas com precisão máxima. Use apenas o texto fornecido.`
       });
     } else if (base64Image) {
-      // ⚠️ PDF escaneado ou imagem: usar OCR visual
+      // 🖼️ Imagem (JPG/PNG): análise visual
       userMessages.push({
         type: 'text',
         text: prompt
@@ -502,8 +477,9 @@ serve(async (req) => {
         extractedText: pdfText || null, // Texto completo do PDF (se disponível)
         debug: {
           textLength: pdfText.length,
-          modelUsed: 'openai/gpt-5-mini',
-          hadPdfText: !!pdfText
+          modelUsed: 'google/gemini-2.5-flash',
+          hadPdfText: !!pdfText,
+          processingType: pdfText ? 'native_text' : 'visual_ocr'
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
