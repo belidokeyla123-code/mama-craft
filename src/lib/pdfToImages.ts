@@ -42,8 +42,8 @@ export async function convertPDFToImages(
       console.log(`[PDF→IMG] Processando página ${pageNum}/${totalPages}...`);
       const page = await pdf.getPage(pageNum);
       
-      // Configurar escala para qualidade adequada (1.0x para OCR - mais leve)
-      const scale = 1.0;
+      // Configurar escala otimizada (1.5x balanceia qualidade OCR com tamanho do arquivo)
+      const scale = 1.5;
       const viewport = page.getViewport({ scale });
       console.log(`[PDF→IMG] Viewport: ${viewport.width}x${viewport.height}`);
       

@@ -810,6 +810,22 @@ Agora extraia TODOS os dados de saúde listados acima:`;
       ],
         function_call: { name: "extract_case_info" },
     };
+  
+    // 📊 LOG: Tamanho do payload
+    const payloadSize = JSON.stringify(requestBody).length;
+    const payloadSizeMB = (payloadSize / 1024 / 1024).toFixed(2);
+    console.log(`[IA BATCH] 📊 Tamanho do payload: ${payloadSizeMB} MB (${payloadSize} bytes)`);
+    console.log(`[IA BATCH] 📄 Documentos no batch: ${processedBatch.length}`);
+    
+    if (parseFloat(payloadSizeMB) > 5) {
+      console.warn(`[IA BATCH] ⚠️ PAYLOAD MUITO GRANDE! (${payloadSizeMB} MB)`);
+      console.warn(`[IA BATCH] Recomendação: Reduzir BATCH_SIZE ou qualidade das imagens`);
+      console.warn(`[IA BATCH] Limite recomendado: 4-5 MB por requisição`);
+    } else if (parseFloat(payloadSizeMB) > 3) {
+      console.log(`[IA BATCH] ⚠️ Payload grande (${payloadSizeMB} MB) - dentro do aceitável`);
+    } else {
+      console.log(`[IA BATCH] ✅ Payload otimizado (${payloadSizeMB} MB)`);
+    }
 
     // Adicionar parâmetros específicos por modelo
     if (useLovableAI) {

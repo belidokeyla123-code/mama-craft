@@ -229,8 +229,8 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
   if (docsError) throw docsError;
   console.log(`[BATCH] ${documents.length} documentos encontrados no banco`);
 
-  // FASE 1: BATCH PROCESSING - Dividir em lotes de 10
-  const BATCH_SIZE = 10;
+  // FASE 1: BATCH PROCESSING - Dividir em lotes de 3 (otimizado para Lovable AI)
+  const BATCH_SIZE = 3;
   const batches: any[][] = [];
   for (let i = 0; i < documents.length; i += BATCH_SIZE) {
     batches.push(documents.slice(i, i + BATCH_SIZE));

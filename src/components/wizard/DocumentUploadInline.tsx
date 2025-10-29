@@ -57,130 +57,186 @@ export const DocumentUploadInline = ({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
+    // 🔒 DEDUPLICAÇÃO: Verificar arquivos existentes antes de processar
+    const { data: existingDocs } = await supabase
+      .from('documents')
+      .select('file_name')
+      .eq('case_id', caseId);
+    
+    const existingFileNames = new Set(existingDocs?.map(d => d.file_name) || []);
+    const filesToProcess = files.filter(file => {
+      if (existingFileNames.has(file.name)) {
+        console.log(`⚠️ Arquivo ${file.name} já existe. Pulando...`);
+        toast.warning(`${file.name} já foi enviado anteriormente`);
+        return false;
+      }
+      return true;
+    });
+
+    if (filesToProcess.length === 0) {
+      toast.info('Nenhum arquivo novo para processar');
+      return;
+    }
+
+    console.log(`[UPLOAD] ${filesToProcess.length} arquivo(s) novo(s) será(ão) processado(s)`);
+
     setUploading(true);
     setUploadState('uploading');
     try {
       const insertedDocIds: string[] = [];
       let pdfDocId: string | null = null; // ID do PDF original
       
-      for (const file of files) {
-        // 🔥 DETECTAR E CONVERTER PDFs
+      for (const file of filesToProcess) {
+        // 🔥 DETECTAR E CONVERTER PDFs (com retry e fallback)
         if (isPDF(file)) {
           console.log(`[PDF→PNG] Detectado PDF: ${file.name}`);
           setUploadState('converting');
           toast.info(`Convertendo ${file.name} em páginas...`);
           
-          try {
-            // Converter PDF para imagens
-            const { images, originalFileName } = await convertPDFToImages(file);
-            console.log(`[PDF→PNG] ✅ ${images.length} páginas convertidas`);
-            
-            // Salvar PDF original primeiro (para referência)
-            const sanitizedPdfName = sanitizeFileName(file.name);
-            const pdfTimestamp = Date.now();
-            const pdfFileName = `${caseId}/${pdfTimestamp}_${sanitizedPdfName}`;
-            
-            const { error: pdfUploadError } = await supabase.storage
-              .from('case-documents')
-              .upload(pdfFileName, file);
+          let conversionSuccess = false;
+          let images: File[] = [];
+          let originalFileName = '';
 
-            if (pdfUploadError) throw pdfUploadError;
-            
-            // Registrar PDF no banco
-            const mappedDocType = mapDocumentTypeToEnum(suggestedDocType || 'outro');
-            const { data: pdfDoc, error: pdfInsertError } = await supabase
-              .from('documents')
-              .insert([{
-                case_id: caseId,
-                file_name: sanitizedPdfName,
-                file_path: pdfFileName,
-                document_type: mappedDocType as any,
-                mime_type: 'application/pdf',
-                file_size: file.size
-              }])
-              .select('id')
-              .single();
-
-            if (pdfInsertError) throw pdfInsertError;
-            if (pdfDoc) pdfDocId = pdfDoc.id;
-            
-            setUploadState('uploading');
-            
-            // Fazer upload de cada PNG com progresso
-            setProgress({ current: 0, total: images.length });
-            
-            for (let i = 0; i < images.length; i++) {
-              const image = images[i];
-              setProgress({ current: i + 1, total: images.length });
-              
-              const sanitizedImageName = sanitizeFileName(image.name);
-              const imageTimestamp = Date.now();
-              const imageFileName = `${caseId}/${imageTimestamp}_${sanitizedImageName}`;
-              
-              // Upload PNG para storage
-              const { error: imageUploadError } = await supabase.storage
-                .from('case-documents')
-                .upload(imageFileName, image);
-
-              if (imageUploadError) throw imageUploadError;
-
-              // Registrar PNG no banco com parent_document_id
-              const { data: imageDoc, error: imageInsertError } = await supabase
-                .from('documents')
-                .insert([{
-                  case_id: caseId,
-                  file_name: sanitizedImageName,
-                  file_path: imageFileName,
-                  document_type: mappedDocType as any,
-                  mime_type: 'image/png',
-                  file_size: image.size,
-                  parent_document_id: pdfDocId // Link para PDF original
-                }])
-                .select('id')
-                .single();
-
-              if (imageInsertError) throw imageInsertError;
-              if (imageDoc) insertedDocIds.push(imageDoc.id);
+          // 🔄 RETRY: Tentar conversão até 2 vezes
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              const result = await convertPDFToImages(file);
+              images = result.images;
+              originalFileName = result.originalFileName;
+              console.log(`[PDF→PNG] ✅ ${images.length} páginas convertidas (tentativa ${attempt})`);
+              conversionSuccess = true;
+              break;
+            } catch (error) {
+              console.error(`[PDF→PNG] ❌ Tentativa ${attempt}/2 falhou:`, error);
+              if (attempt === 2) {
+                console.warn(`[PDF→PNG] ⚠️ Conversão falhou. Enviando PDF original...`);
+                toast.warning(`Conversão de ${file.name} falhou. Enviando arquivo original.`);
+                conversionSuccess = false;
+              } else {
+                console.log(`[PDF→PNG] Aguardando 1s antes de tentar novamente...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
             }
-            
-            setProgress({ current: 0, total: 0 });
-            
-            setUploadedFiles(prev => [...prev, `${originalFileName} (${images.length} páginas)`]);
-            toast.success(`${images.length} páginas convertidas de ${originalFileName}`);
-            
-          } catch (conversionError) {
-            console.error('[PDF→PNG] Erro na conversão:', conversionError);
-            toast.error(`Erro ao converter ${file.name}. Enviando PDF direto.`);
-            
-            // Fallback: enviar PDF sem conversão
-            const sanitizedName = sanitizeFileName(file.name);
+          }
+
+          if (!conversionSuccess) {
+            // 🔄 FALLBACK: Enviar PDF original sem conversão
+            setUploadState('uploading');
             const timestamp = Date.now();
-            const fileName = `${caseId}/${timestamp}_${sanitizedName}`;
-            
+            const sanitizedFileName = sanitizeFileName(file.name);
+            const filePath = `${caseId}/${timestamp}_${sanitizedFileName}`;
+
             const { error: uploadError } = await supabase.storage
               .from('case-documents')
-              .upload(fileName, file);
+              .upload(filePath, file);
 
-            if (uploadError) throw uploadError;
+            if (uploadError) {
+              console.error(`[UPLOAD] Erro ao enviar PDF:`, uploadError);
+              toast.error(`Erro ao enviar ${file.name}`);
+              continue;
+            }
 
             const mappedDocType = mapDocumentTypeToEnum(suggestedDocType || 'outro');
-            const { data: doc, error: insertError } = await supabase
+            const { data: docData, error: docError } = await supabase
+              .from('documents')
+              .insert({
+                case_id: caseId,
+                file_name: file.name,
+                file_path: filePath,
+                document_type: mappedDocType as any,
+                mime_type: file.type,
+                file_size: file.size,
+              })
+              .select()
+              .single();
+
+            if (docError) {
+              console.error('[UPLOAD] Erro ao salvar documento:', docError);
+              toast.error(`Erro ao salvar ${file.name}`);
+              continue;
+            }
+
+            insertedDocIds.push(docData.id);
+            console.log(`[UPLOAD] ✓ PDF original enviado: ${file.name}`);
+            continue;
+          }
+          
+          // Se chegou aqui, conversão foi bem sucedida
+          setUploadState('uploading');
+          console.log(`[PDF→PNG] ✅ ${images.length} páginas convertidas`);
+            
+          // Salvar PDF original primeiro (para referência)
+          const sanitizedPdfName = sanitizeFileName(file.name);
+          const pdfTimestamp = Date.now();
+          const pdfFileName = `${caseId}/${pdfTimestamp}_${sanitizedPdfName}`;
+          
+          const { error: pdfUploadError } = await supabase.storage
+            .from('case-documents')
+            .upload(pdfFileName, file);
+
+          if (pdfUploadError) throw pdfUploadError;
+          
+          // Registrar PDF no banco
+          const mappedDocType = mapDocumentTypeToEnum(suggestedDocType || 'outro');
+          const { data: pdfDoc, error: pdfInsertError } = await supabase
+            .from('documents')
+            .insert([{
+              case_id: caseId,
+              file_name: sanitizedPdfName,
+              file_path: pdfFileName,
+              document_type: mappedDocType as any,
+              mime_type: 'application/pdf',
+              file_size: file.size
+            }])
+            .select('id')
+            .single();
+
+          if (pdfInsertError) throw pdfInsertError;
+          if (pdfDoc) pdfDocId = pdfDoc.id;
+          
+          setUploadState('uploading');
+          
+          // Fazer upload de cada PNG com progresso
+          setProgress({ current: 0, total: images.length });
+          
+          for (let i = 0; i < images.length; i++) {
+            const image = images[i];
+            setProgress({ current: i + 1, total: images.length });
+            
+            const sanitizedImageName = sanitizeFileName(image.name);
+            const imageTimestamp = Date.now();
+            const imageFileName = `${caseId}/${imageTimestamp}_${sanitizedImageName}`;
+            
+            // Upload PNG para storage
+            const { error: imageUploadError } = await supabase.storage
+              .from('case-documents')
+              .upload(imageFileName, image);
+
+            if (imageUploadError) throw imageUploadError;
+
+            // Registrar PNG no banco com parent_document_id
+            const { data: imageDoc, error: imageInsertError } = await supabase
               .from('documents')
               .insert([{
                 case_id: caseId,
-                file_name: sanitizedName,
-                file_path: fileName,
+                file_name: sanitizedImageName,
+                file_path: imageFileName,
                 document_type: mappedDocType as any,
-                mime_type: file.type,
-                file_size: file.size
+                mime_type: 'image/png',
+                file_size: image.size,
+                parent_document_id: pdfDocId // Link para PDF original
               }])
               .select('id')
               .single();
 
-            if (insertError) throw insertError;
-            if (doc) insertedDocIds.push(doc.id);
-            setUploadedFiles(prev => [...prev, file.name]);
+            if (imageInsertError) throw imageInsertError;
+            if (imageDoc) insertedDocIds.push(imageDoc.id);
           }
+          
+          setProgress({ current: 0, total: 0 });
+          
+          setUploadedFiles(prev => [...prev, `${originalFileName} (${images.length} páginas)`]);
+          toast.success(`${images.length} páginas convertidas de ${originalFileName}`);
         } else {
           // Processar arquivos não-PDF normalmente
           const sanitizedName = sanitizeFileName(file.name);
