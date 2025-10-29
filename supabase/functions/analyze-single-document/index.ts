@@ -4,9 +4,6 @@ import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/b
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs';
 
-// ✅ Configurar worker do PDF.js para Deno
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.worker.mjs';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -232,39 +229,20 @@ serve(async (req) => {
     let pdfText = '';
     let base64Image = '';
     
-    // 3. PROCESSAR PDF: extrair texto + criar imagem da primeira página
+    // 3. PROCESSAR PDF: extrair texto (RÁPIDO como ChatGPT!)
     if (isPdf) {
       console.log(`[ANALYZE-SINGLE] 📄 PDF detectado - extraindo texto nativo...`);
       
       // Extrair texto do PDF
       pdfText = await extractPdfText(arrayBuffer);
-      if (pdfText) {
+      if (pdfText && pdfText.length > 50) {
         console.log(`[ANALYZE-SINGLE] ✅ Texto extraído: ${pdfText.length} caracteres`);
         console.log(`[ANALYZE-SINGLE] 📝 Primeiras 500 chars:\n${pdfText.substring(0, 500)}`);
       } else {
-        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto (pode ser escaneado, usando OCR visual)`);
-      }
-      
-      // Converter apenas PRIMEIRA página para imagem (contexto visual)
-      try {
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-        
-        // Criar canvas com Deno Canvas
-        const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
-        const canvas = createCanvas(viewport.width, viewport.height);
-        const context = canvas.getContext('2d');
-        
-        await page.render({ canvasContext: context, viewport }).promise;
-        const dataUrl = canvas.toDataURL('image/png');
-        base64Image = dataUrl; // Já inclui "data:image/png;base64,"
-        
-        console.log(`[ANALYZE-SINGLE] 🖼️ Primeira página renderizada como imagem`);
-      } catch (renderError: any) {
-        console.error(`[ANALYZE-SINGLE] ⚠️ Erro ao renderizar página:`, renderError);
-        // ⚠️ Se falhar, usar apenas o texto extraído (sem imagem)
-        console.log(`[ANALYZE-SINGLE] ℹ️ Continuando análise apenas com texto extraído`);
+        console.log(`[ANALYZE-SINGLE] ⚠️ PDF sem texto (escaneado) - convertendo para imagem`);
+        // Para PDFs escaneados, enviar como base64 para OCR
+        const base64 = base64Encode(arrayBuffer);
+        base64Image = `data:application/pdf;base64,${base64}`;
       }
     } else {
       // 3. PROCESSAR IMAGEM: converter para base64
@@ -327,29 +305,27 @@ serve(async (req) => {
     // 6. Chamar IA com texto + imagem
     console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (GPT-5 Mini)...`);
     
-    // Construir mensagens: priorizar texto extraído se disponível
+    // Construir mensagens: priorizar texto extraído
     const userMessages = [];
     
     if (pdfText && pdfText.length > 50) {
-      // PDF com texto: enviar texto + imagem para validação (se disponível)
+      // ✅ PDF com texto nativo: análise RÁPIDA como ChatGPT
       userMessages.push({
         type: 'text',
-        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF:\n\n${pdfText}\n\n---\n\n${base64Image ? '[Imagem da primeira página anexada abaixo para validação visual. Priorize o texto acima sobre a imagem.]' : '[Sem imagem - análise baseada apenas no texto extraído]'}`
+        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF (NATIVO):\n\n${pdfText}\n\n---\n\nAnalise o texto acima e extraia as informações solicitadas com precisão máxima.`
       });
-    } else {
-      // Imagem ou PDF escaneado: apenas prompt
+    } else if (base64Image) {
+      // ⚠️ PDF escaneado ou imagem: usar OCR visual
       userMessages.push({
         type: 'text',
         text: prompt
       });
-    }
-    
-    // Adicionar imagem apenas se disponível (não vazia)
-    if (base64Image) {
       userMessages.push({
         type: 'image_url',
         image_url: { url: base64Image }
       });
+    } else {
+      throw new Error('Documento sem texto e sem imagem - não foi possível processar');
     }
     
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
