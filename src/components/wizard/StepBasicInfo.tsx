@@ -42,6 +42,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const autoFilledFields = data.autoFilledFields || [];
   const missingFields = data.missingFields || [];
   const [isSaving, setIsSaving] = useState(false);
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   // Sistema de orquestração para disparar pipeline completo
   const { triggerFullPipeline } = useCaseOrchestration({ 
@@ -100,11 +101,12 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     loadCnisAnalysis();
   }, [data.caseId]);
 
-  // Carregar períodos rurais automaticamente das extrações
+  // Carregar períodos rurais E urbanos automaticamente das extrações
   useEffect(() => {
-    const loadRuralPeriodsFromExtractions = async () => {
+    const loadPeriodsFromExtractions = async () => {
       if (!data.caseId) return;
-      if (data.ruralPeriods && data.ruralPeriods.length > 0) return; // Já tem períodos
+      // Só carregar se ainda não tem períodos
+      if ((data.ruralPeriods?.length || 0) > 0 && (data.urbanPeriods?.length || 0) > 0) return;
 
       try {
         const { data: extractions, error } = await supabase
@@ -115,26 +117,56 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
         if (error) throw error;
 
-        // Buscar períodos rurais nas extrações
         let foundRuralPeriods: RuralPeriod[] = [];
+        let foundUrbanPeriods: UrbanPeriod[] = [];
         
         for (const extraction of extractions || []) {
+          // Buscar em periodos_rurais (campo direto)
           if (extraction.periodos_rurais && Array.isArray(extraction.periodos_rurais) && extraction.periodos_rurais.length > 0) {
-            foundRuralPeriods = extraction.periodos_rurais as unknown as RuralPeriod[];
-            break;
+            foundRuralPeriods = [...foundRuralPeriods, ...extraction.periodos_rurais as unknown as RuralPeriod[]];
+          }
+          
+          // Buscar também em entities.ruralPeriods e entities.urbanPeriods
+          if (extraction.entities && typeof extraction.entities === 'object') {
+            const entities = extraction.entities as any;
+            
+            if (entities.ruralPeriods && Array.isArray(entities.ruralPeriods) && entities.ruralPeriods.length > 0) {
+              foundRuralPeriods = [...foundRuralPeriods, ...entities.ruralPeriods];
+            }
+            
+            if (entities.urbanPeriods && Array.isArray(entities.urbanPeriods) && entities.urbanPeriods.length > 0) {
+              foundUrbanPeriods = [...foundUrbanPeriods, ...entities.urbanPeriods];
+            }
           }
         }
 
-        if (foundRuralPeriods.length > 0) {
-          console.log('[AUTO-FILL] Períodos rurais encontrados nas extrações:', foundRuralPeriods);
-          updateData({ ruralPeriods: foundRuralPeriods });
+        if (foundRuralPeriods.length > 0 || foundUrbanPeriods.length > 0) {
+          console.log('[AUTO-FILL] Períodos encontrados:', {
+            rural: foundRuralPeriods.length,
+            urban: foundUrbanPeriods.length
+          });
+          
+          // Mesclar com períodos existentes (não sobrescrever)
+          updateData({ 
+            ruralPeriods: foundRuralPeriods.length > 0 
+              ? [...(data.ruralPeriods || []), ...foundRuralPeriods]
+              : data.ruralPeriods,
+            urbanPeriods: foundUrbanPeriods.length > 0 
+              ? [...(data.urbanPeriods || []), ...foundUrbanPeriods]
+              : data.urbanPeriods
+          });
+          
+          toast.success(
+            `✅ ${foundRuralPeriods.length + foundUrbanPeriods.length} período(s) carregado(s) automaticamente da autodeclaração`,
+            { duration: 5000 }
+          );
         }
       } catch (error) {
-        console.error("Erro ao carregar períodos rurais:", error);
+        console.error("Erro ao carregar períodos:", error);
       }
     };
 
-    loadRuralPeriodsFromExtractions();
+    loadPeriodsFromExtractions();
   }, [data.caseId]);
 
   // Calcular histórico do salário mínimo quando a data de nascimento da criança mudar
@@ -208,6 +240,9 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       return;
     }
 
+    setIsReprocessing(true);
+    toast.info("🔄 Re-processando documentos...", { id: 'reprocess' });
+
     try {
       // Buscar documentos do caso
       const { data: documents, error: docsError } = await supabase
@@ -218,11 +253,14 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       if (docsError) throw docsError;
 
       if (!documents || documents.length === 0) {
-        toast.error("Nenhum documento encontrado");
+        toast.error("Nenhum documento encontrado", { id: 'reprocess' });
+        setIsReprocessing(false);
         return;
       }
 
       const documentIds = documents.map(doc => doc.id);
+
+      toast.info(`🔄 Processando ${documentIds.length} documento(s)...`, { id: 'reprocess' });
 
       // Chamar edge function
       const { data: result, error } = await supabase.functions.invoke("process-documents-with-ai", {
@@ -231,13 +269,18 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
       if (error) throw error;
       
-      // 🆕 DISPARAR PIPELINE COMPLETO
+      toast.success("✅ Documentos re-processados! Sincronizando análise...", { id: 'reprocess' });
+      
+      // Disparar pipeline completo
       await triggerFullPipeline('Re-processamento de documentos');
       
-      window.location.reload(); // Recarregar para pegar novos dados
+      toast.success("✅ Tudo atualizado! Recarregando...", { id: 'reprocess' });
+      
+      setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
       console.error("Erro ao re-processar documentos:", error);
-      toast.error("Falha ao re-processar documentos");
+      toast.error("❌ Falha ao re-processar documentos", { id: 'reprocess' });
+      setIsReprocessing(false);
     }
   };
 
@@ -347,8 +390,18 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       
       toast.success("✅ Dados salvos com sucesso!");
       
-      // 🆕 Disparar pipeline completo após salvar
+      // Disparar pipeline completo para sincronizar com todas as abas
+      toast.info('🔄 Sincronizando com análise, jurisprudência e petição...', { 
+        id: 'sync',
+        duration: 10000 
+      });
+
       await triggerFullPipeline('Informações básicas atualizadas');
+
+      toast.success('✅ Tudo sincronizado! Validação, análise, jurisprudência e petição atualizadas.', { 
+        id: 'sync',
+        duration: 5000 
+      });
       
     } catch (error) {
       console.error("Erro ao salvar:", error);
@@ -383,9 +436,10 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             onClick={handleReprocessDocuments}
             variant="outline"
             className="gap-2"
+            disabled={isReprocessing}
           >
-            <RefreshCw className="h-4 w-4" />
-            Re-processar Documentos
+            <RefreshCw className={`h-4 w-4 ${isReprocessing ? 'animate-spin' : ''}`} />
+            {isReprocessing ? "Re-processando..." : "Re-processar Documentos"}
           </Button>
         )}
       </div>
@@ -720,41 +774,31 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       </Card>
 
       {/* NOVO: Histórico Escolar */}
-      <div className="space-y-4 pt-6 border-t">
-        <div className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-purple-600" />
-          <h3 className="text-lg font-semibold">Histórico Escolar (se houver)</h3>
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-purple-600" />
+            <h3 className="text-lg font-semibold">Histórico Escolar</h3>
+          </div>
+          {data.caseId && (
+            <DocumentUploadInline 
+              caseId={data.caseId}
+              suggestedDocType="historico_escolar"
+              onUploadComplete={async () => {
+                toast.success("Documento enviado! Aguarde processamento...");
+                setTimeout(() => window.location.reload(), 3000);
+              }}
+            />
+          )}
         </div>
 
-        <Alert className="bg-purple-50 border-purple-200">
-          <AlertCircle className="h-4 w-4 text-purple-600" />
-          <AlertDescription>
-            Se a autora estudou em escola rural, adicione o histórico escolar. 
-            Isso comprova vínculo com atividade rural e fortalece a ação.
-          </AlertDescription>
-        </Alert>
-
-        {(!data.schoolHistory || data.schoolHistory.length === 0) && data.caseId && (
-          <Alert variant="destructive" className="border-orange-500">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Histórico escolar não adicionado</AlertTitle>
-            <AlertDescription className="space-y-3">
-              <p>Se houver histórico escolar de escola rural, você pode:</p>
-              <ul className="list-disc list-inside text-sm space-y-1 ml-2">
-                <li>Preencher manualmente abaixo, OU</li>
-                <li><strong>Opção 1:</strong> Adicionar documento do histórico escolar:</li>
-              </ul>
-              
-              <DocumentUploadInline 
-                caseId={data.caseId}
-                suggestedDocType="historico_escolar"
-                onUploadComplete={async () => {
-                  toast.success("Documento enviado! Aguarde processamento...");
-                  setTimeout(() => window.location.reload(), 3000);
-                }}
-              />
-              
-              <div className="mt-4">
+        {(!data.schoolHistory || data.schoolHistory.length === 0) ? (
+          <Alert className="border-orange-400">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <p className="font-medium mb-2">Histórico escolar não adicionado</p>
+              <p className="text-sm">Se houver histórico de escola rural, adicione o documento acima ou cole o texto abaixo:</p>
+              <div className="mt-3">
                 <PasteDataInline 
                   extractionType="historico_escolar"
                   placeholder="Cole o texto do histórico escolar ou CTRL+V um print..."
@@ -768,10 +812,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               </div>
             </AlertDescription>
           </Alert>
-        )}
-
-        {/* Lista de períodos escolares */}
-        {data.schoolHistory && data.schoolHistory.length > 0 && (
+        ) : (
           <div className="space-y-2">
             {data.schoolHistory.map((period: any, index: number) => (
               <Card key={index} className="p-3 bg-purple-50">
@@ -804,44 +845,40 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             ))}
           </div>
         )}
-      </div>
+
+        <div className="flex justify-end mt-4 pt-4 border-t">
+          <Button onClick={handleSaveSection} disabled={isSaving}>
+            {isSaving ? "⏳ Salvando..." : "💾 Salvar Histórico Escolar"}
+          </Button>
+        </div>
+      </Card>
 
       {/* NOVO: Declaração de Saúde UBS */}
-      <div className="space-y-4 pt-6 border-t">
-        <div className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-green-600" />
-          <h3 className="text-lg font-semibold">Declaração de Saúde UBS (se houver)</h3>
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-green-600" />
+            <h3 className="text-lg font-semibold">Declaração de Saúde UBS</h3>
+          </div>
+          {data.caseId && (
+            <DocumentUploadInline 
+              caseId={data.caseId}
+              suggestedDocType="declaracao_saude_ubs"
+              onUploadComplete={async () => {
+                toast.success("Documento enviado! Aguarde processamento...");
+                setTimeout(() => window.location.reload(), 3000);
+              }}
+            />
+          )}
         </div>
 
-        <Alert className="bg-green-50 border-green-200">
-          <AlertCircle className="h-4 w-4 text-green-600" />
-          <AlertDescription>
-            Se a autora recebe atendimento em UBS rural, adicione a declaração. 
-            Isso comprova residência e vínculo com zona rural.
-          </AlertDescription>
-        </Alert>
-
-        {(!data.healthDeclarationUbs || Object.keys(data.healthDeclarationUbs).length === 0) && data.caseId && (
-          <Alert variant="destructive" className="border-orange-500">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Declaração de saúde não adicionada</AlertTitle>
-            <AlertDescription className="space-y-3">
-              <p>Se houver declaração de UBS rural, você pode:</p>
-              <ul className="list-disc list-inside text-sm space-y-1 ml-2">
-                <li>Preencher manualmente abaixo, OU</li>
-                <li><strong>Opção 1:</strong> Adicionar documento da declaração:</li>
-              </ul>
-              
-              <DocumentUploadInline 
-                caseId={data.caseId}
-                suggestedDocType="declaracao_saude_ubs"
-                onUploadComplete={async () => {
-                  toast.success("Documento enviado! Aguarde processamento...");
-                  setTimeout(() => window.location.reload(), 3000);
-                }}
-              />
-              
-              <div className="mt-4">
+        {(!data.healthDeclarationUbs || Object.keys(data.healthDeclarationUbs).length === 0) ? (
+          <Alert className="border-orange-400">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <p className="font-medium mb-2">Declaração de saúde não adicionada</p>
+              <p className="text-sm">Se houver declaração de UBS rural, adicione o documento acima ou cole o texto abaixo:</p>
+              <div className="mt-3">
                 <PasteDataInline 
                   extractionType="declaracao_saude_ubs"
                   placeholder="Cole o texto da declaração de saúde ou CTRL+V um print..."
@@ -854,12 +891,9 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               </div>
             </AlertDescription>
           </Alert>
-        )}
-
-        {/* Mostrar declaração se houver */}
-        {data.healthDeclarationUbs && Object.keys(data.healthDeclarationUbs).length > 0 && (
-          <Card className="p-4 bg-green-50">
-            <div className="space-y-2">
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium">Unidade de Saúde</Label>
                 <p className="text-sm">{data.healthDeclarationUbs.unidade_saude || 'Não informado'}</p>
@@ -879,22 +913,31 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
                 </p>
               </div>
               {data.healthDeclarationUbs.observacoes && (
-                <div>
+                <div className="col-span-2">
                   <Label className="text-sm font-medium">Observações</Label>
                   <p className="text-xs text-muted-foreground">{data.healthDeclarationUbs.observacoes}</p>
                 </div>
               )}
+            </div>
+            
+            <div className="flex justify-end pt-2 border-t">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => updateData({ healthDeclarationUbs: {} })}
               >
-                <Trash2 className="h-4 w-4 mr-2" /> Remover
+                <Trash2 className="h-4 w-4 mr-2" /> Excluir Declaração
               </Button>
             </div>
-          </Card>
+          </div>
         )}
-      </div>
+
+        <div className="flex justify-end mt-4 pt-4 border-t">
+          <Button onClick={handleSaveSection} disabled={isSaving}>
+            {isSaving ? "⏳ Salvando..." : "💾 Salvar Declaração de Saúde"}
+          </Button>
+        </div>
+      </Card>
 
       {/* SEÇÃO 4: PROPRIETÁRIO DA TERRA (apenas se especial) */}
       {data.profile === "especial" && (
@@ -1249,6 +1292,12 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               Digite os membros da família separados por vírgula
             </p>
           </div>
+
+          <div className="flex justify-end mt-4 pt-4 border-t">
+            <Button onClick={handleSaveSection} disabled={isSaving} className="gap-2">
+              {isSaving ? "⏳ Salvando..." : "💾 Salvar Períodos Rurais"}
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -1316,7 +1365,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           
           <div className="flex justify-end mt-6 pt-4 border-t">
             <Button onClick={handleSaveSection} disabled={isSaving} className="gap-2">
-              {isSaving ? "⏳ Salvando..." : "💾 Salvar Períodos Rurais"}
+              {isSaving ? "⏳ Salvando..." : "💾 Salvar Períodos Urbanos"}
             </Button>
           </div>
         </Card>
@@ -1324,7 +1373,22 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
       {/* SEÇÃO 7: REQUERIMENTO ADMINISTRATIVO */}
       <Card className="p-6">
-        <h3 className="text-xl font-semibold mb-4">Requerimento Administrativo</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-semibold">Requerimento Administrativo</h3>
+          </div>
+          {data.hasRa && data.caseId && (
+            <DocumentUploadInline 
+              caseId={data.caseId}
+              suggestedDocType="processo_administrativo"
+              onUploadComplete={async () => {
+                toast.success("Documento enviado! Aguarde processamento...");
+                setTimeout(() => window.location.reload(), 3000);
+              }}
+            />
+          )}
+        </div>
         
         <div className="space-y-4">
           <div className="flex items-center space-x-2">
@@ -1341,47 +1405,27 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </div>
 
           {data.hasRa && (
-            <div className="ml-6 space-y-4 p-4 bg-muted/50 rounded-lg">
-              {/* Alerta se os dados não foram extraídos COM UPLOAD INLINE */}
+            <div className="space-y-4">
               {(!data.raProtocol || !data.raRequestDate || !data.raDenialDate || !data.raDenialReason) && (
-                <Alert variant="destructive" className="border-orange-500">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Dados do RA não extraídos</AlertTitle>
-                  <AlertDescription className="space-y-3">
-                    <p>Os dados do Requerimento Administrativo não foram extraídos automaticamente.</p>
-                    <p className="text-sm font-medium">Você pode:</p>
-                    <ul className="list-disc list-inside text-sm space-y-1 ml-2">
-                      <li>Preencher manualmente os campos abaixo, OU</li>
-                      <li>Adicionar novamente o documento do processo administrativo:</li>
-                    </ul>
-                    {data.caseId && (
-                      <>
-                        <DocumentUploadInline 
-                          caseId={data.caseId}
-                          suggestedDocType="processo_administrativo"
-                          onUploadComplete={async () => {
-                            toast.success("Documento enviado! Aguarde processamento...");
-                            setTimeout(() => window.location.reload(), 3000);
-                          }}
-                        />
-                        
-                        <div className="mt-4">
-                          <PasteDataInline 
-                            extractionType="processo_administrativo"
-                            placeholder="Cole aqui o texto do processo administrativo (indeferimento, protocolo, etc)..."
-                            onDataExtracted={(extractedData) => {
-                              // Atualizar os campos automaticamente
-                              updateData({
-                                raProtocol: extractedData.raProtocol || data.raProtocol,
-                                raRequestDate: extractedData.raRequestDate || data.raRequestDate,
-                                raDenialDate: extractedData.raDenialDate || data.raDenialDate,
-                                raDenialReason: extractedData.raDenialReason || data.raDenialReason,
-                              });
-                            }}
-                          />
-                        </div>
-                      </>
-                    )}
+                <Alert className="border-orange-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <p className="font-medium mb-2">Dados do RA não extraídos</p>
+                    <p className="text-sm">Preencha manualmente ou cole o processo administrativo abaixo:</p>
+                    <div className="mt-3">
+                      <PasteDataInline 
+                        extractionType="processo_administrativo"
+                        placeholder="Cole aqui o texto do processo administrativo (indeferimento, protocolo, etc)..."
+                        onDataExtracted={(extractedData) => {
+                          updateData({
+                            raProtocol: extractedData.raProtocol || data.raProtocol,
+                            raRequestDate: extractedData.raRequestDate || data.raRequestDate,
+                            raDenialDate: extractedData.raDenialDate || data.raDenialDate,
+                            raDenialReason: extractedData.raDenialReason || data.raDenialReason,
+                          });
+                        }}
+                      />
+                    </div>
                   </AlertDescription>
                 </Alert>
               )}
@@ -1431,6 +1475,14 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             </div>
           )}
         </div>
+
+        {data.hasRa && (
+          <div className="flex justify-end mt-4 pt-4 border-t">
+            <Button onClick={handleSaveSection} disabled={isSaving}>
+              {isSaving ? "⏳ Salvando..." : "💾 Salvar Requerimento Administrativo"}
+            </Button>
+          </div>
+        )}
       </Card>
 
       {/* SEÇÃO 8: SALÁRIO MÍNIMO DE REFERÊNCIA COM HISTÓRICO */}

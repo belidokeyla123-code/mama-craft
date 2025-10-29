@@ -276,18 +276,40 @@ Este é o documento MAIS IMPORTANTE para períodos rurais!
 
 🔴 CAMPOS OBRIGATÓRIOS A EXTRAIR:
 
-1. **PERÍODOS DE ATIVIDADE RURAL** (ruralPeriods):
-   - startDate: Data de início (YYYY-MM-DD)
-   - endDate: Data de fim (YYYY-MM-DD ou vazio se ainda trabalha)
-   - location: Local COMPLETO (Sítio/Fazenda + Município/UF)
-   - withWhom: COM QUEM MORA - COPIE EXATAMENTE: "pai e mãe", "esposo e 3 filhos", "avó paterna", etc
-   - activities: ATIVIDADES - COPIE TUDO: "plantio de café, cacau, banana, mandioca; criação de galinha e porco"
+1. **PERÍODOS DE ATIVIDADE RURAL** (ruralPeriods) - ESTRUTURA ESPECÍFICA:
+   Retorne um array de objetos com esta estrutura EXATA:
+   [
+     {
+       "startDate": "YYYY-MM-DD",
+       "endDate": "YYYY-MM-DD" (ou vazio "" se ainda ativo),
+       "location": "Descrição completa do local (Sítio X, Município Y - UF)",
+       "withWhom": "Com quem morava (ex: com minha mãe, sozinha, com esposo e 3 filhos)",
+       "activities": "Atividades desenvolvidas (ex: lavoura de café, criação de galinha)"
+     }
+   ]
+   
+   IMPORTANTE:
+   - Se encontrar múltiplos períodos, extraia TODOS em array separado
+   - Não agrupe períodos diferentes
+   - Mantenha formato de data ISO (YYYY-MM-DD)
 
-2. **SEÇÃO 2.2 - GRUPO FAMILIAR** (familyMembersDetailed):
+2. **PERÍODOS URBANOS** (urbanPeriods) - SE HOUVER:
+   Se a autodeclaração mencionar períodos urbanos, extraia também:
+   [
+     {
+       "startDate": "YYYY-MM-DD",
+       "endDate": "YYYY-MM-DD",
+       "details": "Tipo de trabalho urbano (ex: empregada doméstica)"
+     }
+   ]
+   
+   Se NÃO houver períodos urbanos, retorne array vazio: []
+
+3. **SEÇÃO 2.2 - GRUPO FAMILIAR** (familyMembersDetailed):
    Procure uma TABELA com colunas: NOME | DN | CPF | ESTADO CIVIL | PARENTESCO
    Extrair CADA linha desta tabela!
 
-3. **SEÇÃO 3 - DADOS DA TERRA**:
+4. **SEÇÃO 3 - DADOS DA TERRA**:
    - landArea: Área cedida em hectares (número)
    - landTotalArea: Área total do imóvel (número)
    - landExploitedArea: Área explorada (número)
@@ -299,9 +321,23 @@ Este é o documento MAIS IMPORTANTE para períodos rurais!
    - landOwnerCpf: CPF do proprietário (só números)
    - landOwnerRg: RG do proprietário
 
-4. **ATIVIDADES RURAIS DETALHADAS**:
+5. **ATIVIDADES RURAIS DETALHADAS**:
    - ruralActivitiesPlanting: "CAFÉ, CACAU, BANANA, MANDIOCA, MILHO, ARROZ"
    - ruralActivitiesBreeding: "GALINHA E PORCO"
+
+⚠️ EXEMPLO DO FORMATO ESPERADO:
+{
+  "ruralPeriods": [
+    {
+      "startDate": "2015-01-01",
+      "endDate": "2022-11-19",
+      "location": "Sítio São José, Município Ouro Preto do Oeste - RO",
+      "withWhom": "com minha mãe e irmãos",
+      "activities": "lavoura de café, criação de galinha e porcos"
+    }
+  ],
+  "urbanPeriods": []
+}
 
 ⚠️ LEIA TODAS AS PÁGINAS DESTE DOCUMENTO PÁGINA POR PÁGINA!
 
