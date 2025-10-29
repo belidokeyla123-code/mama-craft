@@ -169,22 +169,24 @@ Retorne um JSON estruturado com:
       }
 
       const extracted = JSON.parse(toolCall.function.arguments);
-      console.log('[PROCESS-CHAT] Dados extraídos:', extracted);
+      console.log('[PROCESS-CHAT] 📊 Dados extraídos:', JSON.stringify(extracted, null, 2));
 
-      // Processar dados extraídos baseado no tipo
+      // ✅ CORREÇÃO: Validar campos existentes e salvar corretamente
       let updates: any = {};
       let insertions: any[] = [];
 
       if (extracted.type === 'benefit_history' && extracted.data.nb) {
-        // Inserir benefício anterior
+        console.log('[PROCESS-CHAT] 💊 Salvando benefício anterior em benefit_history');
+        
+        // ✅ Inserir benefício anterior DIRETAMENTE em benefit_history (não em cases)
         insertions.push({
           table: 'benefit_history',
           data: {
             case_id: caseId,
             nb: extracted.data.nb,
-            benefit_type: extracted.data.benefitType || 'Não especificado',
-            start_date: extracted.data.startDate,
-            end_date: extracted.data.endDate,
+            benefit_type: extracted.data.benefitType || 'Salário-Maternidade',
+            start_date: extracted.data.startDate || null,
+            end_date: extracted.data.endDate || null,
             status: extracted.data.status || 'cessado'
           }
         });
@@ -239,17 +241,46 @@ Retorne um JSON estruturado com:
         updates[extracted.data.field] = extracted.data.value;
       }
 
-      // Aplicar atualizações no caso
+      // ✅ CORREÇÃO: Validar campos antes de salvar em cases
+      let validUpdates: any = {};
+      
       if (Object.keys(updates).length > 0) {
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(updates)
-          .eq('id', caseId);
+        // Lista de campos válidos na tabela cases
+        const validFields = [
+          'author_name', 'author_cpf', 'author_rg', 'child_name', 'child_birth_date',
+          'rural_periods', 'urban_periods', 'special_notes', 'has_ra', 'ra_protocol'
+        ];
+        
+        // Filtrar apenas campos válidos
+        for (const [key, value] of Object.entries(updates)) {
+          if (validFields.includes(key)) {
+            validUpdates[key] = value;
+          } else {
+            console.warn(`[PROCESS-CHAT] ⚠️ Campo "${key}" não existe em cases, criando exceção`);
+            // Criar exceção para informação não mapeada
+            insertions.push({
+              table: 'case_exceptions',
+              data: {
+                case_id: caseId,
+                exception_type: 'unmapped_field',
+                description: `Campo "${key}": ${JSON.stringify(value)}`,
+                voice_transcribed: false
+              }
+            });
+          }
+        }
+        
+        if (Object.keys(validUpdates).length > 0) {
+          const { error: updateError } = await supabase
+            .from('cases')
+            .update(validUpdates)
+            .eq('id', caseId);
 
-        if (updateError) {
-          console.error('[PROCESS-CHAT] Erro ao atualizar caso:', updateError);
-        } else {
-          console.log('[PROCESS-CHAT] Caso atualizado:', updates);
+          if (updateError) {
+            console.error('[PROCESS-CHAT] ❌ Erro ao atualizar caso:', updateError);
+          } else {
+            console.log('[PROCESS-CHAT] ✅ Caso atualizado:', validUpdates);
+          }
         }
       }
 
@@ -266,10 +297,16 @@ Retorne um JSON estruturado com:
         }
       }
 
+      // ✅ CORREÇÃO #6: Disparar sincronização após salvar benefício
+      if (extracted.type === 'benefit_history' && insertions.length > 0) {
+        console.log('[PROCESS-CHAT] 🔄 Benefício salvo, sincronização necessária');
+      }
+
       return new Response(JSON.stringify({
         extracted,
-        updatedFields: Object.keys(updates),
-        insertedRecords: insertions.length
+        updatedFields: Object.keys(validUpdates || {}),
+        insertedRecords: insertions.length,
+        requiresSync: extracted.type === 'benefit_history'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

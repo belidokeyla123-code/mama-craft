@@ -2,7 +2,8 @@ import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Scale, Clock, FileQuestion } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Scale, Clock, FileQuestion, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -64,11 +65,52 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   const [hasCache, setHasCache] = useState(false);
   const [docsChanged, setDocsChanged] = useState(false);
 
+  // ✅ CORREÇÃO #4: Estado para benefícios sobrepostos
+  const [benefitHistory, setBenefitHistory] = useState<any[]>([]);
+  const [hasOverlappingBenefit, setHasOverlappingBenefit] = useState(false);
+
   // Hook de orquestração para disparar pipeline completo
   const { triggerFullPipeline } = useCaseOrchestration({
     caseId: data.caseId || '',
     enabled: !!data.caseId
   });
+
+  // ✅ CORREÇÃO #4: Carregar benefícios e verificar sobreposição
+  useEffect(() => {
+    const loadBenefitHistory = async () => {
+      if (!data.caseId) return;
+      
+      const { data: benefits, error } = await supabase
+        .from('benefit_history')
+        .select('*')
+        .eq('case_id', data.caseId);
+
+      if (error) {
+        console.error('[BENEFIT_HISTORY] Erro:', error);
+        return;
+      }
+
+      if (benefits && benefits.length > 0) {
+        setBenefitHistory(benefits);
+        
+        // Verificar sobreposição com data de nascimento
+        const childBirthDate = data.childBirthDate || data.eventDate;
+        if (childBirthDate) {
+          const overlapping = benefits.some(b => {
+            if (!b.end_date) return false;
+            const diff = Math.abs(
+              new Date(b.end_date).getTime() - 
+              new Date(childBirthDate).getTime()
+            );
+            return diff < 120 * 24 * 60 * 60 * 1000; // 120 dias
+          });
+          setHasOverlappingBenefit(overlapping);
+        }
+      }
+    };
+
+    loadBenefitHistory();
+  }, [data.caseId, data.childBirthDate, data.eventDate]);
 
   // Carregar do cache ao entrar na aba
   useEffect(() => {
@@ -345,6 +387,37 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
           Análise de CNIS, carência, RMI, valor da causa e probabilidade de êxito
         </p>
       </div>
+
+      {/* ✅ CORREÇÃO #4: Alerta de benefício sobreposto */}
+      {hasOverlappingBenefit && (
+        <Alert variant="destructive" className="border-red-600">
+          <AlertCircle className="h-5 w-5" />
+          <AlertTitle className="text-lg font-bold">
+            🔴 ATENÇÃO: Benefício Anterior no Mesmo Evento
+          </AlertTitle>
+          <AlertDescription>
+            <div className="mt-2 space-y-2">
+              <p className="font-semibold">
+                Foi detectado um benefício anterior cujo período coincide com a data do parto atual.
+              </p>
+              <div className="bg-red-100 p-3 rounded-md mt-2">
+                <p className="text-sm"><strong>Risco:</strong> O INSS pode alegar duplicidade de benefício e indeferir o pedido.</p>
+                <p className="text-sm mt-1"><strong>Estratégia:</strong> Verificar se o benefício anterior foi cessado antes do evento atual ou se trata-se de situação diferente (ex: aborto vs parto, gêmeos, etc).</p>
+              </div>
+              <div className="mt-3">
+                <p className="text-sm font-semibold">Benefícios detectados:</p>
+                <ul className="list-disc ml-6 text-sm mt-1">
+                  {benefitHistory.map((b, idx) => (
+                    <li key={idx}>
+                      NB {b.nb}: {b.benefit_type} ({b.start_date} a {b.end_date || 'atual'})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex gap-3">
         <Button onClick={performAnalysis} disabled={loading}>

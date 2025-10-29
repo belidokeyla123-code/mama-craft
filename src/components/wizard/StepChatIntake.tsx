@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,39 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     caseId: data.caseId || '', 
     enabled: !!data.caseId 
   });
+
+  // ✅ CORREÇÃO #6: Chamar migração automática ao montar
+  useEffect(() => {
+    const migrateBenefits = async () => {
+      if (!data.caseId) return;
+      
+      console.log('[CHAT] 🔄 Migrando benefícios de extrações para benefit_history');
+      
+      try {
+        const { data: result, error } = await supabase.functions.invoke(
+          'migrate-extractions-to-history',
+          { body: { caseId: data.caseId } }
+        );
+
+        if (error) {
+          console.error('[CHAT] ⚠️ Erro na migração:', error);
+          return;
+        }
+
+        if (result?.migratedCount > 0) {
+          console.log(`[CHAT] ✅ ${result.migratedCount} benefício(s) migrado(s)`);
+          toast({
+            title: "Benefícios anteriores detectados",
+            description: `${result.migratedCount} benefício(s) carregado(s) dos documentos`,
+          });
+        }
+      } catch (error) {
+        console.error('[CHAT] Erro na migração:', error);
+      }
+    };
+
+    migrateBenefits();
+  }, [data.caseId]);
 
   // 🆕 DEBUG: Log quando o componente monta e quando há caseId
   console.log('[CHAT INTAKE] Componente montado');
