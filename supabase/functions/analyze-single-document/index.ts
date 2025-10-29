@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
-import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -166,25 +165,6 @@ function getSchemaForDocType(docType: string) {
   };
 }
 
-// Função para extrair texto do PDF
-async function extractPdfText(pdfBuffer: ArrayBuffer): Promise<string> {
-  try {
-    const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
-    let fullText = '';
-    
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items.map((item: any) => item.str).join(' ');
-      fullText += `\n=== Página ${i} ===\n${pageText}\n`;
-    }
-    
-    return fullText.trim();
-  } catch (error: any) {
-    console.error('[PDF EXTRACT] Erro ao extrair texto:', error);
-    return '';
-  }
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -229,51 +209,18 @@ serve(async (req) => {
     let pdfText = '';
     let base64Image = '';
     
-    // 3. PROCESSAR PDF: extrair texto OU converter em imagem (escaneados)
+    // 3. PROCESSAR PDF: enviar diretamente para OCR do Gemini
     if (isPdf) {
-      console.log(`[ANALYZE-SINGLE] 📄 PDF detectado - extraindo texto nativo...`);
+      console.log(`[ANALYZE-SINGLE] 📄 PDF detectado - enviando para OCR direto do Gemini`);
       
-      // Extrair texto do PDF
-      pdfText = await extractPdfText(arrayBuffer);
-      if (pdfText && pdfText.length > 50) {
-        console.log(`[ANALYZE-SINGLE] ✅ Texto extraído: ${pdfText.length} caracteres`);
-        console.log(`[ANALYZE-SINGLE] 📝 Primeiras 500 chars:\n${pdfText.substring(0, 500)}`);
-      } else {
-        // PDF escaneado (sem texto) - CONVERTER PRIMEIRA PÁGINA EM PNG
-        console.log(`[ANALYZE-SINGLE] 📸 PDF escaneado detectado - convertendo primeira página em imagem...`);
-        
-        try {
-          // Carregar PDF com PDF.js
-          const loadingTask = pdfjsLib.getDocument({
-            data: arrayBuffer,
-            useWorkerFetch: false,
-            isEvalSupported: false,
-            useSystemFonts: true
-          });
-          const pdfDoc = await loadingTask.promise;
-          const page = await pdfDoc.getPage(1);
-          const viewport = page.getViewport({ scale: 2.0 }); // Escala alta para melhor OCR
-          
-          // Renderizar em canvas (usando Deno canvas)
-          const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
-          const canvas = createCanvas(viewport.width, viewport.height);
-          const context = canvas.getContext('2d');
-          
-          await page.render({
-            canvasContext: context as any,
-            viewport: viewport
-          }).promise;
-          
-          // Converter canvas para PNG base64
-          const pngDataUrl = canvas.toDataURL('image/png');
-          base64Image = pngDataUrl;
-          
-          console.log(`[ANALYZE-SINGLE] ✅ PDF escaneado convertido em PNG para OCR (${(pngDataUrl.length / 1024).toFixed(1)} KB)`);
-        } catch (renderError: any) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao converter PDF escaneado:`, renderError);
-          throw new Error(`PDF escaneado não pôde ser convertido em imagem: ${renderError.message}`);
-        }
-      }
+      // Converter PDF completo para base64
+      const base64Pdf = base64Encode(arrayBuffer);
+      base64Image = `data:application/pdf;base64,${base64Pdf}`;
+      
+      console.log(`[ANALYZE-SINGLE] ✅ PDF convertido (${(base64Pdf.length / 1024).toFixed(1)} KB) - Gemini fará OCR nativo`);
+      
+      // pdfText fica vazio - forçar modo visual (OCR)
+      pdfText = '';
     } else {
       // 3. PROCESSAR IMAGEM: converter para base64
       const base64 = base64Encode(arrayBuffer);
