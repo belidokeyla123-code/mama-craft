@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText } from "lucide-react";
+import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText, Loader2 } from "lucide-react";
 import { CaseData, RuralPeriod, UrbanPeriod } from "@/pages/NewCase";
 import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMinimo";
 import { useEffect, useState } from "react";
@@ -78,6 +78,70 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     }
     return null;
   };
+
+  // Auto-save com debounce - salva automaticamente após 2s sem mudanças
+  useEffect(() => {
+    if (!data.caseId) return;
+    
+    setIsSaving(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const cleanDate = (dateStr: any) => {
+          if (!dateStr) return null;
+          const str = String(dateStr).toLowerCase().trim();
+          if (['n/a', 'não identificado', 'não', 'vazio', 'não informado'].some(inv => str.includes(inv))) {
+            return null;
+          }
+          return dateStr;
+        };
+
+        await supabase.from('cases').update({
+          author_name: data.authorName,
+          author_cpf: data.authorCpf,
+          author_rg: data.authorRg,
+          author_birth_date: cleanDate(data.authorBirthDate),
+          author_address: data.authorAddress,
+          author_marital_status: data.authorMaritalStatus,
+          child_name: data.childName,
+          child_birth_date: cleanDate(data.childBirthDate),
+          father_name: data.fatherName,
+          profile: data.profile,
+          event_type: data.eventType,
+          event_date: cleanDate(data.eventDate),
+          land_owner_name: data.landOwnerName,
+          land_owner_cpf: data.landOwnerCpf,
+          land_owner_rg: data.landOwnerRg,
+          land_ownership_type: data.landOwnershipType,
+          land_property_name: data.landPropertyName,
+          land_municipality: data.landMunicipality,
+          rural_activity_since: cleanDate(data.ruralActivitySince),
+          rural_periods: data.ruralPeriods as any,
+          urban_periods: data.urbanPeriods as any,
+          family_members: data.familyMembers as any,
+          has_ra: data.hasRa,
+          ra_protocol: data.raProtocol,
+          ra_request_date: cleanDate(data.raRequestDate),
+          ra_denial_date: cleanDate(data.raDenialDate),
+          ra_denial_reason: data.raDenialReason,
+          salario_minimo_ref: data.salarioMinimoRef,
+          updated_at: new Date().toISOString(),
+        }).eq('id', data.caseId);
+
+        setIsSaving(false);
+      } catch (error) {
+        console.error('[AUTO-SAVE] Erro:', error);
+        setIsSaving(false);
+      }
+    }, 2000);
+    
+    return () => clearTimeout(timeoutId);
+  }, [
+    data.authorName, data.authorCpf, data.authorRg, data.authorBirthDate,
+    data.childName, data.childBirthDate, data.fatherName, data.eventDate,
+    data.profile, data.eventType, data.hasRa, data.raProtocol,
+    data.landOwnerName, data.landOwnerCpf, data.landOwnershipType,
+    data.ruralPeriods, data.urbanPeriods, data.salarioMinimoRef,
+  ]);
 
   // Carregar análise do CNIS quando o componente montar
   useEffect(() => {
@@ -423,7 +487,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-2xl font-bold mb-2">Informações Básicas</h2>
           <p className="text-muted-foreground">
@@ -431,17 +495,32 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </p>
         </div>
         
-        {data.caseId && (
-          <Button 
-            onClick={handleReprocessDocuments}
-            variant="outline"
-            className="gap-2"
-            disabled={isReprocessing}
-          >
-            <RefreshCw className={`h-4 w-4 ${isReprocessing ? 'animate-spin' : ''}`} />
-            {isReprocessing ? "Re-processando..." : "Re-processar Documentos"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isSaving && (
+            <Badge variant="outline" className="animate-pulse">
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Salvando...
+            </Badge>
+          )}
+          {!isSaving && (
+            <Badge variant="outline" className="text-green-600 border-green-600">
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              Tudo salvo
+            </Badge>
+          )}
+          
+          {data.caseId && (
+            <Button 
+              onClick={handleReprocessDocuments}
+              variant="outline"
+              className="gap-2"
+              disabled={isReprocessing}
+            >
+              <RefreshCw className={`h-4 w-4 ${isReprocessing ? 'animate-spin' : ''}`} />
+              {isReprocessing ? "Re-processando..." : "Re-processar Documentos"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* ALERTA DE CAMPOS CRÍTICOS FALTANTES */}

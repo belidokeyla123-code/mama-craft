@@ -33,7 +33,6 @@ export default function CaseDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1); // Começa nas informações básicas
-  const [isNavigating, setIsNavigating] = useState(false);
   const [caseData, setCaseData] = useState<CaseData>({
     authorName: "",
     authorCpf: "",
@@ -241,21 +240,15 @@ export default function CaseDetail() {
 
   const progress = (currentStep / (STEPS.length - 1)) * 100;
 
-  const handleNext = async () => {
+  const handleNext = () => {
     if (currentStep < STEPS.length - 1) {
-      setIsNavigating(true);
       setCurrentStep((prev) => prev + 1);
-      await loadCaseData();
-      setIsNavigating(false);
     }
   };
 
-  const handleBack = async () => {
+  const handleBack = () => {
     if (currentStep > 0) {
-      setIsNavigating(true);
       setCurrentStep((prev) => prev - 1);
-      await loadCaseData();
-      setIsNavigating(false);
     }
   };
 
@@ -386,14 +379,6 @@ export default function CaseDetail() {
 
         {/* Step Content */}
         <Card className="p-8 mb-6 relative">
-          {isNavigating && (
-            <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 rounded-lg">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                <span className="text-sm text-muted-foreground">Carregando dados...</span>
-              </div>
-            </div>
-          )}
           {renderStep()}
         </Card>
 
