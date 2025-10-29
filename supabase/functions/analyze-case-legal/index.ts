@@ -92,8 +92,11 @@ Ao analisar o CNIS, você deve:
 DADOS DO CASO:
 ${JSON.stringify(caseData, null, 2)}
 
-DOCUMENTOS (${documents?.length || 0}):
-${documents?.map(d => `- ${d.document_type}: ${d.file_name}`).join('\n') || 'Nenhum'}
+📁 DOCUMENTOS JÁ ENVIADOS PELA CLIENTE (${documents?.length || 0}):
+${documents?.map(d => `✅ ${d.document_type} - ${d.file_name} [JÁ POSSUI]`).join('\n') || '❌ Nenhum documento enviado ainda'}
+
+⚠️⚠️⚠️ ATENÇÃO CRÍTICA: OS DOCUMENTOS LISTADOS ACIMA JÁ FORAM ENVIADOS! ⚠️⚠️⚠️
+NÃO RECOMENDE JUNTAR DOCUMENTOS QUE JÁ ESTÃO NA LISTA ACIMA!
 
 EXTRAÇÕES:
 ${JSON.stringify(extractions, null, 2)}
@@ -139,6 +142,73 @@ TAREFA: Faça uma análise jurídica completa e retorne JSON com:
   },
   "recomendacoes": ["Recomendação 1"]
 }
+
+**REGRAS CRÍTICAS PARA RECOMENDAÇÕES:**
+
+1. ✅ **NUNCA RECOMENDAR DOCUMENTOS JÁ ENVIADOS:**
+   
+   Documentos que JÁ FORAM ENVIADOS (verifique a lista acima):
+   ${documents?.map(d => `   - ✅ ${d.document_type} → JÁ POSSUI, NÃO RECOMENDE`).join('\n') || '   - Nenhum documento enviado'}
+   
+   Se autodeclaração_rural JÁ está na lista → NÃO recomende "juntar autodeclaração"
+   Se documento_terra JÁ está na lista → NÃO recomende "juntar documento da terra"
+   Se comprovante_residencia JÁ está na lista → NÃO recomende "juntar comprovante"
+   Se certidao_nascimento JÁ está na lista → NÃO recomende "juntar certidão de nascimento"
+   Se cnis JÁ está na lista → NÃO recomende "solicitar CNIS"
+   E assim por diante...
+
+2. ✅ **RECOMENDAR APENAS DOCUMENTOS QUE FALTAM:**
+   
+   Documentos necessários mas NÃO enviados:
+   - Compare a lista de documentos NECESSÁRIOS com os documentos JÁ ENVIADOS
+   - Recomende APENAS os que NÃO aparecem na lista acima
+   - Exemplo: Se falta "declaracao_saude_ubs" → "Juntar declaração de UBS comprovando atendimentos durante gravidez"
+   - Exemplo: Se falta "historico_escolar" → "Juntar histórico escolar em escola rural para reforçar prova de residência"
+
+3. ❌ **NUNCA RECOMENDAR "PEDIDOS PROCESSUAIS" COMO SE FOSSEM DOCUMENTOS:**
+   
+   PEDIDOS (vão na minuta, NÃO são recomendações):
+   - ❌ "Tutela de urgência" → PEDIDO para minuta
+   - ❌ "Inversão do ônus da prova" → PEDIDO para minuta
+   - ❌ "Citação do INSS" → PEDIDO para minuta
+   - ❌ "Honorários advocatícios" → PEDIDO para minuta
+   - ❌ "Justiça gratuita" → PEDIDO para minuta
+   
+   Recomendações devem ser APENAS sobre:
+   - ✅ Juntar documentos faltantes
+   - ✅ Buscar testemunhas
+   - ✅ Orientar cliente sobre audiência/procedimentos
+   - ✅ Solicitar documentos ao INSS (via ofício judicial)
+
+4. ✅ **FORMATO CORRETO DE RECOMENDAÇÕES:**
+   
+   ✅ BOM: "Juntar histórico escolar em escola rural para reforçar prova de residência no período"
+   ✅ BOM: "Buscar testemunhas vizinhos/familiares para confirmar atividade rural"
+   ✅ BOM: "Orientar cliente sobre importância de comparecer à audiência"
+   ✅ BOM: "Solicitar ao juiz ofício à escola rural para confirmar matrícula no período"
+   
+   ❌ RUIM: "Solicitar tutela de urgência" (isso é pedido da minuta)
+   ❌ RUIM: "Juntar autodeclaração rural" (se JÁ foi enviada)
+   ❌ RUIM: "Requerer inversão do ônus da prova" (isso é pedido da minuta)
+
+5. 🎯 **PRIORIZAR RECOMENDAÇÕES POR IMPORTÂNCIA:**
+   
+   CRÍTICO (documentos obrigatórios faltantes):
+   - Certidão de nascimento (se não tiver)
+   - RG/CPF (se não tiver)
+   - Autodeclaração rural (se não tiver)
+   - Comprovante de residência (se não tiver)
+   
+   ALTO (documentos que fortalecem muito a prova):
+   - Histórico escolar em escola rural
+   - Declaração de UBS/posto de saúde rural
+   - Fotos da propriedade
+   - Documentos da terra (ITR, CCIR, escritura)
+   
+   MÉDIO (orientações processuais):
+   - Preparar testemunhas
+   - Comparecer à audiência
+   - Acompanhar andamento do processo
 
 **SITUAÇÕES ESPECIAIS DETECTADAS:**
 ${caseExceptions && caseExceptions.length > 0 ? 
