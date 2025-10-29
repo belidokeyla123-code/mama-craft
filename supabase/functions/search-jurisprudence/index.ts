@@ -211,7 +211,7 @@ Retorne JSON com 3-5 de cada tipo:
     // Chamar IA para busca jurisprudências com contexto completo
     console.log('[SEARCH-JURIS] Chamando IA com análise completa...');
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos timeout (mais tempo por causa do prompt maior)
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 segundos timeout
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -286,7 +286,8 @@ Retorne JSON com 3-5 de cada tipo:
       }
 
       // Salvar no cache global para reutilização
-      await supabase
+      console.log('[JURISPRUDENCE] Salvando no cache global...');
+      const { error: cacheError } = await supabase
         .from('jurisprudence_cache')
         .insert({
           query_hash: cacheKey,
@@ -295,7 +296,12 @@ Retorne JSON com 3-5 de cada tipo:
           results: results
         });
 
-      console.log('[JURISPRUDENCE] Salvo no cache global');
+      if (cacheError) {
+        console.error('[JURISPRUDENCE] Erro ao salvar cache:', cacheError);
+        // Não falhar se der erro no cache, apenas logar
+      }
+
+      console.log('[JURISPRUDENCE] ✅ Salvo no cache global');
 
       return new Response(JSON.stringify(results), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -98,8 +98,9 @@ ${documents?.map(d => `✅ ${d.document_type} - ${d.file_name} [JÁ POSSUI]`).jo
 ⚠️⚠️⚠️ ATENÇÃO CRÍTICA: OS DOCUMENTOS LISTADOS ACIMA JÁ FORAM ENVIADOS! ⚠️⚠️⚠️
 NÃO RECOMENDE JUNTAR DOCUMENTOS QUE JÁ ESTÃO NA LISTA ACIMA!
 
-EXTRAÇÕES:
-${JSON.stringify(extractions, null, 2)}
+EXTRAÇÕES (resumidas):
+${extractions?.slice(0, 3).map(e => `- Doc: ${e.document_id} | Dados: ${JSON.stringify(e.entities || {}).substring(0, 200)}...`).join('\n') || 'Nenhuma'}
+${extractions && extractions.length > 3 ? `... e mais ${extractions.length - 3} extrações` : ''}
 
 TAREFA: Faça uma análise jurídica completa e retorne JSON com:
 {
@@ -179,9 +180,9 @@ Considere:
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 20 segundos (aumentado para processar regras complexas)
+    // Timeout de 30 segundos (otimizado para casos com muitos documentos)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
