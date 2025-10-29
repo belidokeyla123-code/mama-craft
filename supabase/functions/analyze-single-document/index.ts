@@ -229,7 +229,7 @@ serve(async (req) => {
     let pdfText = '';
     let base64Image = '';
     
-    // 3. PROCESSAR PDF: extrair texto (RÁPIDO como ChatGPT!)
+    // 3. PROCESSAR PDF: extrair texto OU converter em imagem (escaneados)
     if (isPdf) {
       console.log(`[ANALYZE-SINGLE] 📄 PDF detectado - extraindo texto nativo...`);
       
@@ -239,15 +239,46 @@ serve(async (req) => {
         console.log(`[ANALYZE-SINGLE] ✅ Texto extraído: ${pdfText.length} caracteres`);
         console.log(`[ANALYZE-SINGLE] 📝 Primeiras 500 chars:\n${pdfText.substring(0, 500)}`);
       } else {
-        // PDF escaneado (sem texto) - não suportado
-        console.error(`[ANALYZE-SINGLE] ❌ PDF escaneado detectado (sem texto extraível)`);
-        throw new Error('PDF escaneado detectado. Por favor, converta o PDF em imagens JPG ou PNG antes de fazer upload para análise mais precisa.');
+        // PDF escaneado (sem texto) - CONVERTER PRIMEIRA PÁGINA EM PNG
+        console.log(`[ANALYZE-SINGLE] 📸 PDF escaneado detectado - convertendo primeira página em imagem...`);
+        
+        try {
+          // Carregar PDF com PDF.js
+          const loadingTask = pdfjsLib.getDocument({
+            data: arrayBuffer,
+            useWorkerFetch: false,
+            isEvalSupported: false,
+            useSystemFonts: true
+          });
+          const pdfDoc = await loadingTask.promise;
+          const page = await pdfDoc.getPage(1);
+          const viewport = page.getViewport({ scale: 2.0 }); // Escala alta para melhor OCR
+          
+          // Renderizar em canvas (usando Deno canvas)
+          const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
+          const canvas = createCanvas(viewport.width, viewport.height);
+          const context = canvas.getContext('2d');
+          
+          await page.render({
+            canvasContext: context as any,
+            viewport: viewport
+          }).promise;
+          
+          // Converter canvas para PNG base64
+          const pngDataUrl = canvas.toDataURL('image/png');
+          base64Image = pngDataUrl;
+          
+          console.log(`[ANALYZE-SINGLE] ✅ PDF escaneado convertido em PNG para OCR (${(pngDataUrl.length / 1024).toFixed(1)} KB)`);
+        } catch (renderError: any) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao converter PDF escaneado:`, renderError);
+          throw new Error(`PDF escaneado não pôde ser convertido em imagem: ${renderError.message}`);
+        }
       }
     } else {
       // 3. PROCESSAR IMAGEM: converter para base64
       const base64 = base64Encode(arrayBuffer);
       base64Image = `data:${mimeType};base64,${base64}`;
-      console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida (${(base64.length / 1024).toFixed(1)} KB)`);
+      console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida para análise (${(base64.length / 1024).toFixed(1)} KB)`);
     }
 
     // 4. Classificar tipo (se ainda não classificado)
@@ -301,23 +332,25 @@ serve(async (req) => {
     // 5. Montar prompt específico
     const prompt = buildPromptForDocType(docType, doc.file_name);
 
-    // 6. Chamar IA com texto extraído (sem imagem para PDFs)
-    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Gemini 2.5 Flash)...`);
+    // 6. Chamar IA com texto extraído OU imagem (PDFs escaneados/imagens)
+    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Google Gemini 2.5 Flash)...`);
     
-    // Construir mensagens: apenas texto para PDFs
+    // Construir mensagens: texto nativo OU imagem OCR
     const userMessages = [];
     
     if (pdfText && pdfText.length > 50) {
       // ✅ PDF com texto nativo: análise RÁPIDA e PRECISA (como ChatGPT)
+      console.log(`[ANALYZE-SINGLE] 📄 Modo: Análise de texto nativo (rápido)`);
       userMessages.push({
         type: 'text',
-        text: `${prompt}\n\n📄 TEXTO COMPLETO EXTRAÍDO DO PDF (NATIVO):\n\n${pdfText}\n\n---\n\nAnalise o texto acima e extraia as informações solicitadas com precisão máxima. Use apenas o texto fornecido.`
+        text: `${prompt}\n\n📄 **TEXTO COMPLETO EXTRAÍDO DO PDF (NATIVO):**\n\n${pdfText}\n\n---\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Analise APENAS o texto acima extraído nativamente do PDF\n- Extraia TODAS as informações visíveis com precisão máxima\n- Para datas, use formato YYYY-MM-DD\n- Para CPF, extraia apenas números (sem pontos/traços)\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
       });
     } else if (base64Image) {
-      // 🖼️ Imagem (JPG/PNG): análise visual
+      // 🖼️ PDF escaneado ou imagem: análise visual com OCR
+      console.log(`[ANALYZE-SINGLE] 📸 Modo: OCR visual (PDF escaneado ou imagem)`);
       userMessages.push({
         type: 'text',
-        text: prompt
+        text: `${prompt}\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Esta é uma IMAGEM (PDF escaneado ou JPG/PNG)\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD\n- Para CPF, extraia apenas números (sem pontos/traços)\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
       });
       userMessages.push({
         type: 'image_url',
@@ -338,7 +371,34 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: ESPECIALISTA_MATERNIDADE_PROMPT + '\n\nVocê é um especialista em OCR e extração de dados de documentos brasileiros. Extraia TODAS as informações visíveis com máxima precisão. Quando houver texto extraído do PDF, priorize-o sobre a análise visual da imagem.'
+            content: ESPECIALISTA_MATERNIDADE_PROMPT + `
+
+📋 **INSTRUÇÕES ESPECÍFICAS PARA EXTRAÇÃO DE DADOS**
+
+Você é um especialista altamente experiente em análise de documentos previdenciários brasileiros, com foco em:
+
+1. **Processos administrativos do INSS** (indeferimentos, concessões, despachos)
+2. **Certidões de nascimento** (formato brasileiro RCPN)
+3. **Documentos de identificação** (RG, CPF)
+4. **Comprovantes de atividade rural** (autodeclarações, ITR, documentos de terra)
+5. **Históricos escolares e declarações de saúde** (UBS/Postos rurais)
+
+🎯 **REGRAS CRÍTICAS:**
+
+- Extraia **TODAS** as informações visíveis com **precisão máxima**
+- Para PDFs com texto nativo: priorize o texto extraído (mais preciso que OCR)
+- Para imagens/PDFs escaneados: use OCR com atenção especial a:
+  - Datas (formato brasileiro DD/MM/AAAA → converter para YYYY-MM-DD)
+  - Números de protocolo/NB (geralmente 10+ dígitos)
+  - CPFs (11 dígitos, remover pontos/traços)
+  - Nomes completos (respeitar maiúsculas/minúsculas originais)
+  
+- **PROCESSO INSS (Indeferimento):** Extraia protocolo/NB, data do requerimento, data do indeferimento, motivo literal completo
+- **CERTIDÃO DE NASCIMENTO:** Nome da criança ≠ Nome da mãe (são pessoas diferentes!)
+- **DOCUMENTOS DE TERRA:** Extrair nome do proprietário, CPF, área, localização
+- **AUTODECLARAÇÃO RURAL:** Períodos de trabalho, membros da família, atividades
+
+⚠️ **RESPONDA SEMPRE EM PORTUGUÊS BRASILEIRO** usando a função extract_document_data fornecida.`
           },
           {
             role: 'user',

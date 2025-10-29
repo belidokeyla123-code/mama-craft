@@ -301,11 +301,100 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})`
               }]);
               
-              // 🆕 MOSTRAR TRANSCRIÇÃO DO PDF NO CHAT
-              if (analysisResult?.extractedText) {
+              // 🆕 APRESENTAÇÃO ESTILO CHATGPT: Dados estruturados + transcrição
+              if (analysisResult?.extracted && Object.keys(analysisResult.extracted).length > 0) {
+                const extracted = analysisResult.extracted;
+                
+                let friendlyMessage = `📋 **Documento analisado: ${pageFile.name}**\n\n`;
+                
+                // DADOS DO PROCESSO ADMINISTRATIVO (se houver)
+                if (extracted.raProtocol || extracted.raRequestDate || extracted.raDenialReason) {
+                  friendlyMessage += `📑 **PROCESSO ADMINISTRATIVO (INSS)**\n`;
+                  if (extracted.raProtocol) friendlyMessage += `• Protocolo/NB: **${extracted.raProtocol}**\n`;
+                  if (extracted.benefitType) friendlyMessage += `• Benefício: ${extracted.benefitType}\n`;
+                  if (extracted.raRequestDate) friendlyMessage += `• Data do Requerimento: ${extracted.raRequestDate}\n`;
+                  if (extracted.raDenialDate) friendlyMessage += `• Data do Indeferimento: ${extracted.raDenialDate}\n`;
+                  if (extracted.raDenialReason) friendlyMessage += `• Motivo: *"${extracted.raDenialReason}"*\n`;
+                  friendlyMessage += '\n';
+                }
+                
+                // DADOS DA AUTORA/MÃE
+                if (extracted.motherName || extracted.motherCpf || extracted.fullName) {
+                  friendlyMessage += `👤 **AUTORA (Mãe)**\n`;
+                  if (extracted.motherName || extracted.fullName) friendlyMessage += `• Nome: **${extracted.motherName || extracted.fullName}**\n`;
+                  if (extracted.motherCpf || extracted.cpf) friendlyMessage += `• CPF: ${extracted.motherCpf || extracted.cpf}\n`;
+                  if (extracted.motherRg || extracted.rg) friendlyMessage += `• RG: ${extracted.motherRg || extracted.rg}\n`;
+                  if (extracted.motherBirthDate || extracted.birthDate) friendlyMessage += `• Data de Nascimento: ${extracted.motherBirthDate || extracted.birthDate}\n`;
+                  if (extracted.motherAddress || extracted.address) friendlyMessage += `• Endereço: ${extracted.motherAddress || extracted.address}\n`;
+                  friendlyMessage += '\n';
+                }
+                
+                // DADOS DA CRIANÇA
+                if (extracted.childName || extracted.childBirthDate) {
+                  friendlyMessage += `👶 **CRIANÇA**\n`;
+                  if (extracted.childName) friendlyMessage += `• Nome: **${extracted.childName}**\n`;
+                  if (extracted.childBirthDate) friendlyMessage += `• Data de Nascimento: ${extracted.childBirthDate}\n`;
+                  if (extracted.birthCity) friendlyMessage += `• Cidade de Nascimento: ${extracted.birthCity}\n`;
+                  if (extracted.fatherName) friendlyMessage += `• Pai: ${extracted.fatherName}\n`;
+                  if (extracted.registryNumber) friendlyMessage += `• Matrícula: ${extracted.registryNumber}\n`;
+                  if (extracted.registryDate) friendlyMessage += `• Data do Registro: ${extracted.registryDate}\n`;
+                  friendlyMessage += '\n';
+                }
+                
+                // PROPRIEDADE RURAL
+                if (extracted.landOwnerName || extracted.landArea || extracted.landLocation) {
+                  friendlyMessage += `🏡 **PROPRIEDADE RURAL**\n`;
+                  if (extracted.landOwnerName) friendlyMessage += `• Proprietário: ${extracted.landOwnerName}\n`;
+                  if (extracted.landOwnerCpf) friendlyMessage += `• CPF do Proprietário: ${extracted.landOwnerCpf}\n`;
+                  if (extracted.landArea) friendlyMessage += `• Área: ${extracted.landArea}\n`;
+                  if (extracted.landLocation) friendlyMessage += `• Localização: ${extracted.landLocation}\n`;
+                  friendlyMessage += '\n';
+                }
+                
+                // ATIVIDADE RURAL
+                if (extracted.ruralActivitySince || (extracted.ruralPeriods && extracted.ruralPeriods.length > 0)) {
+                  friendlyMessage += `🌾 **ATIVIDADE RURAL**\n`;
+                  if (extracted.ruralActivitySince) friendlyMessage += `• Trabalha no campo desde: ${extracted.ruralActivitySince}\n`;
+                  if (extracted.ruralPeriods && extracted.ruralPeriods.length > 0) {
+                    friendlyMessage += `• Períodos declarados:\n`;
+                    extracted.ruralPeriods.forEach((period: any, idx: number) => {
+                      friendlyMessage += `  ${idx + 1}. ${period.startDate || '?'} a ${period.endDate || 'atual'} - ${period.location || ''}\n`;
+                    });
+                  }
+                  if (extracted.familyMembersDetailed && extracted.familyMembersDetailed.length > 0) {
+                    friendlyMessage += `• Membros da família: ${extracted.familyMembersDetailed.map((m: any) => m.name).join(", ")}\n`;
+                  }
+                  friendlyMessage += '\n';
+                }
+                
+                // PROCURAÇÃO
+                if (extracted.attorneyName || extracted.oabNumber) {
+                  friendlyMessage += `📝 **PROCURAÇÃO**\n`;
+                  if (extracted.attorneyName) friendlyMessage += `• Advogado: ${extracted.attorneyName}\n`;
+                  if (extracted.oabNumber) friendlyMessage += `• OAB: ${extracted.oabNumber}\n`;
+                  if (extracted.signatureDate) friendlyMessage += `• Data: ${extracted.signatureDate}\n`;
+                  friendlyMessage += '\n';
+                }
+                
+                // TRANSCRIÇÃO COMPLETA (colapsável, últimos 800 caracteres)
+                if (analysisResult?.extractedText && analysisResult.extractedText.length > 100) {
+                  const transcription = analysisResult.extractedText;
+                  const preview = transcription.length > 800 
+                    ? `...${transcription.slice(-800)}` 
+                    : transcription;
+                  
+                  friendlyMessage += `\n---\n\n📄 **Transcrição Completa** *(${transcription.length} caracteres)*:\n\n\`\`\`\n${preview}\n\`\`\`\n`;
+                }
+                
                 setMessages(prev => [...prev, {
                   role: "assistant",
-                  content: `📄 **Transcrição do documento "${pageFile.name}":**\n\n\`\`\`\n${analysisResult.extractedText}\n\`\`\`\n\n✅ Dados processados`
+                  content: friendlyMessage
+                }]);
+              } else if (analysisResult?.extractedText) {
+                // Fallback: só tem transcrição, sem dados estruturados
+                setMessages(prev => [...prev, {
+                  role: "assistant",
+                  content: `📄 **Transcrição do documento "${pageFile.name}":**\n\n\`\`\`\n${analysisResult.extractedText.substring(0, 800)}${analysisResult.extractedText.length > 800 ? '...' : ''}\n\`\`\`\n\n✅ Dados processados`
                 }]);
               }
             }
