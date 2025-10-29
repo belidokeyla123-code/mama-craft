@@ -61,12 +61,8 @@ ${JSON.stringify(caseData, null, 2)}
 ANÁLISE JURÍDICA:
 ${JSON.stringify(analysis, null, 2)}
 
-DOCUMENTOS COM DADOS EXTRAÍDOS:
-${JSON.stringify(documents?.map(d => ({
-  tipo: d.document_type,
-  nome: d.file_name,
-  dados_extraidos: d.extractions?.[0]?.entities
-})), null, 2)}
+DOCUMENTOS ANEXADOS (${documents?.length || 0} documentos):
+${documents?.map((d, i) => `${i+1}. ${d.document_type} (${d.file_name})`).join('\n') || 'Nenhum'}
 
 PROCURAÇÃO:
 ${JSON.stringify(procuracaoData, null, 2)}
@@ -361,9 +357,9 @@ Retorne apenas o texto da petição em markdown.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 12 segundos (otimizado)
+    // Timeout de 40 segundos (geração de petição é processo complexo)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 40000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
