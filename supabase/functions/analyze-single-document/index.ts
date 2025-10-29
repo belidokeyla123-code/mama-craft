@@ -204,29 +204,16 @@ serve(async (req) => {
 
     const arrayBuffer = await fileData.arrayBuffer();
     const mimeType = doc.mime_type || '';
-    const isPdf = mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
     
-    let pdfText = '';
-    let base64Image = '';
-    
-    // 3. PROCESSAR PDF: enviar diretamente para OCR do Gemini
-    if (isPdf) {
-      console.log(`[ANALYZE-SINGLE] 📄 PDF detectado - enviando para OCR direto do Gemini`);
-      
-      // Converter PDF completo para base64
-      const base64Pdf = base64Encode(arrayBuffer);
-      base64Image = `data:application/pdf;base64,${base64Pdf}`;
-      
-      console.log(`[ANALYZE-SINGLE] ✅ PDF convertido (${(base64Pdf.length / 1024).toFixed(1)} KB) - Gemini fará OCR nativo`);
-      
-      // pdfText fica vazio - forçar modo visual (OCR)
-      pdfText = '';
-    } else {
-      // 3. PROCESSAR IMAGEM: converter para base64
-      const base64 = base64Encode(arrayBuffer);
-      base64Image = `data:${mimeType};base64,${base64}`;
-      console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida para análise (${(base64.length / 1024).toFixed(1)} KB)`);
+    // 3. PROCESSAR APENAS IMAGENS (PDFs já foram convertidos no cliente)
+    if (mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf')) {
+      throw new Error('PDFs devem ser convertidos em imagens no cliente antes de enviar');
     }
+    
+    // Converter imagem para base64
+    const base64 = base64Encode(arrayBuffer);
+    const base64Image = `data:${mimeType};base64,${base64}`;
+    console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida para análise (${(base64.length / 1024).toFixed(1)} KB)`);
 
     // 4. Classificar tipo (se ainda não classificado)
     let docType = doc.document_type;
@@ -279,33 +266,8 @@ serve(async (req) => {
     // 5. Montar prompt específico
     const prompt = buildPromptForDocType(docType, doc.file_name);
 
-    // 6. Chamar IA com texto extraído OU imagem (PDFs escaneados/imagens)
+    // 6. Chamar IA com imagem para OCR
     console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Google Gemini 2.5 Flash)...`);
-    
-    // Construir mensagens: texto nativo OU imagem OCR
-    const userMessages = [];
-    
-    if (pdfText && pdfText.length > 50) {
-      // ✅ PDF com texto nativo: análise RÁPIDA e PRECISA (como ChatGPT)
-      console.log(`[ANALYZE-SINGLE] 📄 Modo: Análise de texto nativo (rápido)`);
-      userMessages.push({
-        type: 'text',
-        text: `${prompt}\n\n📄 **TEXTO COMPLETO EXTRAÍDO DO PDF (NATIVO):**\n\n${pdfText}\n\n---\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Analise APENAS o texto acima extraído nativamente do PDF\n- Extraia TODAS as informações visíveis com precisão máxima\n- Para datas, use formato YYYY-MM-DD\n- Para CPF, extraia apenas números (sem pontos/traços)\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
-      });
-    } else if (base64Image) {
-      // 🖼️ PDF escaneado ou imagem: análise visual com OCR
-      console.log(`[ANALYZE-SINGLE] 📸 Modo: OCR visual (PDF escaneado ou imagem)`);
-      userMessages.push({
-        type: 'text',
-        text: `${prompt}\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Esta é uma IMAGEM (PDF escaneado ou JPG/PNG)\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD\n- Para CPF, extraia apenas números (sem pontos/traços)\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
-      });
-      userMessages.push({
-        type: 'image_url',
-        image_url: { url: base64Image }
-      });
-    } else {
-      throw new Error('Documento sem texto e sem imagem - não foi possível processar');
-    }
     
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -333,8 +295,7 @@ Você é um especialista altamente experiente em análise de documentos previden
 🎯 **REGRAS CRÍTICAS:**
 
 - Extraia **TODAS** as informações visíveis com **precisão máxima**
-- Para PDFs com texto nativo: priorize o texto extraído (mais preciso que OCR)
-- Para imagens/PDFs escaneados: use OCR com atenção especial a:
+- Use OCR com atenção especial a:
   - Datas (formato brasileiro DD/MM/AAAA → converter para YYYY-MM-DD)
   - Números de protocolo/NB (geralmente 10+ dígitos)
   - CPFs (11 dígitos, remover pontos/traços)
@@ -349,7 +310,16 @@ Você é um especialista altamente experiente em análise de documentos previden
           },
           {
             role: 'user',
-            content: userMessages
+            content: [
+              {
+                type: 'text',
+                text: `${prompt}\n\n⚠️ **INSTRUÇÕES:**\n- Esta é uma IMAGEM de documento\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD\n- Para CPF, extraia apenas números (sem pontos/traços)\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
+              },
+              {
+                type: 'image_url',
+                image_url: { url: base64Image }
+              }
+            ]
           }
         ],
         tools: [{
@@ -481,12 +451,9 @@ Você é um especialista altamente experiente em análise de documentos previden
         docType,
         extracted: extracted.extractedData,
         confidence: extracted.extractionConfidence,
-        extractedText: pdfText || null, // Texto completo do PDF (se disponível)
         debug: {
-          textLength: pdfText.length,
           modelUsed: 'google/gemini-2.5-flash',
-          hadPdfText: !!pdfText,
-          processingType: pdfText ? 'native_text' : 'visual_ocr'
+          processingType: 'visual_ocr'
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

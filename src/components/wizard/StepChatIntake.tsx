@@ -211,15 +211,30 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             content: `📄 [${processedCount}/${filesToUpload.length}] Processando: ${file.name}...`
           }]);
           
-          // ✅ ENVIAR PDF DIRETO (sem conversão)
-          const filesToProcess: File[] = [file]; // Sempre enviar arquivo original
-
-          // Mensagem específica para PDF
+          // 🔄 CONVERTER PDF EM IMAGENS (no cliente)
+          let filesToProcess: File[] = [file];
+          
           if (isPDF(file)) {
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: `📄 Lendo PDF com IA (rápido e preciso)...`
+              content: `📄 Convertendo PDF "${file.name}" em imagens para OCR...`
             }]);
+            
+            try {
+              console.log(`[PDF] Convertendo "${file.name}" em imagens...`);
+              const { images } = await convertPDFToImages(file);
+              filesToProcess = images;
+              
+              setMessages(prev => [...prev, {
+                role: "assistant",
+                content: `✅ PDF convertido: ${images.length} página(s) pronta(s) para análise`
+              }]);
+              
+              console.log(`[PDF] ✅ ${images.length} imagens geradas de "${file.name}"`);
+            } catch (conversionError: any) {
+              console.error('[PDF] ❌ Erro na conversão:', conversionError);
+              throw new Error(`Erro ao converter PDF "${file.name}": ${conversionError.message}`);
+            }
           }
           
           // Para cada página/imagem, processar IMEDIATAMENTE
