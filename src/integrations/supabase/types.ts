@@ -432,6 +432,7 @@ export type Database = {
           spouse_name: string | null
           started_with_chat: boolean | null
           status: Database["public"]["Enums"]["case_status"]
+          template_url: string | null
           updated_at: string
           urban_periods: Json | null
           valor_causa: number | null
@@ -493,6 +494,7 @@ export type Database = {
           spouse_name?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
+          template_url?: string | null
           updated_at?: string
           urban_periods?: Json | null
           valor_causa?: number | null
@@ -554,6 +556,7 @@ export type Database = {
           spouse_name?: string | null
           started_with_chat?: boolean | null
           status?: Database["public"]["Enums"]["case_status"]
+          template_url?: string | null
           updated_at?: string
           urban_periods?: Json | null
           valor_causa?: number | null
