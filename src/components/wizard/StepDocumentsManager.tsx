@@ -343,89 +343,45 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
       const uploadedDocs = await Promise.all(uploadPromises);
 
-      // FASE 2: Adicionar à fila de processamento
-      setUploadProgress("Adicionando à fila de processamento...");
+      // 🆕 PROCESSAR IMEDIATAMENTE COM IA (SEM FILA)
+      setUploadProgress("Processando com IA...");
       
-      // Verificar se já existe entrada na fila
-      const { data: existingQueue } = await supabase
-        .from('processing_queue')
-        .select('id')
-        .eq('case_id', caseId)
-        .maybeSingle();
-
-      if (existingQueue) {
-        // Atualizar entrada existente
-        const { error: queueError } = await supabase
-          .from('processing_queue')
-          .update({
-            status: 'queued',
-            updated_at: new Date().toISOString()
-          })
-          .eq('case_id', caseId);
-        
-        if (queueError) {
-          console.error('Erro ao atualizar fila:', queueError);
-          throw queueError;
+      const documentIds = uploadedDocs.map(doc => doc.id);
+      
+      const { error: processError } = await supabase.functions.invoke('process-documents-with-ai', {
+        body: { 
+          caseId, 
+          documentIds 
         }
-      } else {
-        // Criar nova entrada
-        const { error: queueError } = await supabase
-          .from('processing_queue')
-          .insert({
-            case_id: caseId,
-            status: 'queued'
-          });
-
-        if (queueError) {
-          console.error('Erro ao adicionar à fila:', queueError);
-          throw queueError;
-        }
-      }
-
-      toast({
-        title: "📥 Documentos adicionados à fila",
-        description: `${uploadedDocs.length} documento(s) enviado(s). Processamento iniciará em breve.`,
       });
 
-      // Recarregar lista imediatamente
+      if (processError) {
+        console.error('Erro ao processar:', processError);
+        toast({
+          title: "⚠️ Processamento falhou",
+          description: "Documentos enviados mas processamento com IA falhou. Tente reprocessar.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "✅ Documentos processados!",
+          description: `${uploadedDocs.length} documento(s) analisado(s) com IA.`
+        });
+      }
+
+      // Recarregar lista
       await loadDocuments();
       
-      // 🆕 DISPARAR PIPELINE COMPLETO após upload
+      // 🆕 DISPARAR PIPELINE COMPLETO (Validação → Análise → Jurisprudência → Tese)
+      setUploadProgress("Sincronizando análise...");
       await triggerFullPipeline('Novos documentos adicionados');
       
-      // Polling para verificar status na fila
-      const pollInterval = setInterval(async () => {
-        const { data: queue } = await supabase
-          .from('processing_queue')
-          .select('status, completed_at')
-          .eq('case_id', caseId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-          
-        if (queue?.status === 'completed') {
-          clearInterval(pollInterval);
-          await loadDocuments();
-          if (onDocumentsChange) onDocumentsChange();
-          toast({
-            title: "✅ Processamento concluído!",
-            description: "Dados extraídos com IA. Confira a aba de Informações Básicas.",
-          });
-        } else if (queue?.status === 'failed') {
-          clearInterval(pollInterval);
-          toast({
-            title: "❌ Erro no processamento",
-            description: "Tente enviar os documentos novamente.",
-            variant: "destructive"
-          });
-        }
-      }, 5000); // Verificar a cada 5 segundos
-      
-      // Timeout de segurança: parar polling após 3 minutos
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        console.log('[POLLING] Timeout atingido');
-      }, 180000);
+      toast({
+        title: "🔄 Sincronização completa",
+        description: "Validação, análise, jurisprudência e tese atualizadas!"
+      });
+
+      if (onDocumentsChange) onDocumentsChange();
 
     } catch (error: any) {
       console.error("Erro ao enviar documentos:", error);
