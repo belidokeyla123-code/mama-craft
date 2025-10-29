@@ -204,10 +204,28 @@ serve(async (req) => {
 
     const arrayBuffer = await fileData.arrayBuffer();
     const mimeType = doc.mime_type || '';
+    const isPdf = mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
     
-    // 3. PROCESSAR APENAS IMAGENS (PDFs já foram convertidos no cliente)
-    if (mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf')) {
-      throw new Error('PDFs devem ser convertidos em imagens no cliente antes de enviar');
+    // 3. DETECTAR PDFs antigos (já no storage) - ignorar graciosamente
+    if (isPdf) {
+      console.log(`[ANALYZE-SINGLE] ⚠️ PDF detectado no storage - pulando análise (PDFs devem ser convertidos no cliente)`);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          documentId,
+          docType: 'outro',
+          extracted: {},
+          confidence: 'low',
+          skipped: true,
+          message: 'PDF não processado - faça re-upload para converter em imagens',
+          debug: {
+            modelUsed: 'none',
+            processingType: 'skipped_pdf'
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
     // Converter imagem para base64

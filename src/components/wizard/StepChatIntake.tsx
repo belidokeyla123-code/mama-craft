@@ -751,6 +751,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       let processedCount = 0;
 
       // Dividir em chunks para processamento paralelo controlado
+      const skippedPdfs: string[] = [];
+      
       for (let i = 0; i < allDocs.length; i += CONCURRENT_LIMIT) {
         const chunk = allDocs.slice(i, i + CONCURRENT_LIMIT);
         
@@ -773,11 +775,19 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             }
 
             processedCount++;
-            console.log(`[REPROCESS] ${processedCount}/${allDocs.length} - ${doc.file_name} ✓`);
+            
+            // Detectar PDFs pulados
+            if (result.skipped) {
+              skippedPdfs.push(doc.file_name);
+              console.log(`[REPROCESS] ${processedCount}/${allDocs.length} - ${doc.file_name} ⊘ (PDF pulado)`);
+            } else {
+              console.log(`[REPROCESS] ${processedCount}/${allDocs.length} - ${doc.file_name} ✓`);
+            }
 
             return {
               docType: result.docType,
-              extracted: result.extracted || {}
+              extracted: result.extracted || {},
+              skipped: result.skipped || false
             };
           } catch (err) {
             console.error(`[REPROCESS] Falha em ${doc.file_name}:`, err);
@@ -787,15 +797,23 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
         const chunkResults = await Promise.all(chunkPromises);
 
-        // Mesclar dados extraídos
+        // Mesclar dados extraídos (exceto os pulados)
         chunkResults.forEach((result) => {
-          if (result && result.extracted) {
+          if (result && result.extracted && !result.skipped) {
             Object.assign(allExtractedData, result.extracted);
           }
         });
       }
 
       console.log('[REPROCESS] ✅ Todos os documentos processados:', allExtractedData);
+      
+      // Informar sobre PDFs pulados
+      if (skippedPdfs.length > 0) {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ ${skippedPdfs.length} PDF(s) antigo(s) foram pulados:\n${skippedPdfs.map(f => `• ${f}`).join('\n')}\n\n💡 Para processar PDFs, faça re-upload - eles serão automaticamente convertidos em imagens.`
+        }]);
+      }
 
       // Atualizar dados do caso com os dados extraídos
       if (allExtractedData.childName) {
