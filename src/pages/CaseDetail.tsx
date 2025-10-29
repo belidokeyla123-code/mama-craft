@@ -50,6 +50,51 @@ export default function CaseDetail() {
     loadCaseData();
   }, [id]);
 
+  // Função para verificar se um valor é inválido
+  const isInvalidValue = (value: any): boolean => {
+    if (!value) return true;
+    const str = String(value).toLowerCase().trim();
+    return ['n/a', 'não identificado', 'não', 'vazio', 'não informado'].some(inv => str.includes(inv));
+  };
+
+  // Função para consolidar extrações com dados do caso
+  const consolidateExtractions = (caseData: CaseData, extractions: any[]): CaseData => {
+    const consolidated = { ...caseData };
+    
+    // Mapeamento de campos: caso → possíveis campos nas extractions
+    const fieldMapping: Record<string, string[]> = {
+      childName: ['childName', 'fullName', 'name'],
+      childBirthDate: ['childBirthDate', 'birthDate', 'dataNascimento'],
+      authorName: ['motherName', 'authorName', 'fullName', 'granterName', 'patientName'],
+      authorCpf: ['cpf', 'granterCpf', 'motherCpf'],
+      authorRg: ['rg', 'motherRg'],
+      authorBirthDate: ['motherBirthDate', 'birthDate', 'dataNascimento'],
+      fatherName: ['fatherName', 'paiFiliacao'],
+    };
+
+    // Iterar sobre todas as extrações para consolidar valores
+    extractions.forEach(extraction => {
+      const entities = extraction.entities || {};
+      
+      for (const [caseField, extractionFields] of Object.entries(fieldMapping)) {
+        // Verificar se o campo atual do caso é inválido
+        const currentValue = (consolidated as any)[caseField];
+        if (isInvalidValue(currentValue)) {
+          // Procurar um valor válido nas extrações
+          for (const extField of extractionFields) {
+            const extractedValue = entities[extField];
+            if (extractedValue && !isInvalidValue(extractedValue)) {
+              (consolidated as any)[caseField] = extractedValue;
+              break; // Encontrou um valor válido, parar de procurar
+            }
+          }
+        }
+      }
+    });
+
+    return consolidated;
+  };
+
   const loadCaseData = async () => {
     if (!id) return;
 
@@ -84,7 +129,7 @@ export default function CaseDetail() {
         .eq("case_id", id);
 
       // Mapear dados do banco para CaseData
-      const mappedData: CaseData = {
+      let mappedData: CaseData = {
         caseId: caseDetails.id,
         authorName: caseDetails.author_name,
         authorCpf: caseDetails.author_cpf,
@@ -121,6 +166,11 @@ export default function CaseDetail() {
         missingFields: extractions?.[0]?.missing_fields,
         autoFilledFields: Object.keys(extractions?.[0]?.auto_filled_fields || {}),
       };
+
+      // 🆕 Consolidar com extrações para priorizar dados válidos
+      if (extractions && extractions.length > 0) {
+        mappedData = consolidateExtractions(mappedData, extractions);
+      }
 
       setCaseData(mappedData);
     } catch (error: any) {
