@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { TimelineChart } from "@/components/case/TimelineChart";
 import { DocumentUploadInline } from "./DocumentUploadInline";
+import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
 interface StepAnalysisProps {
   data: CaseData;
@@ -62,6 +63,12 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   const [analysis, setAnalysis] = useState<LegalAnalysis | null>(null);
   const [hasCache, setHasCache] = useState(false);
   const [docsChanged, setDocsChanged] = useState(false);
+
+  // Hook de orquestração para disparar pipeline completo
+  const { triggerFullPipeline } = useCaseOrchestration({
+    caseId: data.caseId || '',
+    enabled: !!data.caseId
+  });
 
   // Carregar do cache ao entrar na aba
   useEffect(() => {
@@ -182,6 +189,149 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
       case 'baixa': return 'text-red-600';
       default: return 'text-gray-600';
     }
+  };
+
+  // Função para detectar tipo de documento a partir da recomendação
+  const detectDocumentType = (recommendation: string): string | null => {
+    const rec = recommendation.toLowerCase();
+    
+    const typeMap: Record<string, string> = {
+      'processo administrativo': 'processo_administrativo',
+      'cnis': 'cnis',
+      'certidão de nascimento': 'certidao_nascimento',
+      'certidão de casamento': 'certidao_casamento',
+      'certidão de óbito': 'certidao_obito',
+      'rg': 'identificacao',
+      'cpf': 'identificacao',
+      'identidade': 'identificacao',
+      'comprovante de residência': 'comprovante_residencia',
+      'comprovante de endereço': 'comprovante_residencia',
+      'autodeclaração': 'autodeclaracao_rural',
+      'declaração rural': 'autodeclaracao_rural',
+      'sindicato': 'declaracao_sindicato_rural',
+      'sindicato rural': 'declaracao_sindicato_rural',
+      'ubs': 'declaracao_saude_ubs',
+      'unidade básica de saúde': 'declaracao_saude_ubs',
+      'unidade de saúde': 'declaracao_saude_ubs',
+      'posto de saúde': 'declaracao_saude_ubs',
+      'histórico escolar': 'historico_escolar',
+      'escola': 'historico_escolar',
+      'nota fiscal': 'nota_fiscal_produtor_rural',
+      'produtor rural': 'nota_fiscal_produtor_rural',
+      'itr': 'documento_terra',
+      'ccir': 'documento_terra',
+      'documento de terra': 'documento_terra',
+      'escritura': 'documento_terra',
+      'contrato de arrendamento': 'documento_terra',
+      'contrato de parceria': 'documento_terra',
+      'procuração': 'procuracao',
+      'prontuário': 'prontuario_medico_parto',
+      'prontuário médico': 'prontuario_medico_parto',
+      'foto': 'fotos_propriedade',
+      'fotos da propriedade': 'fotos_propriedade',
+      'cartão de vacina': 'cartao_vacina'
+    };
+    
+    const sortedEntries = Object.entries(typeMap).sort((a, b) => b[0].length - a[0].length);
+    
+    for (const [keyword, docType] of sortedEntries) {
+      if (rec.includes(keyword)) {
+        console.log(`🎯 Detectado tipo de documento: ${docType} (palavra-chave: "${keyword}")`);
+        return docType;
+      }
+    }
+    
+    console.log('⚠️ Tipo de documento não detectado automaticamente');
+    return null;
+  };
+
+  // Função para verificar se recomendação pede documento
+  const needsDocumentUpload = (recommendation: string): boolean => {
+    const keywords = [
+      'juntar', 
+      'solicitar', 
+      'adicionar', 
+      'anexar', 
+      'incluir', 
+      'apresentar', 
+      'obter',
+      'providenciar',
+      'buscar',
+      'requerer'
+    ];
+    const rec = recommendation.toLowerCase();
+    return keywords.some(keyword => rec.includes(keyword));
+  };
+
+  // Componente para renderizar recomendação com botão de upload inteligente
+  const RecommendationItem = ({ 
+    recommendation, 
+    index 
+  }: { 
+    recommendation: string; 
+    index: number;
+  }) => {
+    const [isProcessing, setIsProcessing] = useState(false);
+    const needsUpload = needsDocumentUpload(recommendation);
+    const docType = detectDocumentType(recommendation);
+
+    const handleUploadComplete = async () => {
+      setIsProcessing(true);
+      
+      toast.success("📄 Documento enviado!", { 
+        id: `upload-${index}`,
+        description: "Processando e sincronizando análise..." 
+      });
+      
+      try {
+        console.log('🔄 Iniciando sincronização completa após upload...');
+        
+        // Disparar pipeline completo
+        await triggerFullPipeline('Documento adicionado via recomendação');
+        
+        console.log('✅ Pipeline completo executado');
+        
+        // Recarregar análise atualizada
+        toast.info("🔄 Recarregando análise...", { id: `reload-${index}` });
+        await performAnalysis();
+        
+        toast.success("✅ Análise atualizada!", { 
+          id: `reload-${index}`,
+          description: "Todas as abas foram sincronizadas"
+        });
+        
+      } catch (error) {
+        console.error("❌ Erro ao processar documento:", error);
+        toast.error("❌ Erro ao processar documento", {
+          description: "Tente recarregar a página"
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    return (
+      <li className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex-1 text-sm leading-relaxed">
+          {recommendation}
+        </div>
+        
+        {needsUpload && data.caseId && (
+          <div className="flex-shrink-0">
+            <DocumentUploadInline 
+              caseId={data.caseId}
+              suggestedDocType={docType || undefined}
+              onUploadComplete={handleUploadComplete}
+              buttonText="📎 Juntar"
+              buttonVariant="outline"
+              buttonSize="sm"
+              disabled={isProcessing}
+              showProgress={false}
+            />
+          </div>
+        )}
+      </li>
+    );
   };
 
   return (
@@ -397,11 +547,21 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
 
           {/* Recomendações */}
           {analysis.recomendacoes && analysis.recomendacoes.length > 0 && (
-            <Card className="p-6 bg-blue-50 dark:bg-blue-950">
-              <h3 className="text-lg font-bold mb-3">Recomendações</h3>
-              <ul className="list-disc list-inside space-y-1 text-sm">
+            <Card className="p-6 bg-blue-50 dark:bg-blue-950 border-2 border-blue-300">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                <Scale className="h-5 w-5" />
+                Recomendações
+                <span className="text-xs font-normal text-gray-500 ml-2">
+                  (clique em "📎 Juntar" para adicionar documentos diretamente)
+                </span>
+              </h3>
+              <ul className="space-y-3">
                 {analysis.recomendacoes.map((rec, index) => (
-                  <li key={index}>{rec}</li>
+                  <RecommendationItem 
+                    key={index} 
+                    recommendation={rec} 
+                    index={index}
+                  />
                 ))}
               </ul>
             </Card>

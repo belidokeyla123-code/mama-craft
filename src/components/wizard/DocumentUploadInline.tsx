@@ -11,12 +11,23 @@ interface DocumentUploadInlineProps {
   caseId: string;
   suggestedDocType?: string;
   onUploadComplete?: () => void;
+  // Props para customizar aparência do botão
+  buttonText?: string;
+  buttonVariant?: "default" | "outline" | "ghost" | "secondary";
+  buttonSize?: "default" | "sm" | "lg" | "icon";
+  disabled?: boolean;
+  showProgress?: boolean; // Se deve mostrar Card com progresso ou só botão
 }
 
 export const DocumentUploadInline = ({ 
   caseId, 
   suggestedDocType,
-  onUploadComplete 
+  onUploadComplete,
+  buttonText = "📎 Adicionar Documento",
+  buttonVariant = "outline",
+  buttonSize = "default",
+  disabled = false,
+  showProgress = true
 }: DocumentUploadInlineProps) => {
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
@@ -313,7 +324,7 @@ export const DocumentUploadInline = ({
     }
   };
 
-  return (
+  return showProgress ? (
     <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-2 border-blue-300">
       <div className="flex items-center justify-between">
         <div className="flex-1">
@@ -356,14 +367,15 @@ export const DocumentUploadInline = ({
             onChange={handleFileUpload}
             className="hidden"
             id={`inline-upload-${caseId}`}
-            disabled={uploading}
+            disabled={uploading || disabled}
           />
           <label htmlFor={`inline-upload-${caseId}`}>
             <Button 
-              variant="outline" 
+              variant={buttonVariant}
+              size={buttonSize}
               className="gap-2" 
               asChild
-              disabled={uploading}
+              disabled={uploading || disabled}
             >
               <span>
                 {uploading ? (
@@ -374,7 +386,7 @@ export const DocumentUploadInline = ({
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    Adicionar Documento
+                    {buttonText}
                   </>
                 )}
               </span>
@@ -383,5 +395,37 @@ export const DocumentUploadInline = ({
         </div>
       </div>
     </Card>
+  ) : (
+    <div className="inline-flex">
+      <input
+        type="file"
+        multiple
+        accept=".pdf,.jpg,.jpeg,.png,.docx"
+        onChange={handleFileUpload}
+        className="hidden"
+        id={`inline-upload-${caseId}`}
+        disabled={uploading || disabled}
+      />
+      <label htmlFor={`inline-upload-${caseId}`}>
+        <Button 
+          variant={buttonVariant}
+          size={buttonSize}
+          className="gap-2" 
+          asChild
+          disabled={uploading || disabled}
+        >
+          <span>
+            {uploading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              buttonText
+            )}
+          </span>
+        </Button>
+      </label>
+    </div>
   );
 };
