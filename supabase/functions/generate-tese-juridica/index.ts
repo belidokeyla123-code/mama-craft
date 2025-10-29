@@ -47,6 +47,7 @@ SAÍDA (JSON):
       "tese_completa": "Texto argumentativo de 2-4 parágrafos, persuasivo, com citações",
       "fundamentacao_legal": ["Art. X da Lei Y", "Decreto Z"],
       "fundamentacao_jurisprudencial": ["REsp 123456/SP - tese fixada"],
+      "links_jurisprudencias": ["https://..."],
       "tecnica_persuasao": "analogia | contraste | causa-efeito | autoridade",
       "score_persuasao": 85
     }
@@ -61,6 +62,9 @@ Deno.serve(async (req) => {
 
   try {
     const { caseId, selectedJurisprudencias, selectedSumulas, selectedDoutrinas } = await req.json();
+    
+    // Extrair links das jurisprudências
+    const jurisLinks = (selectedJurisprudencias || []).map((j: any) => j.link).filter(Boolean);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -102,6 +106,8 @@ ${JSON.stringify(selectedSumulas, null, 2)}
 
 DOUTRINAS:
 ${JSON.stringify(selectedDoutrinas, null, 2)}
+
+**IMPORTANTE:** Inclua os links das jurisprudências no campo "links_jurisprudencias" do JSON de saída, mantendo a mesma ordem da fundamentação_jurisprudencial. Links disponíveis: ${JSON.stringify(jurisLinks)}
 
 AGORA CONSTRUA 3-5 TESES JURÍDICAS PERSUASIVAS conectando essas fontes ao caso concreto. Use técnicas de PNL, retórica e persuasão. Seja eloquente mas técnico. RETORNE JSON VÁLIDO.`;
 

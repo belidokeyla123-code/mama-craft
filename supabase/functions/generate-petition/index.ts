@@ -49,72 +49,40 @@ serve(async (req) => {
 
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
-GERE UMA PETIÇÃO INICIAL DE SALÁRIO-MATERNIDADE COMPLETA E PROFISSIONAL.
-
-**DADOS DO CASO:**
+DADOS DO CASO:
 Autora: ${caseData.author_name} | CPF: ${caseData.author_cpf}
 Perfil: ${caseData.profile} | Evento: ${caseData.child_birth_date || caseData.event_date}
-${caseData.ra_protocol ? `RA Indeferido: ${caseData.ra_protocol} | Motivo: ${caseData.ra_denial_reason}` : ''}
+${caseData.ra_protocol ? `RA Indeferido: ${caseData.ra_protocol}` : ''}
 
-ANÁLISE: ${JSON.stringify(analysis?.resumo_executivo || analysis?.fundamentacao_legal || {}, null, 2)}
+ANÁLISE: ${JSON.stringify(analysis?.resumo_executivo || {}, null, 2)}
 RMI: R$ ${analysis?.rmi?.valor || caseData.salario_minimo_ref}
 Valor da Causa: R$ ${analysis?.valor_causa || 'a calcular'}
 
-DOCUMENTOS (${documents?.length || 0}): ${documents?.map(d => d.document_type).join(', ') || 'Nenhum'}
+ESTRUTURA OBRIGATÓRIA:
+I. Endereçamento ao ${trf}
+II. Qualificação (Autora + INSS)
+III. Fatos (perfil segurada + evento gerador + ${caseData.ra_protocol ? 'RA indeferido' : 'nenhum RA'})
+IV. Direito (Lei 8.213/91 + IN 128/2022 + jurisprudências)
+V. Provas (${documents?.length || 0} documentos)
+VI. Pedidos:
+   - Tutela Urgência (Art. 300 CPC)
+   - Principal: salário-maternidade | DIB: ${caseData.child_birth_date}
+   - Honorários (15-20%)
+   - Justiça Gratuita
+VII. Valor da Causa: R$ ${analysis?.valor_causa}
 
-JURISPRUDÊNCIAS: ${selectedJurisprudencias?.map((j: any) => j.tese || j.ementa?.substring(0, 100)).join(' | ') || 'Nenhuma'}
+REGRAS:
+✅ Use APENAS dados fornecidos
+✅ Seja técnica e persuasiva
+✅ Markdown formatado
 
-**ESTRUTURA OBRIGATÓRIA:**
-
-I. EXCELENTÍSSIMO SR. DR. JUIZ FEDERAL DA [SUBSEÇÃO] - ${trf}
-
-II. QUALIFICAÇÃO
-- Autora completa (nome, CPF, RG, endereço completo, telefone)
-- Réu: INSS | CNPJ: 29.979.036/0001-40
-
-III. DOS FATOS (narrativa cronológica)
-- Perfil segurada ${caseData.profile === 'especial' ? '(atividade rural, regime familiar)' : '(urbana)'}
-- Evento gerador (parto/adoção ${caseData.child_birth_date})
-${caseData.ra_protocol ? '- RA indeferido injustamente' : ''}
-${videoAnalysis ? '- Vídeo propriedade comprova atividade' : ''}
-
-IV. DO DIREITO
-- Lei 8.213/91 (Arts. 11-VII, 39, 71, 71-§3º)
-- Decreto 3.048/99 (Arts. 93, 106)
-- IN 128/2022
-- Jurisprudências citadas
-- Argumentação persuasiva
-
-V. DAS PROVAS
-Lista ${documents?.length} documentos (explicar conjunto probatório)
-
-VI. DOS PEDIDOS
-A) TUTELA URGÊNCIA (Art. 300 CPC): probabilidade direito + perigo dano → implantar benefício
-B) PRINCIPAL: concessão salário-maternidade | DIB: ${caseData.child_birth_date} | RMI: R$ ${analysis?.rmi?.valor}
-C) INVERSÃO ÔNUS PROVA (Art. 373-§1º CPC)
-D) HONORÁRIOS (15-20% Súmula 111 STJ)
-E) JUSTIÇA GRATUITA (Art. 98 CPC)
-
-VII. VALOR DA CAUSA: R$ ${analysis?.valor_causa}
-
-VIII. REQUERIMENTOS FINAIS (citação, provas, procedência total)
-
-Local, Data
-[Nome Advogado] OAB/[UF]
-
-**REGRAS:**
-✅ Use APENAS dados fornecidos (não invente)
-✅ Seja técnica, persuasiva e completa
-✅ Inclua TODOS elementos estrutura
-✅ Argumentação PNL (anáforas, metáforas dignidade humana)
-
-Retorne petição em markdown formatado.`;
-
+Retorne petição completa em markdown.`;
+    
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 40 segundos (geração de petição é processo complexo)
+    // Timeout de 60 segundos
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 40000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

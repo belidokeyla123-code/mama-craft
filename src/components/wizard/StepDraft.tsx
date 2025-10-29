@@ -546,18 +546,16 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
-          <FileText className="h-7 w-7 text-primary" />
-          Petição Inicial Completa
-        </h2>
-        <p className="text-muted-foreground">
-          Petição gerada com formatação ABNT, persuasão e análise crítica
-        </p>
-      </div>
-
-      {/* Seção 1: Geração e Ações */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+            <FileText className="h-7 w-7 text-primary" />
+            Petição Inicial Completa
+          </h2>
+          <p className="text-muted-foreground">
+            Petição gerada com formatação ABNT, persuasão e análise crítica
+          </p>
+        </div>
         <Button onClick={generatePetition} disabled={loading} className="gap-2">
           {loading ? (
             <>
@@ -576,30 +574,17 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             </>
           )}
         </Button>
+      </div>
+
+      {/* Ações da Petição */}
+      <div className="flex flex-wrap gap-3">
         <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
-          Baixar DOCX (ABNT)
+          Baixar DOCX
         </Button>
         <Button onClick={handleDownloadPlaceholders} variant="outline" className="gap-2">
           <FileText className="h-4 w-4" />
-          Baixar Lista de Placeholders
-        </Button>
-        <Button 
-          onClick={handleProtocolar}
-          disabled={!petition || isProtocoling}
-          className="gap-2 bg-success hover:bg-success/90"
-        >
-          {isProtocoling ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Protocolando...
-            </>
-          ) : (
-            <>
-              <CheckCheck className="h-4 w-4" />
-              Protocolar Ação
-            </>
-          )}
+          Baixar Lista
         </Button>
         <div>
           <input
@@ -623,6 +608,23 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             {templateFile.name}
           </Badge>
         )}
+        <Button 
+          onClick={handleProtocolar}
+          disabled={!petition || isProtocoling}
+          className="gap-2 bg-success hover:bg-success/90"
+        >
+          {isProtocoling ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Protocolando...
+            </>
+          ) : (
+            <>
+              <CheckCheck className="h-4 w-4" />
+              Protocolar Ação
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Petição Gerada */}

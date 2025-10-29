@@ -19,6 +19,7 @@ interface TeseJuridica {
   tese_completa: string;
   fundamentacao_legal: string[];
   fundamentacao_jurisprudencial: string[];
+  links_jurisprudencias?: string[];
   tecnica_persuasao: string;
   score_persuasao: number;
 }
@@ -251,7 +252,19 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
                 <p className="font-semibold text-sm mb-1">Fundamentação Jurisprudencial:</p>
                 <ul className="list-disc list-inside space-y-1 text-sm">
                   {tese.fundamentacao_jurisprudencial.map((fund, idx) => (
-                    <li key={idx}>{fund}</li>
+                    <li key={idx} className="flex items-center gap-2">
+                      <span>{fund}</span>
+                      {tese.links_jurisprudencias?.[idx] && (
+                        <a 
+                          href={tese.links_jurisprudencias[idx]} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline text-xs"
+                        >
+                          [ver link]
+                        </a>
+                      )}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -299,11 +312,6 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
         {selectedTitles.size > 0 && (
           <Badge variant="outline" className="px-3 py-2">
             {selectedTitles.size} selecionadas
-          </Badge>
-        )}
-        {hasCache && (
-          <Badge variant="secondary" className="px-3 py-2">
-            Cache ativo - teses salvas
           </Badge>
         )}
       </div>
