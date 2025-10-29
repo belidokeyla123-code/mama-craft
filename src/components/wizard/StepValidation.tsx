@@ -152,6 +152,40 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     }
   };
 
+  const handleReconvertFailedPdfs = async () => {
+    if (!data.caseId) return;
+    
+    setIsValidating(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('reconvert-failed-pdfs', {
+        body: { caseId: data.caseId }
+      });
+
+      if (error) throw error;
+
+      if (result.reprocessed === 0) {
+        sonnerToast.info('Todos os documentos já foram processados!');
+      } else {
+        sonnerToast.success(`${result.reprocessed} documento(s) sendo reprocessado(s)!`);
+        
+        // Aguardar 5 segundos e revalidar
+        setTimeout(async () => {
+          await handleValidate();
+          sonnerToast.info('Checklist atualizado!');
+        }, 5000);
+      }
+    } catch (error: any) {
+      console.error('Erro ao reprocessar:', error);
+      toast({
+        title: "Erro ao reprocessar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   if (isValidating || !validationResult) {
     return (
       <Card className="p-6">
@@ -285,6 +319,15 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         <Button onClick={handleValidate} disabled={isValidating} className="gap-2">
           <RefreshCw className="h-4 w-4" />
           Validar Novamente
+        </Button>
+        <Button 
+          onClick={handleReconvertFailedPdfs} 
+          disabled={isValidating}
+          variant="outline" 
+          className="gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          🔄 Reprocessar Documentos Falhados
         </Button>
       </div>
 

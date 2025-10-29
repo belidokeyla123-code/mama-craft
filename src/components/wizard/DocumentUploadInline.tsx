@@ -21,14 +21,15 @@ export const DocumentUploadInline = ({
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'converting' | 'processing' | 'done'>('idle');
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
-  // Polling para aguardar extrações serem criadas
+  // ⚡ Polling otimizado para aguardar extrações
   const pollForExtractions = async (
     docIds: string[], 
-    maxWaitMs: number = 30000
+    maxWaitMs: number = 10000 // ⚡ Reduzido de 30s para 10s
   ): Promise<boolean> => {
     const startTime = Date.now();
-    const pollInterval = 2000; // Verificar a cada 2s
+    const pollInterval = 500; // ⚡ Reduzido de 2s para 500ms
     
     setUploadState('processing');
     
@@ -105,8 +106,13 @@ export const DocumentUploadInline = ({
             
             setUploadState('uploading');
             
-            // Fazer upload de cada PNG
-            for (const image of images) {
+            // Fazer upload de cada PNG com progresso
+            setProgress({ current: 0, total: images.length });
+            
+            for (let i = 0; i < images.length; i++) {
+              const image = images[i];
+              setProgress({ current: i + 1, total: images.length });
+              
               const sanitizedImageName = sanitizeFileName(image.name);
               const imageTimestamp = Date.now();
               const imageFileName = `${caseId}/${imageTimestamp}_${sanitizedImageName}`;
@@ -136,6 +142,8 @@ export const DocumentUploadInline = ({
               if (imageInsertError) throw imageInsertError;
               if (imageDoc) insertedDocIds.push(imageDoc.id);
             }
+            
+            setProgress({ current: 0, total: 0 });
             
             setUploadedFiles(prev => [...prev, `${originalFileName} (${images.length} páginas)`]);
             toast.success(`${images.length} páginas convertidas de ${originalFileName}`);
@@ -241,21 +249,33 @@ export const DocumentUploadInline = ({
   return (
     <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-2 border-blue-300">
       <div className="flex items-center justify-between">
-      <div className="flex-1">
+        <div className="flex-1">
           {uploadState === 'converting' && (
+            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 mb-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Convertendo PDF em páginas PNG... 📄→🖼️
+            </div>
+          )}
+          {uploadState === 'uploading' && progress.total > 0 && (
             <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400 mb-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Convertendo PDF em páginas...
+              Enviando página {progress.current} de {progress.total}...
             </div>
           )}
           {uploadState === 'processing' && (
-            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 mb-2">
+            <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 mb-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Processando com IA...
+              Extraindo informações com IA... 🤖
             </div>
           )}
-          {uploadedFiles.length > 0 && uploadState !== 'processing' && uploadState !== 'converting' && (
-            <div className="flex items-center gap-2 text-sm text-green-600 mb-2">
+          {uploadState === 'done' && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 mb-2">
+              <CheckCircle className="h-4 w-4" />
+              ✅ Processamento concluído!
+            </div>
+          )}
+          {uploadedFiles.length > 0 && uploadState === 'idle' && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 mb-2">
               <CheckCircle className="h-4 w-4" />
               {uploadedFiles.length} arquivo(s) enviado(s)
             </div>

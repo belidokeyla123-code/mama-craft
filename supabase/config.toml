@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.detect-cnis-situation]
 verify_jwt = false
+
+[functions.reconvert-failed-pdfs]
+verify_jwt = false
