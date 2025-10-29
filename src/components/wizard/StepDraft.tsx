@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,6 +76,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   useEffect(() => {
     if (data.caseId && !petition) {
       loadCachedDraft();
+      loadExistingTemplate();
     }
   }, [data.caseId]);
 
@@ -100,6 +101,27 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       }
     } catch (error) {
       console.error('Erro ao carregar cache:', error);
+    }
+  };
+
+  const loadExistingTemplate = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select('template_url')
+        .eq('id', data.caseId)
+        .maybeSingle();
+
+      if (caseData?.template_url) {
+        // Criar objeto File simulado para exibir controles
+        setTemplateFile(new File([], 'modelo.docx', { 
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+        }));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar template:', error);
     }
   };
 
@@ -247,15 +269,103 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
-  const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        toast.error('Por favor, envie apenas arquivos .docx');
+    if (!file) return;
+    
+    if (file.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      toast.error('Por favor, envie apenas arquivos .docx');
+      return;
+    }
+
+    try {
+      // 1. Upload para Storage
+      const fileName = `${data.caseId}/${Date.now()}_template.docx`;
+      const { error: uploadError } = await supabase.storage
+        .from('case-templates')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // 2. Obter URL pública
+      const { data: publicUrl } = supabase.storage
+        .from('case-templates')
+        .getPublicUrl(fileName);
+
+      // 3. Salvar URL no banco
+      await supabase
+        .from('cases')
+        .update({ template_url: publicUrl.publicUrl })
+        .eq('id', data.caseId);
+
+      setTemplateFile(file);
+      toast.success('Modelo enviado com sucesso!');
+
+    } catch (error) {
+      console.error('Erro ao enviar modelo:', error);
+      toast.error('Erro ao enviar modelo');
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      // Buscar URL do template
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select('template_url')
+        .eq('id', data.caseId)
+        .maybeSingle();
+
+      if (!caseData?.template_url) {
+        toast.error('Modelo não encontrado');
         return;
       }
-      setTemplateFile(file);
-      toast.info("Funcionalidade de merge com template será implementada em breve");
+
+      // Fazer download
+      window.open(caseData.template_url, '_blank');
+      
+    } catch (error) {
+      console.error('Erro ao baixar modelo:', error);
+      toast.error('Erro ao baixar modelo');
+    }
+  };
+
+  const handleRemoveTemplate = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      // 1. Buscar URL atual
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select('template_url')
+        .eq('id', data.caseId)
+        .maybeSingle();
+
+      if (caseData?.template_url) {
+        // 2. Extrair path do Storage
+        const path = caseData.template_url.split('/case-templates/')[1];
+        
+        // 3. Deletar do Storage
+        await supabase.storage
+          .from('case-templates')
+          .remove([path]);
+      }
+
+      // 4. Limpar do banco
+      await supabase
+        .from('cases')
+        .update({ template_url: null })
+        .eq('id', data.caseId);
+
+      // 5. Limpar estado local
+      setTemplateFile(null);
+      toast.success('Modelo removido com sucesso');
+
+    } catch (error) {
+      console.error('Erro ao remover modelo:', error);
+      toast.error('Erro ao remover modelo');
     }
   };
 
@@ -547,37 +657,32 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
-            <FileText className="h-7 w-7 text-primary" />
-            Petição Inicial Completa
-          </h2>
-          <p className="text-muted-foreground">
-            Petição gerada com formatação ABNT, persuasão e análise crítica
-          </p>
-        </div>
-        <Button onClick={generatePetition} disabled={loading} className="gap-2">
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Gerando...
-            </>
-          ) : hasCache ? (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Gerar Nova Versão
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Gerar Petição
-            </>
-          )}
-        </Button>
+        <h2 className="text-2xl font-bold flex items-center gap-3">
+          <FileText className="h-7 w-7 text-primary" />
+          Petição Inicial Completa
+          <Button onClick={generatePetition} disabled={loading} className="gap-2 ml-4">
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Gerando...
+              </>
+            ) : hasCache ? (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Gerar Nova Versão
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Gerar Petição
+              </>
+            )}
+          </Button>
+        </h2>
       </div>
 
       {/* Ações da Petição */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar DOCX
@@ -586,27 +691,43 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           <FileText className="h-4 w-4" />
           Baixar Lista
         </Button>
-        <div>
-          <input
-            type="file"
-            accept=".docx"
-            onChange={handleTemplateUpload}
-            className="hidden"
-            id="template-upload"
-          />
-          <label htmlFor="template-upload">
-            <Button variant="outline" className="gap-2" asChild>
-              <span>
-                <Upload className="h-4 w-4" />
-                Enviar Modelo
-              </span>
+        {!templateFile ? (
+          <div>
+            <input
+              type="file"
+              accept=".docx"
+              onChange={handleTemplateUpload}
+              className="hidden"
+              id="template-upload"
+            />
+            <label htmlFor="template-upload">
+              <Button variant="outline" className="gap-2" asChild>
+                <span>
+                  <Upload className="h-4 w-4" />
+                  Enviar Modelo
+                </span>
+              </Button>
+            </label>
+          </div>
+        ) : (
+          <>
+            <Button 
+              onClick={handleDownloadTemplate}
+              variant="outline" 
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Baixar Modelo
             </Button>
-          </label>
-        </div>
-        {templateFile && (
-          <Badge variant="secondary" className="px-3 py-2">
-            {templateFile.name}
-          </Badge>
+            <Button
+              onClick={handleRemoveTemplate}
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </>
         )}
         <Button 
           onClick={handleProtocolar}
