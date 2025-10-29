@@ -615,6 +615,7 @@ export type Database = {
           file_size: number | null
           id: string
           mime_type: string | null
+          parent_document_id: string | null
           uploaded_at: string
         }
         Insert: {
@@ -626,6 +627,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          parent_document_id?: string | null
           uploaded_at?: string
         }
         Update: {
@@ -637,6 +639,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          parent_document_id?: string | null
           uploaded_at?: string
         }
         Relationships: [
@@ -645,6 +648,13 @@ export type Database = {
             columns: ["case_id"]
             isOneToOne: false
             referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_parent_document_id_fkey"
+            columns: ["parent_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
             referencedColumns: ["id"]
           },
         ]

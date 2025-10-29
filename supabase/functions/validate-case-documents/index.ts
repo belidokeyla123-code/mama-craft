@@ -28,7 +28,7 @@ serve(async (req) => {
 
     if (caseError) throw caseError;
 
-    // Buscar documentos
+    // Buscar documentos (incluindo parent_document_id para agrupar PDFs convertidos)
     const { data: documents, error: docsError } = await supabase
       .from('documents')
       .select('*')
@@ -39,7 +39,7 @@ serve(async (req) => {
     // Buscar extrações
     const { data: extractions } = await supabase
       .from('extractions')
-      .select('*')
+      .select('*, document:documents!inner(id, parent_document_id)')
       .eq('case_id', caseId);
 
     // Normalizar tipos de documentos com sinônimos
@@ -226,6 +226,19 @@ Use "medium" para documentos complementares.`;
       const validationResult = JSON.parse(aiData.choices[0].message.content);
 
       // Adicionar document_id aos itens do checklist com logging detalhado
+      // Agrupar extrações de páginas do mesmo PDF
+      const groupedExtractions: Record<string, any[]> = {};
+      if (extractions) {
+        extractions.forEach(ext => {
+          // @ts-ignore
+          const parentId = ext.document?.parent_document_id || ext.document_id;
+          if (!groupedExtractions[parentId]) {
+            groupedExtractions[parentId] = [];
+          }
+          groupedExtractions[parentId].push(ext);
+        });
+      }
+      
       const enrichedChecklist = validationResult.checklist.map((checkItem: any) => {
         // Extrair o tipo de documento do nome do item
         const itemLower = checkItem.item.toLowerCase();
@@ -250,13 +263,30 @@ Use "medium" para documentos complementares.`;
           itemType = 'carteira_trabalho';
         }
         
-        // Encontrar documento correspondente com múltiplas estratégias
-        const matchingDoc = documents.find(d => {
-          const docTypeNorm = normalizeDocType(d.document_type);
-          return docTypeNorm === itemType || 
-                 d.document_type.toLowerCase().includes(itemType) ||
-                 itemType.includes(docTypeNorm);
-        });
+        // Priorizar match por extraction com document_id
+        let matchingDoc = null;
+        if (extractions) {
+          for (const [parentId, exts] of Object.entries(groupedExtractions)) {
+            const ext = exts[0]; // Pegar primeira extraction do grupo
+            // @ts-ignore
+            const docTypeNorm = normalizeDocType(ext.document?.document_type || '');
+            if (docTypeNorm === itemType) {
+              // Encontrar o documento original (PDF ou página)
+              matchingDoc = documents.find(d => d.id === parentId);
+              break;
+            }
+          }
+        }
+        
+        // Fallback: buscar por document_type
+        if (!matchingDoc) {
+          matchingDoc = documents.find(d => {
+            const docTypeNorm = normalizeDocType(d.document_type);
+            return docTypeNorm === itemType || 
+                   d.document_type.toLowerCase().includes(itemType) ||
+                   itemType.includes(docTypeNorm);
+          });
+        }
         
         console.log(`[MATCH] Item: "${checkItem.item}" -> Type: "${itemType}" -> Doc: ${matchingDoc?.id || 'NOT FOUND'}`);
         
