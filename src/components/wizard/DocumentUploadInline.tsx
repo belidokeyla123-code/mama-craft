@@ -283,14 +283,25 @@ export const DocumentUploadInline = ({
       }
 
       // Aguardar extrações serem criadas antes de chamar callback
-      if (onUploadComplete && insertedDocIds.length > 0) {
+      if (insertedDocIds.length > 0) {
         const success = await pollForExtractions(insertedDocIds);
+        
+        // Trigger revalidação automática
+        await supabase.functions.invoke('validate-case-documents', {
+          body: { caseId: caseId }
+        });
+        
+        // Force UI refresh
+        window.dispatchEvent(new CustomEvent('revalidate-documents'));
+        
         if (success) {
-          toast.success('Documentos processados com sucesso!');
-          onUploadComplete();
+          toast.success('Documentos processados e validados!');
         } else {
           toast.warning('Processamento demorou mais que o esperado');
-          onUploadComplete(); // Chama mesmo assim para não travar UX
+        }
+        
+        if (onUploadComplete) {
+          onUploadComplete();
         }
       }
     } catch (error: any) {

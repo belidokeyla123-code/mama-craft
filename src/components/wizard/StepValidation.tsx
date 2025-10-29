@@ -33,6 +33,16 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     if (data.caseId && !validationResult) {
       handleValidate();
     }
+
+    const handleRevalidate = () => {
+      handleValidate();
+    };
+    
+    window.addEventListener('revalidate-documents', handleRevalidate);
+    
+    return () => {
+      window.removeEventListener('revalidate-documents', handleRevalidate);
+    };
   }, [data.caseId]);
 
   const handleValidate = async () => {
@@ -302,9 +312,9 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           <h3 className="text-lg font-semibold mb-4">Checklist Documental</h3>
           <div className="space-y-2">
             {checklist.map((item: any, idx: number) => {
-              const isOk = !!item.document;
+              const isOk = item.status === 'ok';
               const isCritical = item.importance === 'critical';
-              const hasDocumentId = !!item.document?.id;
+              const hasDocumentId = !!item.document_id;
               
               return (
                 <div 
@@ -325,14 +335,9 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                     )}
                     <div className="flex-1">
                       <p className="font-medium">{item.item}</p>
-                      {item.document && (
-                        <p className="text-xs text-muted-foreground">
-                          {item.document.file_name}
-                        </p>
-                      )}
-                      {hasDocumentId && (
+                      {hasDocumentId && isOk && (
                         <p className="text-xs text-success mt-1">
-                          ✓ Documento processado com sucesso
+                          ✓ Documento enviado e validado
                         </p>
                       )}
                     </div>
@@ -345,11 +350,11 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                   </div>
                 
                   {/* Botão de exclusão se documento presente */}
-                  {item.document && (
+                  {hasDocumentId && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleDeleteDocument(item.document.id)}
+                      onClick={() => handleDeleteDocument(item.document_id)}
                       className="flex-shrink-0"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -357,7 +362,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                   )}
                   
                   {/* Botão de upload se documento faltante */}
-                  {!item.document && (item.importance === 'critical' || item.importance === 'high') && data.caseId && (
+                  {!hasDocumentId && (item.importance === 'critical' || item.importance === 'high') && data.caseId && (
                     <DocumentUploadInline 
                       caseId={data.caseId}
                       suggestedDocType={item.item}
