@@ -335,8 +335,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5-mini',
-        max_completion_tokens: 2048,
+        model: 'google/gemini-2.5-flash',
         messages: [
           {
             role: 'system',
@@ -374,10 +373,12 @@ serve(async (req) => {
 
     const aiResult = await aiResponse.json();
     console.log(`[ANALYZE-SINGLE] ✅ IA respondeu`);
+    console.log(`[ANALYZE-SINGLE] 🔍 Resposta completa da IA:`, JSON.stringify(aiResult, null, 2));
 
     // 7. Extrair dados da resposta com parsing defensivo
     const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall?.function?.arguments) {
+      console.error(`[ANALYZE-SINGLE] ❌ IA não retornou tool calls. Resposta:`, JSON.stringify(aiResult.choices?.[0]?.message, null, 2));
       throw new Error('IA não retornou dados estruturados');
     }
 
