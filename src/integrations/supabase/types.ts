@@ -1142,7 +1142,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      invoke_process_queue_worker: { Args: never; Returns: undefined }
+      [_ in never]: never
     }
     Enums: {
       case_status:
