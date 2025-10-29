@@ -161,7 +161,14 @@ Com base na ANÁLISE JURÍDICA COMPLETA e nas SITUAÇÕES ESPECÍFICAS acima, bu
 - Se a carência não foi cumprida, busque precedentes sobre reconhecimento de atividade rural
 - Se houver situações especiais (filho falecido, etc), busque jurisprudências ESPECÍFICAS disso
 
-Retorne JSON com 3-5 de cada tipo:
+**REGRAS CRÍTICAS:**
+1. Retorne NO MÁXIMO 3 itens de cada tipo (jurisprudências, súmulas, doutrinas)
+2. Escolha APENAS as MAIS RELEVANTES - qualidade > quantidade
+3. NÃO REPITA informações - se uma súmula diz o mesmo que uma jurisprudência, escolha apenas a mais forte
+4. NÃO REPITA autores de doutrina - máximo 1 citação por autor
+5. Priorize: STJ > TRF > TNU > TJ
+
+Retorne JSON com NO MÁXIMO 3 de cada tipo:
 {
   "jurisprudencias": [
     {

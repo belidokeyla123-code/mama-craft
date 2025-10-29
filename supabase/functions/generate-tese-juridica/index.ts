@@ -109,7 +109,15 @@ ${JSON.stringify(selectedDoutrinas, null, 2)}
 
 **IMPORTANTE:** Inclua os links das jurisprudências no campo "links_jurisprudencias" do JSON de saída, mantendo a mesma ordem da fundamentação_jurisprudencial. Links disponíveis: ${JSON.stringify(jurisLinks)}
 
-AGORA CONSTRUA 3-5 TESES JURÍDICAS PERSUASIVAS conectando essas fontes ao caso concreto. Use técnicas de PNL, retórica e persuasão. Seja eloquente mas técnico. RETORNE JSON VÁLIDO.`;
+**REGRAS CRÍTICAS:**
+1. Construa NO MÁXIMO 3 TESES JURÍDICAS (não 5, não 4, máximo 3)
+2. Cada tese deve ser ÚNICA - NÃO REPITA argumentos
+3. NÃO cite a mesma jurisprudência/súmula em múltiplas teses
+4. NÃO cite o mesmo autor de doutrina em múltiplas teses
+5. Priorize QUALIDADE sobre quantidade
+6. Se não houver material suficiente para 3 teses únicas, retorne menos
+
+AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes ao caso concreto. Use técnicas de PNL, retórica e persuasão. Seja eloquente mas técnico. RETORNE JSON VÁLIDO.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {

@@ -167,13 +167,14 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
       setDoutrinas(result.doutrinas || []);
       setTeses(result.teses_juridicas_aplicaveis || []);
       
-      // Salvar no cache
+      // Salvar no cache PRESERVANDO seleções existentes
+      const currentSelectedIds = Array.from(selectedIds);
       await supabase
         .from('jurisprudence_results')
         .upsert({
           case_id: data.caseId,
           results: result,
-          selected_ids: Array.from(selectedIds),
+          selected_ids: currentSelectedIds, // Manter seleções anteriores
           created_at: new Date().toISOString()
         });
       
