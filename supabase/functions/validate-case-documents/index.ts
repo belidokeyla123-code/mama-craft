@@ -39,7 +39,7 @@ serve(async (req) => {
     // Buscar extrações
     const { data: extractions } = await supabase
       .from('extractions')
-      .select('*, document:documents!inner(id, parent_document_id)')
+      .select('*')
       .eq('case_id', caseId);
 
     // Normalizar tipos de documentos com sinônimos
@@ -230,8 +230,10 @@ Use "medium" para documentos complementares.`;
       const groupedExtractions: Record<string, any[]> = {};
       if (extractions) {
         extractions.forEach(ext => {
-          // @ts-ignore
-          const parentId = ext.document?.parent_document_id || ext.document_id;
+          // Buscar documento associado para pegar parent_document_id
+          const doc = documents.find(d => d.id === ext.document_id);
+          const parentId = doc?.parent_document_id || ext.document_id;
+          
           if (!groupedExtractions[parentId]) {
             groupedExtractions[parentId] = [];
           }
@@ -268,8 +270,9 @@ Use "medium" para documentos complementares.`;
         if (extractions) {
           for (const [parentId, exts] of Object.entries(groupedExtractions)) {
             const ext = exts[0]; // Pegar primeira extraction do grupo
-            // @ts-ignore
-            const docTypeNorm = normalizeDocType(ext.document?.document_type || '');
+            const doc = documents.find(d => d.id === ext.document_id);
+            const docTypeNorm = normalizeDocType(doc?.document_type || '');
+            
             if (docTypeNorm === itemType) {
               // Encontrar o documento original (PDF ou página)
               matchingDoc = documents.find(d => d.id === parentId);
