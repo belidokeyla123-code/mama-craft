@@ -1147,8 +1147,119 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       return;
     }
     
+    // 🔥 VALIDAR SE HÁ BRECHAS SELECIONADAS
+    if (!selectedBrechas || selectedBrechas.length === 0) {
+      toast.error('❌ Selecione pelo menos uma brecha para aplicar correções');
+      return;
+    }
+    
     console.log('[APPLY-CORRECTIONS] Iniciando aplicação de correções...');
     console.log('[APPLY-CORRECTIONS] Petition length:', petition?.length);
+    console.log('[APPLY-CORRECTIONS] Brechas selecionadas:', selectedBrechas.length);
+    
+    setApplyingJudgeCorrections(true);
+    
+    try {
+      // Filtrar apenas as brechas selecionadas (por índice)
+      const brechasSelecionadas = selectedBrechas.map(idx => judgeAnalysis.brechas[idx]);
+      
+      console.log('[APPLY-CORRECTIONS] Aplicando correções para:', 
+        brechasSelecionadas.map((b: any) => b.tipo)
+      );
+      
+      // 🔥 CHAMAR EDGE FUNCTION PARA APLICAR CORREÇÕES
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: {
+          petition: petition,
+          judgeAnalysis: {
+            brechas: brechasSelecionadas,
+            pontos_fortes: judgeAnalysis.pontos_fortes || [],
+            pontos_fracos: judgeAnalysis.pontos_fracos || [],
+            recomendacoes: judgeAnalysis.recomendacoes || []
+          }
+        }
+      });
+      
+      if (error) {
+        console.error('[APPLY-CORRECTIONS] Erro no edge function:', error);
+        throw error;
+      }
+      
+      if (!result?.petition_corrigida) {
+        throw new Error('Nenhuma petição corrigida retornada');
+      }
+      
+      console.log('[APPLY-CORRECTIONS] ✅ Correções aplicadas pela IA');
+      console.log('[APPLY-CORRECTIONS] Length antes:', petition.length);
+      console.log('[APPLY-CORRECTIONS] Length depois:', result.petition_corrigida.length);
+      console.log('[APPLY-CORRECTIONS] Diferença:', result.petition_corrigida.length - petition.length);
+      
+      // 🔥 ATUALIZAR ESTADO DA PETIÇÃO
+      setPetition(result.petition_corrigida);
+      
+      // 🔥 SALVAR NO BANCO COM INSERT (não upsert)
+      const { error: saveError } = await supabase.from('drafts').insert([{
+        case_id: data.caseId,
+        markdown_content: result.petition_corrigida,
+        payload: { 
+          corrected_by_judge: true,
+          judge_analysis: judgeAnalysis,
+          applied_brechas: brechasSelecionadas.map((b: any) => b.tipo),
+          timestamp: new Date().toISOString() 
+        } as any
+      }]);
+      
+      if (saveError) {
+        console.error('[APPLY-CORRECTIONS] Erro ao salvar:', saveError);
+      } else {
+        console.log('[APPLY-CORRECTIONS] ✅ Petição corrigida salva no banco');
+      }
+      
+      // 🔥 REMOVER BRECHAS APLICADAS DO ESTADO (filtrar por índice)
+      const brechasRestantes = judgeAnalysis.brechas.filter(
+        (_, idx) => !selectedBrechas.includes(idx)
+      );
+      
+      // Calcular nova pontuação de risco
+      const reducaoTotal = brechasSelecionadas.reduce((acc: number, brecha: any) => {
+        const reducao = brecha.gravidade === 'alta' ? 20 : 
+                        brecha.gravidade === 'media' ? 10 : 5;
+        return acc + reducao;
+      }, 0);
+      
+      const novoRisco = Math.max(0, judgeAnalysis.risco_improcedencia - reducaoTotal);
+      
+      // 🔥 ATUALIZAR ESTADO DO judgeAnalysis
+      setJudgeAnalysis({
+        ...judgeAnalysis,
+        brechas: brechasRestantes,
+        risco_improcedencia: novoRisco
+      });
+      
+      // 🔥 LIMPAR SELEÇÃO
+      setSelectedBrechas([]);
+      
+      // 🔥 FEEDBACK VISUAL
+      toast.success(`✅ ${brechasSelecionadas.length} correção(ões) aplicada(s)! Risco reduzido para ${novoRisco}%`, {
+        duration: 5000
+      });
+      
+      // Flash verde na petição
+      setTimeout(() => {
+        const el = document.querySelector('[data-petition-content]');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el.classList.add('ring-4', 'ring-green-500', 'transition-all');
+          setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
+        }
+      }, 300);
+      
+    } catch (error: any) {
+      console.error('[APPLY-CORRECTIONS] Erro ao aplicar correções:', error);
+      toast.error('Erro ao aplicar correções: ' + (error.message || 'Erro desconhecido'));
+    } finally {
+      setApplyingJudgeCorrections(false);
+    }
   };
 
   // ════════════════════════════════════════════════════════════
