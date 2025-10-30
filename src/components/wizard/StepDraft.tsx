@@ -794,85 +794,87 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
     if (!judgeAnalysis) return;
 
+    // 🚀 OTIMIZAÇÃO: Se selecionou TODAS, usar método otimizado
+    if (selectedBrechas.length === judgeAnalysis.brechas.length) {
+      setSelectedBrechas([]); // Limpar seleção
+      return applyJudgeCorrections(); // Delegar para função original (mais rápida)
+    }
+
     setApplyingJudgeCorrections(true);
     
     try {
       const totalSelected = selectedBrechas.length;
-      let brechasRestantes = [...judgeAnalysis.brechas];
-      let riscoAtual = judgeAnalysis.risco_improcedencia;
       
-      // Aplicar cada brecha selecionada em sequência
-      for (let i = 0; i < totalSelected; i++) {
-        const index = selectedBrechas[i];
-        const brecha = judgeAnalysis.brechas[index];
-        
-        toast.info(`Aplicando (${i + 1}/${totalSelected}): ${brecha.tipo}...`, { duration: 2000 });
-        
-        // Invocar edge function para essa brecha
-        const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
-          body: {
-            petition,
-            judgeAnalysis: {
-              brechas: [brecha],
-              pontos_fortes: [],
-              pontos_fracos: [],
-              recomendacoes: []
-            }
+      // ✅ Coletar todas as brechas selecionadas
+      const selectedBrechasData = selectedBrechas.map(idx => judgeAnalysis.brechas[idx]);
+      
+      toast.info(`⚙️ Aplicando ${totalSelected} correção(ões)...`, { duration: 3000 });
+      
+      // ✅ Invocar edge function UMA VEZ com TODAS as brechas selecionadas
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: {
+          petition,
+          judgeAnalysis: {
+            brechas: selectedBrechasData,  // Todas de uma vez!
+            pontos_fortes: [],
+            pontos_fracos: [],
+            recomendacoes: []
           }
-        });
-
-        if (error) throw error;
-
-        if (result?.petition_corrigida) {
-          setPetition(result.petition_corrigida);
-          
-          // Atualizar listas locais
-          brechasRestantes = brechasRestantes.filter((_, i) => i !== index);
-          const reducao = brecha.gravidade === 'alta' ? 15 : 
-                          brecha.gravidade === 'media' ? 10 : 5;
-          riscoAtual = Math.max(0, riscoAtual - reducao);
-          
-          // Salvar versão
-          await supabase.from('drafts').insert({
-            case_id: data.caseId,
-            markdown_content: result.petition_corrigida,
-            payload: { selected_correction: brecha.descricao }
-          });
         }
-        
-        // Aguardar 800ms entre cada correção
-        if (i < totalSelected - 1) {
-          await new Promise(resolve => setTimeout(resolve, 800));
-        }
-      }
-      
-      // Atualizar estado final
-      setJudgeAnalysis({
-        ...judgeAnalysis,
-        brechas: brechasRestantes,
-        risco_improcedencia: riscoAtual
       });
-      
-      // Limpar seleção
-      setSelectedBrechas([]);
-      
-      toast.success(
-        `✅ ${totalSelected} correção(ões) aplicada(s) com sucesso!\n📉 Risco reduzido para ${riscoAtual}%`,
-        { duration: 5000 }
-      );
-      
-      // Flash verde
-      setTimeout(() => {
-        const el = document.querySelector('[data-petition-content]');
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          el.classList.add('ring-4', 'ring-green-500', 'transition-all');
-          setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
-        }
-      }, 300);
-      
-      // Re-análise automática se aplicou todas as brechas
-      if (totalSelected === judgeAnalysis.brechas.length) {
+
+      if (error) throw error;
+
+      if (result?.petition_corrigida) {
+        setPetition(result.petition_corrigida);
+        
+        // Calcular redução de risco
+        const reducaoTotal = selectedBrechasData.reduce((acc, brecha) => {
+          const reducao = brecha.gravidade === 'alta' ? 15 : 
+                         brecha.gravidade === 'media' ? 10 : 5;
+          return acc + reducao;
+        }, 0);
+        
+        const riscoAtual = Math.max(0, judgeAnalysis.risco_improcedencia - reducaoTotal);
+        
+        // Remover brechas aplicadas
+        const brechasRestantes = judgeAnalysis.brechas.filter(
+          (_, idx) => !selectedBrechas.includes(idx)
+        );
+        
+        // Atualizar estado
+        setJudgeAnalysis({
+          ...judgeAnalysis,
+          brechas: brechasRestantes,
+          risco_improcedencia: riscoAtual
+        });
+        
+        // Salvar versão no banco
+        await supabase.from('drafts').insert({
+          case_id: data.caseId,
+          markdown_content: result.petition_corrigida,
+          payload: { selected_corrections: selectedBrechasData.map(b => b.descricao) }
+        });
+        
+        // Limpar seleção
+        setSelectedBrechas([]);
+        
+        toast.success(
+          `✅ ${totalSelected} correção(ões) aplicadas!\n🔍 Re-analisando...`,
+          { duration: 5000 }
+        );
+        
+        // Flash verde
+        setTimeout(() => {
+          const el = document.querySelector('[data-petition-content]');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.classList.add('ring-4', 'ring-green-500', 'transition-all');
+            setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
+          }
+        }, 300);
+        
+        // ✅ SEMPRE RE-ANALISAR (não só quando aplica todas)
         setTimeout(() => {
           toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
           setTimeout(() => analyzeWithJudgeModule(true), 1500);
