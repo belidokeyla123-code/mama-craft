@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
+import { getDocTypeDisplayInfo } from "@/lib/documentNaming";
 import JSZip from "jszip";
 import {
   AlertDialog,
@@ -742,6 +743,16 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                         <FileText className="h-5 w-5 text-muted-foreground" />
                         <span className="font-medium">{group.groupName}</span>
                         <Badge variant="outline">Convertido de PDF</Badge>
+                        {(() => {
+                          const firstDoc = group.docs[0];
+                          const typeInfo = getDocTypeDisplayInfo(firstDoc?.document_type || 'outro');
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${typeInfo.color}`}>
+                              <span>{typeInfo.icon}</span>
+                              <span>{typeInfo.label}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="p-2 space-y-1 max-h-[200px] overflow-y-auto">
@@ -808,9 +819,18 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                           <span>{formatFileSize(doc.file_size)}</span>
                           <span>•</span>
                           <span>{new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}</span>
+                          <span>•</span>
+                          {(() => {
+                            const typeInfo = getDocTypeDisplayInfo(doc.document_type || 'outro');
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${typeInfo.color}`}>
+                                <span>{typeInfo.icon}</span>
+                                <span>{typeInfo.label}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
-                       {getDocumentTypeBadge(doc.document_type)}
                     </div>
 
                     <div className="flex items-center gap-2 ml-4">

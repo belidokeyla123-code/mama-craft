@@ -422,9 +422,14 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               const confidence = analysisResult?.confidence || 'medium';
               const confidenceEmoji = confidence === 'high' ? '✅' : confidence === 'medium' ? '⚠️' : '❌';
               
+              // 🆕 Mostrar novo nome do arquivo se foi renomeado
+              const renameInfo = analysisResult?.extracted?.newFileName 
+                ? `\n📝 Renomeado para: \`${analysisResult.extracted.newFileName}\``
+                : '';
+              
               setMessages(prev => [...prev, {
                 role: "assistant",
-                content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})`
+                content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})${renameInfo}`
               }]);
               
               // 🆕 APRESENTAÇÃO ESTILO CHATGPT: Dados estruturados + transcrição

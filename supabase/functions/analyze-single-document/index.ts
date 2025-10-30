@@ -3,6 +3,64 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 
+// ============================================================
+// SISTEMA DE NOMENCLATURA INTELIGENTE
+// ============================================================
+
+function sanitizeName(name: string | undefined): string {
+  if (!name) return 'Sem_Nome';
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .substring(0, 50);
+}
+
+function formatDateForFileName(date: string | undefined): string {
+  if (!date) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  const parsed = new Date(date);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
+  return '';
+}
+
+function generateIntelligentFileName(docType: string, extractedData: any, originalFileName: string): string {
+  const timestamp = new Date().toISOString().split('T')[0];
+  const originalExt = originalFileName.split('.').pop() || 'png';
+  
+  const templates: Record<string, (d: any) => string> = {
+    certidao_nascimento: (d) => `Certidao_Nascimento_${sanitizeName(d.childName)}_${formatDateForFileName(d.childBirthDate) || timestamp}`,
+    identificacao: (d) => {
+      const name = sanitizeName(d.fullName);
+      if (d.rg) return `RG_${name}_${d.rg.replace(/[^0-9]/g, '').substring(0, 10)}`;
+      if (d.cpf) return `CPF_${name}_${d.cpf.replace(/[^0-9]/g, '')}`;
+      return `Identificacao_${name}`;
+    },
+    procuracao: (d) => `Procuracao_${sanitizeName(d.granterName)}_${timestamp}`,
+    processo_administrativo: (d) => `Processo_INSS_${d.raProtocol ? d.raProtocol.replace(/[^0-9]/g, '') : timestamp}`,
+    certidao_casamento: (d) => `Certidao_Casamento_${sanitizeName(d.spouseName)}_${formatDateForFileName(d.marriageDate) || timestamp}`,
+    cnis: (d) => `CNIS_${d.nit ? d.nit.replace(/[^0-9]/g, '') : 'Cliente'}_${timestamp}`,
+    autodeclaracao_rural: () => `Autodeclaracao_Rural_${timestamp}`,
+    documento_terra: (d) => `Documento_Terra_${sanitizeName(d.landOwnerName)}_${timestamp}`,
+    comprovante_residencia: (d) => `Comprovante_Residencia_${sanitizeName(d.holderName)}_${formatDateForFileName(d.referenceDate) || timestamp}`,
+    historico_escolar: (d) => `Historico_Escolar_${sanitizeName(d.studentName)}_${d.period || timestamp}`,
+    declaracao_saude_ubs: (d) => `Declaracao_Saude_${sanitizeName(d.patientName)}_${formatDateForFileName(d.declarationDate) || timestamp}`,
+  };
+  
+  const generateName = templates[docType];
+  if (!generateName) return originalFileName;
+  
+  try {
+    return `${generateName(extractedData)}.${originalExt}`;
+  } catch (error) {
+    console.error('Erro ao gerar nome:', error);
+    return originalFileName;
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -551,6 +609,31 @@ Retorne esses campos no objeto \`universalData\` separado.
 
     if (saveError) {
       console.error('[ANALYZE-SINGLE] ⚠️ Erro ao salvar:', saveError);
+    }
+
+    // 🆕 RENOMEAÇÃO AUTOMÁTICA DE ARQUIVO
+    if (extracted.extractedData && docType !== 'outro') {
+      try {
+        const newFileName = generateIntelligentFileName(docType, extracted.extractedData, doc.file_name);
+        
+        if (newFileName !== doc.file_name) {
+          const { error: renameError } = await supabase
+            .from('documents')
+            .update({ file_name: newFileName })
+            .eq('id', documentId);
+          
+          if (renameError) {
+            console.error('[ANALYZE-SINGLE] ⚠️ Erro ao renomear:', renameError);
+          } else {
+            console.log(`[ANALYZE-SINGLE] 📝 Arquivo renomeado: ${doc.file_name} → ${newFileName}`);
+            // Adicionar ao resultado para feedback no frontend
+            extracted.newFileName = newFileName;
+          }
+        }
+      } catch (error) {
+        console.error('[ANALYZE-SINGLE] ⚠️ Erro ao gerar nome:', error);
+        // Não falhar se renomeação falhar
+      }
     }
 
     // 9. SALVAR DADOS GENÉRICOS DE IDENTIFICAÇÃO (qualquer documento) + UNIVERSAIS
