@@ -181,14 +181,42 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
   // IA Contributiva: Validar dados básicos
   const validateWithAI = async () => {
-    if (!data.caseId || !data.birthCity || !data.birthState) return;
+    if (!data.caseId) return;
+    
+    // ✅ EXTRAIR UF DO BIRTH_CITY OU ENDEREÇO
+    let cityToValidate = data.birthCity || '';
+    let ufToValidate = data.birthState || '';
+    
+    // Se birth_city tem formato "Cidade-UF", extrair
+    if (!ufToValidate && cityToValidate) {
+      const match = cityToValidate.match(/([^-/]+)[\s-/]*(RO|AC|AM|RR|PA|AP|TO|MA|PI|CE|RN|PB|PE|AL|SE|BA|MG|ES|RJ|SP|PR|SC|RS|MS|MT|GO|DF)/i);
+      if (match) {
+        cityToValidate = match[1].trim();
+        ufToValidate = match[2]?.toUpperCase() || '';
+      }
+    }
+    
+    // Se ainda não tem UF, tentar extrair do endereço
+    if (!ufToValidate && data.authorAddress) {
+      const addressMatch = data.authorAddress.match(/[,/-]\s*(RO|AC|AM|RR|PA|AP|TO|MA|PI|CE|RN|PB|PE|AL|SE|BA|MG|ES|RJ|SP|PR|SC|RS|MS|MT|GO|DF)/i);
+      if (addressMatch) {
+        ufToValidate = addressMatch[1].toUpperCase();
+      }
+    }
+    
+    if (!cityToValidate || !ufToValidate) {
+      toast.error("Preencha a cidade de nascimento e o endereço completo com UF");
+      return;
+    }
+    
+    console.log('🔍 Validando jurisdição com:', { cityToValidate, ufToValidate, address: data.authorAddress });
     
     setValidatingWithAI(true);
     try {
       const { data: validation, error } = await supabase.functions.invoke('validate-jurisdiction', {
         body: { 
-          city: data.birthCity, 
-          uf: data.birthState,
+          city: cityToValidate, 
+          uf: ufToValidate,
           address: data.authorAddress 
         }
       });
@@ -196,18 +224,19 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       if (!error && validation) {
         setAiValidation(validation);
         
-        if (validation.confianca === 'baixa') {
-          toast.warning('⚠️ A IA identificou possíveis inconsistências nos dados de endereço', {
-            duration: 5000
-          });
-        } else if (validation.confianca === 'alta') {
-          toast.success('✅ Dados validados pela IA com alta confiança', {
-            duration: 3000
-          });
+        // ✅ SALVAR UF NO BANCO SE NÃO EXISTIR
+        if (!data.birthState && ufToValidate) {
+          updateData({ birthState: ufToValidate });
         }
+        
+        toast.success(`Jurisdição validada: ${validation.subsecao}`);
+      } else {
+        console.error('Erro ao validar jurisdição:', error);
+        toast.error("Erro ao validar jurisdição");
       }
-    } catch (error) {
-      console.error('Erro ao validar com IA:', error);
+    } catch (err) {
+      console.error('Erro na validação:', err);
+      toast.error("Erro ao validar jurisdição");
     } finally {
       setValidatingWithAI(false);
     }
@@ -215,10 +244,10 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
   // Executar validação quando dados mudarem
   useEffect(() => {
-    if (data.birthCity && data.birthState && data.authorAddress) {
+    if (data.birthCity && data.authorAddress) {
       validateWithAI();
     }
-  }, [data.birthCity, data.birthState, data.authorAddress]);
+  }, [data.birthCity, data.authorAddress]);
 
   // Carregar análise do CNIS quando o componente montar
   useEffect(() => {

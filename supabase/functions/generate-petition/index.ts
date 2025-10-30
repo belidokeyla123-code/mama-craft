@@ -52,56 +52,65 @@ serve(async (req) => {
     const manualBenefits = caseData?.manual_benefits || [];
     console.log('[PETITION] Benefícios manuais:', manualBenefits.length);
 
-    // ✅ CORREÇÃO #1: Extração robusta de cidade e UF
+    // ✅ ESTRATÉGIA ROBUSTA DE EXTRAÇÃO DE CIDADE/UF
     let city = '';
     let uf = '';
 
-    // Estratégia 1: Tentar extrair do endereço completo (aceita hífen, barra, vírgula)
-    const addressMatch = autoraEndereco?.match(/([A-ZÁÉÍÓÚÂÊÔÃÕ\s]+)[\s,/-]+([A-Z]{2})/i);
+    console.log('[DADOS BRUTOS]', {
+      autoraEndereco,
+      birth_city: caseData.birth_city,
+      birth_state: caseData.birth_state,
+      procuracao_city: procuracaoData.city,
+      procuracao_uf: procuracaoData.uf
+    });
+
+    // ═══ PRIORIDADE 1: ENDEREÇO COMPLETO ═══
+    const addressMatch = autoraEndereco?.match(/([A-ZÁÉÍÓÚÂÊÔÃÕÇÀÈÌÒÙ\s]+?)[\s,/-]+(RO|AC|AM|RR|PA|AP|TO|MA|PI|CE|RN|PB|PE|AL|SE|BA|MG|ES|RJ|SP|PR|SC|RS|MS|MT|GO|DF)/i);
 
     if (addressMatch) {
-      city = addressMatch[1]?.trim();
-      uf = addressMatch[2]?.toUpperCase();
-      console.log(`[ENDEREÇAMENTO] Extraído do endereço: ${city}/${uf}`);
-    } else {
-      // Estratégia 2: Tentar extrair do birth_city (formato: "Cidade-UF" ou "Cidade")
+      city = addressMatch[1].trim();
+      uf = addressMatch[2].toUpperCase();
+      console.log(`✅ [PRIORIDADE 1] Extraído do endereço: ${city}/${uf}`);
+    }
+
+    // ═══ PRIORIDADE 2: BIRTH_CITY (formato "Cidade-UF") ═══
+    if (!city || !uf) {
       if (caseData.birth_city) {
-        const birthCityMatch = caseData.birth_city.match(/([^-/]+)[-/]?([A-Z]{2})?/i);
+        const birthCityMatch = caseData.birth_city.match(/([^-/]+)[\s-/]*(RO|AC|AM|RR|PA|AP|TO|MA|PI|CE|RN|PB|PE|AL|SE|BA|MG|ES|RJ|SP|PR|SC|RS|MS|MT|GO|DF)?/i);
         if (birthCityMatch) {
-          city = birthCityMatch[1]?.trim();
-          uf = birthCityMatch[2]?.toUpperCase() || caseData.birth_state || '';
-          console.log(`[ENDEREÇAMENTO] Extraído de birth_city: ${city}/${uf}`);
+          city = city || birthCityMatch[1].trim();
+          uf = uf || birthCityMatch[2]?.toUpperCase() || caseData.birth_state?.toUpperCase() || '';
+          console.log(`✅ [PRIORIDADE 2] Extraído de birth_city: ${city}/${uf}`);
         }
-      }
-      
-      // Estratégia 3: Fallback para birth_state se ainda não tiver UF
-      if (!uf && caseData.birth_state) {
-        uf = caseData.birth_state;
-      }
-      
-      // Estratégia 4: Tentar procuração
-      if (!city && procuracaoData.city) {
-        city = procuracaoData.city;
       }
     }
 
-    // ❌ NUNCA usar fallback genérico para São Paulo
-    // Se ainda não tiver cidade/UF, avisar no log e deixar erro aparecer
+    // ═══ PRIORIDADE 3: PROCURAÇÃO ═══
+    if (!city && procuracaoData.city) {
+      city = procuracaoData.city;
+      console.log(`✅ [PRIORIDADE 3] Cidade da procuração: ${city}`);
+    }
+    if (!uf && procuracaoData.uf) {
+      uf = procuracaoData.uf.toUpperCase();
+      console.log(`✅ [PRIORIDADE 3] UF da procuração: ${uf}`);
+    }
+
+    // ═══ VALIDAÇÃO FINAL ═══
     if (!city || !uf) {
       console.error('🔴 ERRO CRÍTICO: Cidade ou UF não identificados!', {
         autoraEndereco,
         birth_city: caseData.birth_city,
         birth_state: caseData.birth_state,
-        city,
-        uf
+        procuracao_city: procuracaoData.city,
+        procuracao_uf: procuracaoData.uf,
+        city_final: city,
+        uf_final: uf
       });
       
-      // Último recurso: usar birth_city/birth_state mesmo que incompleto
-      city = city || caseData.birth_city || 'CIDADE_NAO_IDENTIFICADA';
-      uf = uf || caseData.birth_state || 'UF_NAO_IDENTIFICADA';
+      throw new Error(`Dados de endereçamento incompletos: cidade="${city}", uf="${uf}". Verifique os dados do caso.`);
     }
 
-    console.log(`[ENDEREÇAMENTO FINAL] Cidade: ${city} | UF: ${uf}`);
+    console.log(`✅ [EXTRAÇÃO FINAL] Cidade: ${city} | UF: ${uf}`);
     
     // ═══ VALIDAÇÃO ONLINE DE JURISDIÇÃO ═══
     console.log('🔍 Validando jurisdição na internet...');

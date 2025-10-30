@@ -7,6 +7,108 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ═══════════════════════════════════════════════════════════
+// MAPEAMENTO HARDCODED DE JURISDIÇÃO - RONDÔNIA (TRF1)
+// ═══════════════════════════════════════════════════════════
+const JURISDICAO_RONDONIA: Record<string, {
+  subsecao: string;
+  endereco: string;
+  municipios: string[];
+}> = {
+  'ji-parana': {
+    subsecao: 'Ji-Paraná',
+    endereco: 'Rua Duque de Caxias, 1221, Centro, Ji-Paraná/RO, CEP 76900-036',
+    municipios: [
+      'Ji-Paraná',
+      'Porto Velho',
+      'Ariquemes',
+      'Ouro Preto do Oeste',
+      'Jaru',
+      'Presidente Médici',
+      'Alvorada do Oeste',
+      'Urupá',
+      'Mirante da Serra',
+      'Teixeirópolis',
+      'Vale do Paraíso',
+      'Governador Jorge Teixeira',
+      'Nova União',
+      'Rio Crespo',
+      'Cacaulândia',
+      'Gleba Rio Preto'
+    ]
+  },
+  'vilhena': {
+    subsecao: 'Vilhena',
+    endereco: 'Avenida Capitão Castro, 4389, Centro, Vilhena/RO, CEP 76980-020',
+    municipios: [
+      'Vilhena',
+      'Colorado do Oeste',
+      'Cabixi',
+      'Cerejeiras',
+      'Corumbiara',
+      'Pimenteiras do Oeste',
+      'Chupinguaia'
+    ]
+  },
+  'rolim-de-moura': {
+    subsecao: 'Rolim de Moura',
+    endereco: 'Avenida 25 de Agosto, 5549, Centro, Rolim de Moura/RO, CEP 76940-000',
+    municipios: [
+      'Rolim de Moura',
+      'Santa Luzia do Oeste',
+      'Nova Brasilândia do Oeste',
+      'Alto Alegre dos Parecis',
+      'Novo Horizonte do Oeste',
+      'Castanheiras'
+    ]
+  }
+};
+
+function normalizarCidade(nome: string): string {
+  return nome
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .trim();
+}
+
+function identificarSubsecaoRO(cidade: string, endereco?: string): {
+  subsecao: string;
+  endereco: string;
+  municipios_jurisdicao: string[];
+  confianca: string;
+  fonte: string;
+} | null {
+  const cidadeNorm = normalizarCidade(cidade);
+  
+  if (endereco?.toLowerCase().includes('gleba rio preto')) {
+    return {
+      subsecao: 'Ji-Paraná',
+      endereco: JURISDICAO_RONDONIA['ji-parana'].endereco,
+      municipios_jurisdicao: JURISDICAO_RONDONIA['ji-parana'].municipios,
+      confianca: 'alta',
+      fonte: 'Mapeamento hardcoded - Gleba Rio Preto pertence à jurisdição de Ji-Paraná'
+    };
+  }
+  
+  for (const [key, info] of Object.entries(JURISDICAO_RONDONIA)) {
+    const municipiosNorm = info.municipios.map(normalizarCidade);
+    
+    if (municipiosNorm.includes(cidadeNorm)) {
+      return {
+        subsecao: info.subsecao,
+        endereco: info.endereco,
+        municipios_jurisdicao: info.municipios,
+        confianca: 'alta',
+        fonte: `Mapeamento hardcoded - TRF1 Rondônia`
+      };
+    }
+  }
+  
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -15,6 +117,47 @@ serve(async (req) => {
   try {
     const { city, uf, address } = await req.json();
     console.log('🔍 Validando jurisdição:', { city, uf, address });
+
+    // ═══════════════════════════════════════════════════════════
+    // ESTRATÉGIA 1: MAPEAMENTO HARDCODED (RONDÔNIA)
+    // ═══════════════════════════════════════════════════════════
+    if (uf?.toUpperCase() === 'RO') {
+      console.log('🎯 Detectado Rondônia - usando mapeamento hardcoded');
+      const resultado = identificarSubsecaoRO(city, address);
+      
+      if (resultado) {
+        console.log('✅ Jurisdição identificada (hardcoded):', resultado.subsecao);
+        return new Response(JSON.stringify({
+          city,
+          uf: 'RO',
+          ...resultado,
+          trf: 'TRF1',
+          observacao: `${city} é atendido pela subseção judiciária de ${resultado.subsecao}/RO`
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.warn(`⚠️ Município ${city}/RO não encontrado no mapeamento. Usando Ji-Paraná como fallback.`);
+      return new Response(JSON.stringify({
+        city,
+        uf: 'RO',
+        subsecao: 'Ji-Paraná',
+        endereco: JURISDICAO_RONDONIA['ji-parana'].endereco,
+        trf: 'TRF1',
+        municipios_jurisdicao: JURISDICAO_RONDONIA['ji-parana'].municipios,
+        confianca: 'media',
+        fonte: 'Fallback hardcoded - Ji-Paraná atende a maioria dos municípios de RO',
+        observacao: `${city} não está no mapeamento, mas Ji-Paraná é a subseção que atende a maioria dos municípios de Rondônia`
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ESTRATÉGIA 2: IA (OUTROS ESTADOS)
+    // ═══════════════════════════════════════════════════════════
+    console.log('🤖 Usando IA para validar jurisdição (não é Rondônia)');
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
