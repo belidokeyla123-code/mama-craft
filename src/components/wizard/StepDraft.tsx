@@ -440,6 +440,80 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             toast.warning(`⚠️ ${result.brechas.length} nova(s) brecha(s) detectada(s) após correção.`, 
               { id: 'judge-revalidation', duration: 6000 });
           }
+        } else {
+          // 🔥 APLICAR AUTOMATICAMENTE AS CORREÇÕES se houver problemas identificados
+          const hasIssues = (
+            (result.brechas && result.brechas.length > 0) ||
+            (result.pontos_fracos && result.pontos_fracos.length > 0) ||
+            (result.recomendacoes && result.recomendacoes.length > 0)
+          );
+          
+          if (hasIssues) {
+            toast.loading("🔧 Aplicando correções automaticamente...", { id: 'auto-apply' });
+            
+            // Aguardar um momento para garantir que o estado foi atualizado
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            try {
+              console.log('[JUDGE] 🔧 Aplicando correções automaticamente...');
+              
+              const { data: correctionResult, error: correctionError } = await supabase.functions.invoke('apply-judge-corrections', {
+                body: {
+                  petition: petitionToAnalyze,
+                  judgeAnalysis: result
+                }
+              });
+              
+              if (correctionError) {
+                console.error('[JUDGE] Erro ao aplicar correções:', correctionError);
+                toast.error('Erro ao aplicar correções: ' + correctionError.message, { id: 'auto-apply' });
+                return;
+              }
+              
+              if (correctionResult?.petition_corrigida) {
+                setPetition(correctionResult.petition_corrigida);
+                
+                // Salvar no banco
+                await supabase.from('drafts').insert([{
+                  case_id: data.caseId,
+                  markdown_content: correctionResult.petition_corrigida,
+                  payload: { 
+                    corrected_by_judge: true, 
+                    judge_analysis: result,
+                    all_corrections_applied: true,
+                    auto_applied: true,
+                    timestamp: new Date().toISOString() 
+                  } as any
+                }]);
+                
+                // Limpar problemas após aplicação
+                setJudgeAnalysis(prev => prev ? { 
+                  ...prev, 
+                  brechas: [],
+                  pontos_fracos: [],
+                  recomendacoes: [],
+                  risco_improcedencia: 0
+                } : prev);
+                
+                toast.success("✅ Análise concluída e correções aplicadas automaticamente!", { id: 'auto-apply' });
+                
+                // Flash visual
+                setTimeout(() => {
+                  const el = document.querySelector('[data-petition-content]');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    el.classList.add('ring-4', 'ring-green-500', 'transition-all');
+                    setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
+                  }
+                }, 300);
+              }
+            } catch (autoApplyError: any) {
+              console.error('[JUDGE] Erro na aplicação automática:', autoApplyError);
+              toast.error('Erro ao aplicar correções automaticamente', { id: 'auto-apply' });
+            }
+          } else {
+            toast.success("✅ Análise concluída! Petição perfeita, sem correções necessárias.");
+          }
         }
       }
     } catch (error: any) {
