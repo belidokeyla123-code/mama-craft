@@ -1944,6 +1944,13 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         
         toast.success(`✅ ${regionalAdaptation.adaptacoes_sugeridas.length} adaptações regionais aplicadas!`);
         
+        // 🔥 LIMPAR LISTA DE ADAPTAÇÕES (JÁ FORAM APLICADAS)
+        setRegionalAdaptation({
+          ...regionalAdaptation,
+          adaptacoes_sugeridas: [] // Lista vazia = tudo aplicado
+        });
+        setSelectedAdaptations([]); // Limpar seleção
+        
         // Flash visual
         setTimeout(() => {
           const el = document.querySelector('[data-petition-content]');
@@ -2050,6 +2057,13 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         });
         
         toast.success(`✅ ${appellateAnalysis?.adaptacoes_regionais?.length || 0} adaptações do tribunal aplicadas!`);
+        
+        // 🔥 LIMPAR LISTA DE ADAPTAÇÕES (JÁ FORAM APLICADAS)
+        setAppellateAnalysis({
+          ...appellateAnalysis,
+          adaptacoes_regionais: [] // Lista vazia = tudo aplicado
+        });
+        setSelectedAppellateAdaptations([]); // Limpar seleção
         
         // Flash visual
         setTimeout(() => {
@@ -3099,19 +3113,80 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                   </div>
                 )}
 
-                {/* Avaliação de Risco de Recurso */}
-                {appellateAnalysis.risco_recurso && (
-                  <Card className="p-4 bg-red-50 dark:bg-red-950">
-                    <h4 className="font-semibold text-red-800 dark:text-red-200 mb-2">🎯 Avaliação de Risco de Recurso</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">Probabilidade de Recurso</span>
-                        <Badge variant="destructive">{appellateAnalysis.risco_recurso.probabilidade}%</Badge>
+                {/* 🔥 ANÁLISE DE RISCO DE INADMISSIBILIDADE */}
+                {appellateAnalysis.admissibilidade && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Card de Percentual Atendido */}
+                    <Card className="p-4 bg-green-50 dark:bg-green-950">
+                      <h4 className="font-semibold text-green-800 dark:text-green-200 mb-3">
+                        ✅ Requisitos de Admissibilidade
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Requisitos Atendidos</span>
+                          <Badge className="bg-green-600">
+                            {appellateAnalysis.admissibilidade.percentual_atendido}%
+                          </Badge>
+                        </div>
+                        <Progress 
+                          value={appellateAnalysis.admissibilidade.percentual_atendido} 
+                          className="h-3" 
+                        />
+                        <ul className="list-disc list-inside space-y-1 text-xs mt-3">
+                          {appellateAnalysis.admissibilidade.requisitos_atendidos?.map((req: string, i: number) => (
+                            <li key={i} className="text-green-700 dark:text-green-300">{req}</li>
+                          ))}
+                        </ul>
                       </div>
-                      <Progress value={appellateAnalysis.risco_recurso.probabilidade} className="h-2" />
-                      <p className="text-sm text-muted-foreground">{appellateAnalysis.risco_recurso.motivo}</p>
-                    </div>
-                  </Card>
+                    </Card>
+
+                    {/* Card de Risco de Inadmissibilidade */}
+                    <Card className={`p-4 ${
+                      appellateAnalysis.admissibilidade.risco_inadmissibilidade > 30 
+                        ? 'bg-red-50 dark:bg-red-950' 
+                        : appellateAnalysis.admissibilidade.risco_inadmissibilidade > 15
+                        ? 'bg-yellow-50 dark:bg-yellow-950'
+                        : 'bg-blue-50 dark:bg-blue-950'
+                    }`}>
+                      <h4 className={`font-semibold mb-3 ${
+                        appellateAnalysis.admissibilidade.risco_inadmissibilidade > 30 
+                          ? 'text-red-800 dark:text-red-200' 
+                          : appellateAnalysis.admissibilidade.risco_inadmissibilidade > 15
+                          ? 'text-yellow-800 dark:text-yellow-200'
+                          : 'text-blue-800 dark:text-blue-200'
+                      }`}>
+                        ⚠️ Risco de Inadmissibilidade
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Probabilidade de Rejeição do Recurso</span>
+                          <Badge variant={
+                            appellateAnalysis.admissibilidade.risco_inadmissibilidade > 30 
+                              ? 'destructive' 
+                              : appellateAnalysis.admissibilidade.risco_inadmissibilidade > 15
+                              ? 'default'
+                              : 'secondary'
+                          }>
+                            {appellateAnalysis.admissibilidade.risco_inadmissibilidade}%
+                          </Badge>
+                        </div>
+                        <Progress 
+                          value={appellateAnalysis.admissibilidade.risco_inadmissibilidade} 
+                          className="h-3" 
+                        />
+                        {appellateAnalysis.admissibilidade.requisitos_faltantes?.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-xs font-semibold mb-2">Requisitos Faltantes:</p>
+                            <ul className="list-disc list-inside space-y-1 text-xs">
+                              {appellateAnalysis.admissibilidade.requisitos_faltantes.map((req: string, i: number) => (
+                                <li key={i} className="text-red-700 dark:text-red-300">{req}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  </div>
                 )}
 
                 {/* Recomendação Executiva */}
