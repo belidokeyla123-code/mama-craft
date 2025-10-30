@@ -161,7 +161,7 @@ serve(async (req) => {
     // 2. Verificar se já existe análise e se deve reprocessar
     // ==================================================================
     const { data: existingAnalysis, error: existingAnalysisError } = await supabaseClient
-      .from('document_analysis')
+      .from('extractions')
       .select('*')
       .eq('document_id', documentId)
       .single();
@@ -264,12 +264,13 @@ serve(async (req) => {
     // ==================================================================
     console.log(`[DOC ${documentId}] Salvando resultados da análise no banco de dados...`);
     const { error: upsertError } = await supabaseClient
-      .from('document_analysis')
+      .from('extractions')
       .upsert({
         document_id: documentId,
         case_id: caseId,
-        analysis_result: analysisResult,
-        model_version: 'google/gemini-2.5-flash',
+        entities: analysisResult,
+        auto_filled_fields: analysisResult,
+        extracted_at: new Date().toISOString(),
       }, { onConflict: 'document_id' });
 
     if (upsertError) {
