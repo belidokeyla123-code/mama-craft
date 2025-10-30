@@ -2090,8 +2090,41 @@ ${tabelaDocumentos}
         duration: 7000
       });
 
-      // ❌ REMOVIDO: Reanálise automática (causava loop infinito)
-      // Usuário controla quando reanalisar usando botão "🔄 Reanalisar Controle de Qualidade"
+      // 🔥 FASE 8: REVALIDAÇÃO INTELIGENTE (SEM LOOP INFINITO)
+      console.log('[FIX-TABS] 🔄 Iniciando revalidação...');
+      toast.info('🔄 Revalidando status das abas...', { id: 'revalidating' });
+      
+      try {
+        // 1️⃣ Reanalise com Módulo Juiz para atualizar status
+        console.log('[FIX-TABS] 📊 Reanalisando com Módulo Juiz...');
+        await analyzeWithJudgeModule(true, result.petition_corrigida);
+        
+        // 2️⃣ Se jurisprudência tinha problema, buscar novamente
+        const needsJurisprudence = abasComProblemas.some(a => a.aba === 'jurisprudencia');
+        if (needsJurisprudence) {
+          console.log('[FIX-TABS] 📚 Buscando jurisprudência atualizada...');
+          try {
+            await supabase.functions.invoke('queue-jurisprudence', {
+              body: { caseId: data.caseId }
+            });
+          } catch (jError) {
+            console.warn('[FIX-TABS] Erro ao buscar jurisprudência:', jError);
+          }
+        }
+        
+        // 3️⃣ Recarregar Quality Report
+        await loadQualityReport();
+        
+        toast.success('✅ Status atualizados com sucesso!', { 
+          id: 'revalidating',
+          duration: 3000 
+        });
+      } catch (revalError) {
+        console.error('[FIX-TABS] Erro na revalidação:', revalError);
+        toast.warning('Correções aplicadas mas status podem não estar atualizados', { 
+          id: 'revalidating' 
+        });
+      }
       
     } catch (error: any) {
       console.error('[FIX-TABS] ❌ Erro ao corrigir:', error);
