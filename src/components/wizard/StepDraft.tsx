@@ -497,8 +497,15 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     
     setAdaptingRegional(true);
     try {
+      // 🔥 BUSCAR VERSÃO MAIS RECENTE (com correções do juiz se houver)
+      const { petition: latestPetition, hasJudgeCorrections } = await getLatestPetitionVersion();
+      
+      console.log('[ADAPT-REGION] Adaptando:', 
+        hasJudgeCorrections ? 'PETIÇÃO CORRIGIDA' : 'PETIÇÃO ORIGINAL'
+      );
+      
       const { data: result, error } = await supabase.functions.invoke('adapt-petition-regional', {
-        body: { petition, estado }
+        body: { petition: latestPetition, estado }
       });
 
       if (error) throw error;
@@ -1068,6 +1075,60 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     
     console.log('[APPLY-CORRECTIONS] Iniciando aplicação de correções...');
     console.log('[APPLY-CORRECTIONS] Petition length:', petition?.length);
+  };
+
+  // ════════════════════════════════════════════════════════════
+  // BUSCAR ÚLTIMA VERSÃO DA PETIÇÃO (COM TODAS AS MODIFICAÇÕES)
+  // ════════════════════════════════════════════════════════════
+  const getLatestPetitionVersion = async (): Promise<{
+    petition: string;
+    hasJudgeCorrections: boolean;
+    hasRegionalAdaptations: boolean;
+    hasAppellateAdaptations: boolean;
+  }> => {
+    try {
+      const { data: latestDraft } = await supabase
+        .from('drafts')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (!latestDraft) {
+        console.log('[LATEST-VERSION] Nenhuma versão salva, usando state local');
+        return {
+          petition: petition,
+          hasJudgeCorrections: false,
+          hasRegionalAdaptations: false,
+          hasAppellateAdaptations: false
+        };
+      }
+      
+      const payload = latestDraft.payload as any;
+      
+      console.log('[LATEST-VERSION] Versão encontrada:', {
+        id: latestDraft.id,
+        corrected_by_judge: payload?.corrected_by_judge,
+        regional_adaptations: payload?.regional_adaptations_applied,
+        appellate_adaptations: payload?.appellate_adaptations_applied
+      });
+      
+      return {
+        petition: latestDraft.markdown_content || petition,
+        hasJudgeCorrections: !!payload?.corrected_by_judge,
+        hasRegionalAdaptations: !!payload?.regional_adaptations_applied,
+        hasAppellateAdaptations: !!payload?.appellate_adaptations_applied
+      };
+    } catch (error) {
+      console.error('[LATEST-VERSION] Erro ao buscar:', error);
+      return {
+        petition: petition,
+        hasJudgeCorrections: false,
+        hasRegionalAdaptations: false,
+        hasAppellateAdaptations: false
+      };
+    }
     console.log('[APPLY-CORRECTIONS] Petition preview:', petition?.substring(0, 100));
     console.log('[APPLY-CORRECTIONS] JudgeAnalysis:', JSON.stringify(judgeAnalysis, null, 2).substring(0, 500));
     console.log('[APPLY-CORRECTIONS] Número de brechas:', judgeAnalysis?.brechas?.length || 0);
@@ -1184,25 +1245,20 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const analyzeWithAppellateModule = async () => {
     setAnalyzingAppellate(true);
     try {
-      // Buscar petição corrigida do banco (se existir)
-      const { data: latestDraft } = await supabase
-        .from('drafts')
-        .select('*')
-        .eq('case_id', data.caseId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // 🔥 BUSCAR VERSÃO MAIS RECENTE (com correções do juiz + adaptações regionais)
+      const { 
+        petition: latestPetition, 
+        hasJudgeCorrections, 
+        hasRegionalAdaptations 
+      } = await getLatestPetitionVersion();
       
-      // Usar petição corrigida se disponível
-      const draftPayload = latestDraft?.payload as any;
-      const petitionToUse = draftPayload?.corrected_by_judge 
-        ? latestDraft.markdown_content 
-        : petition;
+      console.log('[APPELLATE] Analisando versão:', {
+        hasJudgeCorrections,
+        hasRegionalAdaptations,
+        length: latestPetition.length
+      });
       
-      const judgeAnalysisToUse = draftPayload?.judge_analysis || judgeAnalysis;
-      
-      console.log('[TRIBUNAL] Usando petição:', draftPayload?.corrected_by_judge ? 'CORRIGIDA' : 'ORIGINAL');
-      console.log('[TRIBUNAL] Judge analysis disponível:', !!judgeAnalysisToUse);
+      const judgeAnalysisToUse = judgeAnalysis;
       
       // Buscar TODOS os dados contextuais
       const { data: caseInfo } = await supabase
@@ -1240,7 +1296,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         'analyze-petition-appellate',
         {
           body: {
-            petition: petitionToUse,
+            petition: latestPetition,
             caseInfo,
             documents: documents || [],
             analysis: analysis || null,
@@ -1254,8 +1310,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (error) throw error;
 
       setAppellateAnalysis(result);
+      toast.success('✅ Análise recursiva concluída!');
     } catch (error: any) {
-      console.error('Erro no módulo tribunal:', error);
+      console.error('[APPELLATE] Erro:', error);
       toast.error('Erro na análise recursiva: ' + error.message);
     } finally {
       setAnalyzingAppellate(false);
@@ -1307,11 +1364,16 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
     setApplyingRegionalAdaptations(true);
     try {
-      console.log('[REGIONAL] Aplicando adaptações:', regionalAdaptation.adaptacoes_sugeridas.length);
+      // 🔥 BUSCAR VERSÃO MAIS RECENTE (com correções do juiz se houver)
+      const { petition: latestPetition, hasJudgeCorrections } = await getLatestPetitionVersion();
+      
+      console.log('[REGIONAL] Aplicando adaptações sobre:', 
+        hasJudgeCorrections ? 'PETIÇÃO JÁ CORRIGIDA PELO JUIZ' : 'PETIÇÃO ORIGINAL'
+      );
       
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
         body: {
-          petition,
+          petition: latestPetition,
           judgeAnalysis: {
             brechas: [],
             pontos_fortes: [],
@@ -1330,13 +1392,18 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         console.log('[REGIONAL] Petição corrigida recebida:', result.petition_corrigida.length, 'chars');
         setPetition(result.petition_corrigida);
         
-        // ✅ Usar INSERT ao invés de UPSERT para garantir que salva
+        // ✅ Manter flags anteriores + adicionar nova flag
         const { data: savedDraft, error: saveError } = await supabase
           .from('drafts')
           .insert({
             case_id: data.caseId,
             markdown_content: result.petition_corrigida,
-            payload: { regional_adaptations_applied: true, trf: regionalAdaptation.trf }
+            payload: { 
+              corrected_by_judge: hasJudgeCorrections,
+              regional_adaptations_applied: true,
+              trf: regionalAdaptation.trf,
+              timestamp: new Date().toISOString()
+            }
           })
           .select()
           .single();
@@ -1344,7 +1411,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         if (saveError) {
           console.error('[REGIONAL] Erro ao salvar:', saveError);
         } else {
-          console.log('[REGIONAL] ✅ Salvo no banco - ID:', savedDraft.id);
+          console.log('[REGIONAL] ✅ Salvo com flags:', {
+            corrected_by_judge: hasJudgeCorrections,
+            regional_adaptations_applied: true
+          });
         }
         
         toast.success(`✅ ${regionalAdaptation.adaptacoes_sugeridas.length} adaptações regionais aplicadas!`);
@@ -1413,9 +1483,21 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
     setApplyingRegionalAdaptations(true);
     try {
+      // 🔥 BUSCAR VERSÃO MAIS RECENTE (com correções do juiz + adaptações regionais)
+      const { 
+        petition: latestPetition, 
+        hasJudgeCorrections, 
+        hasRegionalAdaptations 
+      } = await getLatestPetitionVersion();
+      
+      console.log('[APPELLATE-APPLY] Aplicando sobre:', {
+        hasJudgeCorrections,
+        hasRegionalAdaptations
+      });
+      
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
         body: {
-          petition,
+          petition: latestPetition,
           judgeAnalysis: {
             brechas: [],
             pontos_fortes: [],
@@ -1430,15 +1512,32 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (result?.petition_corrigida) {
         setPetition(result.petition_corrigida);
         
-        await supabase.from('drafts').upsert({
+        // ✅ Manter todas as flags anteriores + adicionar nova
+        await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
-          payload: { appellate_adaptations_applied: true }
+          payload: { 
+            corrected_by_judge: hasJudgeCorrections,
+            regional_adaptations_applied: hasRegionalAdaptations,
+            appellate_adaptations_applied: true,
+            timestamp: new Date().toISOString()
+          }
         });
         
         toast.success(`✅ ${appellateAnalysis?.adaptacoes_regionais?.length || 0} adaptações do tribunal aplicadas!`);
+        
+        // Flash visual
+        setTimeout(() => {
+          const el = document.querySelector('[data-petition-content]');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.classList.add('ring-4', 'ring-purple-500', 'transition-all');
+            setTimeout(() => el.classList.remove('ring-4', 'ring-purple-500'), 2000);
+          }
+        }, 300);
       }
     } catch (error: any) {
+      console.error('[APPELLATE-APPLY] Erro:', error);
       toast.error('Erro: ' + error.message);
     } finally {
       setApplyingRegionalAdaptations(false);
