@@ -1485,7 +1485,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
-              🤖 Controle de Qualidade - IA Devolutiva
+              🤖 Controle de Qualidade
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1520,9 +1520,41 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                   <Badge variant="secondary">⚠️ {qualityReport.campos_faltantes?.length || 0} campos faltando</Badge>
                 )}
               </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Valor da Causa e Competência</span>
+                {qualityReport.valor_causa_validado ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant="default" className="bg-green-600">
+                      ✅ R$ {qualityReport.valor_causa}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {qualityReport.competencia === 'juizado' 
+                        ? '📋 Juizado Especial Federal (≤ 60 SM)'
+                        : '⚖️ Vara Federal (> 60 SM)'}
+                    </span>
+                  </div>
+                ) : (
+                  <Badge variant="destructive">❌ Valor incorreto</Badge>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Jurisdição</span>
+                {qualityReport.jurisdicao_ok ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant="default" className="bg-green-600">✅ Correta</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {qualityReport.subsecao}/{qualityReport.uf} - {qualityReport.trf}
+                    </span>
+                  </div>
+                ) : (
+                  <Badge variant="destructive">❌ Incorreta</Badge>
+                )}
+              </div>
               
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Jurisdição (validada online)</span>
+                <span className="font-medium">Confiança da Validação Online</span>
                 <Badge variant={
                   qualityReport.jurisdicao_confianca === 'alta' ? 'default' :
                   qualityReport.jurisdicao_confianca === 'media' ? 'secondary' :
@@ -1591,7 +1623,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           onClick={clearCacheAndRegenerate} 
           variant="destructive" 
           disabled={loading || !petition} 
-          className="gap-2"
+          className="gap-2 hidden"
         >
           <X className="h-4 w-4" />
           Limpar Cache & Regerar Tudo

@@ -159,10 +159,41 @@ serve(async (req) => {
     const trf = trfMap[uf] || 'TRF3';
     const trfNumber = trf.replace('TRF', '');
     
-    // Se não conseguiu endereço específico, usar padrão
-    if (!enderecoJusticaFederal) {
-      enderecoJusticaFederal = `JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}`;
+    // ═══ DETERMINAR COMPETÊNCIA: JUIZADO vs VARA ═══
+    const salarioMinimoAtual = 1518.00; // 2025
+    
+    // Para SALÁRIO-MATERNIDADE: valor da causa = períodos atrasados (não todo o benefício)
+    // Diferente de auxílio-doença que usa valor total
+    let valorCausa = parseFloat(analysis?.valor_causa || '0');
+    
+    // Garantir que para salário-maternidade usamos apenas 4 meses
+    if (caseData.case_type === 'salario_maternidade' && valorCausa === 0) {
+      const rmi = parseFloat(analysis?.rmi?.valor || caseData.salario_minimo_ref || '1518.00');
+      valorCausa = rmi * 4; // 4 meses de salário-maternidade atrasado
     }
+    
+    // Juizado Especial Federal: até 60 salários mínimos
+    // Juizado Especial Cível: até 40 salários mínimos  
+    // Vara Federal: acima desses limites
+    const limiteJuizadoFederal = salarioMinimoAtual * 60; // R$ 91.080,00
+    
+    const isJuizado = valorCausa > 0 && valorCausa <= limiteJuizadoFederal;
+    
+    console.log('[COMPETÊNCIA]', {
+      valor_causa: valorCausa,
+      limite_juizado_federal: limiteJuizadoFederal,
+      competencia: isJuizado ? 'JUIZADO ESPECIAL FEDERAL' : 'VARA FEDERAL',
+      subsecao,
+      uf,
+      trf
+    });
+    
+    console.log('[VALOR DA CAUSA - SALÁRIO-MATERNIDADE]', {
+      tipo_caso: caseData.case_type,
+      rmi: analysis?.rmi?.valor,
+      valor_causa: valorCausa,
+      observacao: 'Apenas 4 meses atrasados, não todo o período'
+    });
 
     // BANCO DE ENDEREÇOS DO INSS POR CIDADE
     const inssAddresses: Record<string, string> = {
@@ -251,12 +282,22 @@ Você DEVE gerar uma petição inicial seguindo EXATAMENTE este formato. PREENCH
 🚨🚨🚨 ATENÇÃO CRÍTICA - VALIDADO NA INTERNET:
 - A autora mora em: ${city}/${uf}
 - Subseção Judiciária CORRETA: ${subsecao}/${uf}
+- Tribunal Regional Federal: ${trf} (${trfNumber}ª REGIÃO)
+- Valor da Causa: R$ ${valorCausa.toFixed(2)}
+- Competência: ${isJuizado ? 'JUIZADO ESPECIAL FEDERAL' : 'VARA FEDERAL'}
 ${jurisdicaoValidada.observacao ? `- Observação: ${jurisdicaoValidada.observacao}` : ''}
-- Fonte de validação: ${jurisdicaoValidada.fonte}
-- Confiança na validação: ${jurisdicaoValidada.confianca}
+- Fonte: ${jurisdicaoValidada.fonte}
+- Confiança: ${jurisdicaoValidada.confianca}
 
-EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA ${trfNumber}ª REGIÃO
-${enderecoJusticaFederal}
+🚨 ESCREVA EXATAMENTE ASSIM (SEM ENDEREÇO FÍSICO):
+
+${isJuizado 
+  ? `EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DO JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}` 
+  : `EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA SUBSEÇÃO JUDICIÁRIA DE ${subsecao.toUpperCase()}/${uf}`
+}
+
+🚨 NÃO INCLUA: rua, avenida, número, CEP ou qualquer endereço físico!
+🚨 Use APENAS o cabeçalho formal acima!
 
 ═══════════════════════════════════════════════════════════════
 
@@ -325,7 +366,10 @@ Liste os ${documents?.length || 0} documentos anexados.
 
 **IX. DO VALOR DA CAUSA**
 
-R$ ${analysis?.valor_causa || (parseFloat(analysis?.rmi?.valor || caseData.salario_minimo_ref) * 4).toFixed(2)}
+R$ ${valorCausa.toFixed(2)}
+
+🚨 ATENÇÃO: Este é o valor dos SALÁRIOS-MATERNIDADE ATRASADOS (4 meses), 
+não o valor total do benefício ao longo do tempo.
 
 ═══════════════════════════════════════════════════════════════
 
@@ -590,6 +634,16 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
           campos_faltantes: camposFaltantes,
           jurisdicao_confianca: jurisdicaoValidada.confianca,
           fonte: jurisdicaoValidada.fonte,
+          
+          // NOVAS VALIDAÇÕES
+          valor_causa: valorCausa.toFixed(2),
+          valor_causa_validado: valorCausa > 0,
+          competencia: isJuizado ? 'juizado' : 'vara',
+          limite_juizado: limiteJuizadoFederal,
+          subsecao: subsecao,
+          uf: uf,
+          trf: trf,
+          jurisdicao_ok: petitionText.includes(subsecao.toUpperCase()),
         });
 
       console.log('📊 Relatório de qualidade salvo:', {
