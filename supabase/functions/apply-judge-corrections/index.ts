@@ -65,7 +65,7 @@ Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'google/gemini-2.5-flash-lite', // 🆕 Modelo mais rápido (3x faster)
           messages: [{ role: 'user', content: prompt }],
         }),
         signal: controller.signal,

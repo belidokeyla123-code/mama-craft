@@ -808,92 +808,122 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       // ✅ Coletar todas as brechas selecionadas
       const selectedBrechasData = selectedBrechas.map(idx => judgeAnalysis.brechas[idx]);
       
-      // 🆕 LOGS DETALHADOS
-      console.log('[CORRECTIONS] 🔧 Aplicando correções');
+      // 🆕 ESTRATÉGIA DE LOTES: Processar em pares para evitar timeout
+      const BATCH_SIZE = 2; // Processar 2 brechas por vez
+      let currentPetition = petition;
+      
+      console.log('[CORRECTIONS] 🔧 Aplicando correções em lotes');
       console.log('[CORRECTIONS] Total de brechas:', totalSelected);
-      console.log('[CORRECTIONS] Tipos:', selectedBrechasData.map(b => b.tipo));
-      console.log('[CORRECTIONS] Petition length:', petition.length);
+      console.log('[CORRECTIONS] Batch size:', BATCH_SIZE);
       
       toast.info(`⚙️ Aplicando ${totalSelected} correção(ões)...`, { duration: 3000 });
       
-      // ✅ Invocar edge function UMA VEZ com TODAS as brechas selecionadas
-      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
-        body: {
-          petition,
-          judgeAnalysis: {
-            brechas: selectedBrechasData,  // Todas de uma vez!
-            pontos_fortes: [],
-            pontos_fracos: [],
-            recomendacoes: []
-          }
+      // Processar em lotes
+      for (let i = 0; i < selectedBrechasData.length; i += BATCH_SIZE) {
+        const batch = selectedBrechasData.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(selectedBrechasData.length / BATCH_SIZE);
+        
+        console.log(`[CORRECTIONS] Processando lote ${batchNum}/${totalBatches}:`, batch.map(b => b.tipo));
+        
+        if (totalSelected > 2) {
+          toast.info(`⚙️ Lote ${batchNum}/${totalBatches}: ${batch.map(b => b.tipo).join(', ')}`, { 
+            duration: 2000 
+          });
         }
+        
+        // ✅ Invocar edge function com este lote
+        const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+          body: {
+            petition: currentPetition, // Usar versão mais recente
+            judgeAnalysis: {
+              brechas: batch,
+              pontos_fortes: [],
+              pontos_fracos: [],
+              recomendacoes: []
+            }
+          }
+        });
+        
+        console.log(`[CORRECTIONS] Lote ${batchNum} concluído:`, result ? 'OK' : 'NULL');
+        
+        if (error) throw error;
+        
+        if (result?.petition_corrigida) {
+          currentPetition = result.petition_corrigida; // Atualizar para próximo lote
+        }
+      }
+      
+      // Atualizar petition final
+      setPetition(currentPetition);
+      
+      // Calcular redução de risco
+      const reducaoTotal = selectedBrechasData.reduce((acc, brecha) => {
+        const reducao = brecha.gravidade === 'alta' ? 15 : 
+                       brecha.gravidade === 'media' ? 10 : 5;
+        return acc + reducao;
+      }, 0);
+      
+      const riscoAtual = Math.max(0, judgeAnalysis.risco_improcedencia - reducaoTotal);
+      
+      // Remover brechas aplicadas
+      const brechasRestantes = judgeAnalysis.brechas.filter(
+        (_, idx) => !selectedBrechas.includes(idx)
+      );
+      
+      // Atualizar estado
+      setJudgeAnalysis({
+        ...judgeAnalysis,
+        brechas: brechasRestantes,
+        risco_improcedencia: riscoAtual
       });
       
-      console.log('[CORRECTIONS] ✅ Edge function respondeu');
-      console.log('[CORRECTIONS] Result:', result ? 'OK' : 'NULL');
-      console.log('[CORRECTIONS] Error:', error || 'NONE');
-
-      if (error) throw error;
-
-      if (result?.petition_corrigida) {
-        setPetition(result.petition_corrigida);
-        
-        // Calcular redução de risco
-        const reducaoTotal = selectedBrechasData.reduce((acc, brecha) => {
-          const reducao = brecha.gravidade === 'alta' ? 15 : 
-                         brecha.gravidade === 'media' ? 10 : 5;
-          return acc + reducao;
-        }, 0);
-        
-        const riscoAtual = Math.max(0, judgeAnalysis.risco_improcedencia - reducaoTotal);
-        
-        // Remover brechas aplicadas
-        const brechasRestantes = judgeAnalysis.brechas.filter(
-          (_, idx) => !selectedBrechas.includes(idx)
-        );
-        
-        // Atualizar estado
-        setJudgeAnalysis({
-          ...judgeAnalysis,
-          brechas: brechasRestantes,
-          risco_improcedencia: riscoAtual
-        });
-        
-        // Salvar versão no banco
-        await supabase.from('drafts').insert({
-          case_id: data.caseId,
-          markdown_content: result.petition_corrigida,
-          payload: { selected_corrections: selectedBrechasData.map(b => b.descricao) }
-        });
-        
-        // Limpar seleção
-        setSelectedBrechas([]);
-        
-        toast.success(
-          `✅ ${totalSelected} correção(ões) aplicadas!\n🔍 Re-analisando...`,
-          { duration: 5000 }
-        );
-        
-        // Flash verde
-        setTimeout(() => {
-          const el = document.querySelector('[data-petition-content]');
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            el.classList.add('ring-4', 'ring-green-500', 'transition-all');
-            setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
-          }
-        }, 300);
-        
-        // ✅ SEMPRE RE-ANALISAR (não só quando aplica todas)
-        setTimeout(() => {
-          toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
-          setTimeout(() => analyzeWithJudgeModule(true), 1500);
-        }, 2000);
-      }
+      // Salvar versão no banco
+      await supabase.from('drafts').insert({
+        case_id: data.caseId,
+        markdown_content: currentPetition,
+        payload: { selected_corrections: selectedBrechasData.map(b => b.descricao) }
+      });
+      
+      // Limpar seleção
+      setSelectedBrechas([]);
+      
+      toast.success(
+        `✅ ${totalSelected} correção(ões) aplicadas!\n🔍 Re-analisando...`,
+        { duration: 5000 }
+      );
+      
+      // Flash verde
+      setTimeout(() => {
+        const el = document.querySelector('[data-petition-content]');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el.classList.add('ring-4', 'ring-green-500', 'transition-all');
+          setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
+        }
+      }, 300);
+      
+      // ✅ SEMPRE RE-ANALISAR (não só quando aplica todas)
+      setTimeout(() => {
+        toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
+        setTimeout(() => analyzeWithJudgeModule(true), 1500);
+      }, 2000);
       
     } catch (error: any) {
       console.error('Erro ao aplicar correções selecionadas:', error);
-      toast.error('Erro ao aplicar correções: ' + error.message);
+      
+      // 🆕 Mensagens de erro específicas
+      if (error.message?.includes('TIMEOUT') || error.message?.includes('408')) {
+        toast.error('⏱️ Tempo limite excedido. Tente selecionar menos brechas por vez.', {
+          duration: 6000
+        });
+      } else if (error.message?.includes('429')) {
+        toast.error('🚫 Limite de requisições atingido. Aguarde alguns segundos.', {
+          duration: 6000
+        });
+      } else {
+        toast.error('Erro ao aplicar correções: ' + error.message);
+      }
     } finally {
       setApplyingJudgeCorrections(false);
     }
