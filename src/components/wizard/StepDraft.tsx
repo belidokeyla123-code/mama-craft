@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
@@ -996,6 +996,46 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
+  // Função para excluir brechas selecionadas
+  const deleteSelectedBrechas = () => {
+    if (!judgeAnalysis || selectedBrechas.length === 0) {
+      toast.error('Nenhuma brecha selecionada para excluir.');
+      return;
+    }
+    
+    console.log('[DELETE-BRECHAS] Excluindo brechas:', selectedBrechas);
+    
+    // Remover brechas selecionadas do array
+    const brechasRestantes = judgeAnalysis.brechas.filter(
+      (_, idx) => !selectedBrechas.includes(idx)
+    );
+    
+    // Calcular redução do risco
+    const brechasExcluidas = judgeAnalysis.brechas.filter(
+      (_, idx) => selectedBrechas.includes(idx)
+    );
+    
+    const reducaoTotal = brechasExcluidas.reduce((acc, brecha) => {
+      const reducao = brecha.gravidade === 'alta' ? 15 : 
+                     brecha.gravidade === 'media' ? 10 : 5;
+      return acc + reducao;
+    }, 0);
+    
+    const novoRisco = Math.max(0, judgeAnalysis.risco_improcedencia - reducaoTotal);
+    
+    // Atualizar estado
+    setJudgeAnalysis({
+      ...judgeAnalysis,
+      brechas: brechasRestantes,
+      risco_improcedencia: novoRisco
+    });
+    
+    toast.success(`✅ ${selectedBrechas.length} brecha(s) excluída(s). Risco reduzido para ${novoRisco}%`);
+    
+    // Limpar seleção
+    setSelectedBrechas([]);
+  };
+
   const applyJudgeCorrections = async () => {
     if (!petition || !judgeAnalysis) {
       console.log('[APPLY-CORRECTIONS] Faltam dados:', { 
@@ -1710,6 +1750,20 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                 
                 {/* Botão Aplicar Correções */}
                 <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button 
+                    onClick={() => {
+                      if (window.confirm(`Tem certeza que deseja excluir ${selectedBrechas.length} brecha(s) selecionada(s)? Esta ação não pode ser desfeita.`)) {
+                        deleteSelectedBrechas();
+                      }
+                    }}
+                    disabled={selectedBrechas.length === 0}
+                    variant="destructive"
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir {selectedBrechas.length > 0 ? `${selectedBrechas.length} ` : ''}Selecionada(s)
+                  </Button>
+                  
                   <Button 
                     onClick={applySelectedCorrections}
                     disabled={selectedBrechas.length === 0 || applyingJudgeCorrections}
