@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, FileText, MessageSquare, FileEdit, Gavel } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FileText, MessageSquare, FileEdit, Gavel, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
 import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
 import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
@@ -15,6 +16,7 @@ import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
 import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
 import { toast } from "sonner";
+import { useCasePipeline } from "@/hooks/useCasePipeline";
 
 export interface RuralPeriod {
   startDate: string;
@@ -188,7 +190,17 @@ const NewCase = () => {
     documents: [],
   });
 
+  // ✅ FASE 2: Hook de pipeline centralizado
+  const { status, isStale, checkPipelineStatus } = useCasePipeline(caseData.caseId || '');
+
   const progress = ((currentStep) / (STEPS.length - 1)) * 100;
+
+  // Atualizar status quando mudar de aba ou caseId
+  useEffect(() => {
+    if (caseData.caseId) {
+      checkPipelineStatus();
+    }
+  }, [currentStep, caseData.caseId]);
 
   const updateCaseData = (data: Partial<CaseData>) => {
     setCaseData(prev => ({ ...prev, ...data }));
@@ -331,39 +343,66 @@ const NewCase = () => {
           <div className="space-y-4">
             {/* Grid de 8 colunas - números alinhados com labels */}
             <div className="grid grid-cols-8 gap-1 pb-4">
-              {STEPS.map((step) => (
-                <div key={step.id} className="flex flex-col items-center gap-1">
-                  {/* Círculo numerado */}
-                  <button
-                    onClick={() => setCurrentStep(step.id)}
-                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
-                      currentStep > step.id
-                        ? "bg-success border-success text-success-foreground cursor-pointer hover:opacity-80"
-                        : currentStep === step.id
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "bg-background border-border text-muted-foreground cursor-pointer hover:border-primary"
-                    }`}
-                  >
-                    {currentStep > step.id ? (
-                      <Check className="h-5 w-5" />
-                    ) : (
-                      <span className="text-base font-bold">{step.id + 1}</span>
-                    )}
-                  </button>
-                  
-                  {/* Label alinhado embaixo */}
-                  <button
-                    onClick={() => setCurrentStep(step.id)}
-                    className={`text-xs hover:text-primary transition-colors text-center leading-none px-0.5 ${
-                      currentStep >= step.id
-                        ? "text-foreground font-medium"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {step.name}
-                  </button>
-                </div>
-              ))}
+              {STEPS.map((step, idx) => {
+                // ✅ FASE 5: Mapear status de cada step
+                const stepKey = ['chat', 'info', 'documentos', 'validacao', 'analise', 'jurisprudencia', 'teses', 'peticao'][idx];
+                const stepStatus = status[stepKey as keyof typeof status];
+                const stepIsStale = isStale[stepKey as keyof typeof isStale];
+                
+                return (
+                  <div key={step.id} className="flex flex-col items-center gap-1">
+                    {/* Círculo numerado */}
+                    <button
+                      onClick={() => setCurrentStep(step.id)}
+                      className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all relative ${
+                        currentStep > step.id
+                          ? "bg-success border-success text-success-foreground cursor-pointer hover:opacity-80"
+                          : currentStep === step.id
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "bg-background border-border text-muted-foreground cursor-pointer hover:border-primary"
+                      }`}
+                    >
+                      {stepStatus === 'running' ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : stepStatus === 'error' ? (
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                      ) : currentStep > step.id ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <span className="text-base font-bold">{step.id + 1}</span>
+                      )}
+                      {/* Badge de desatualizado */}
+                      {stepIsStale && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full border-2 border-background" />
+                      )}
+                    </button>
+                    
+                    {/* Label alinhado embaixo + Status badges */}
+                    <div className="flex flex-col items-center gap-1">
+                      <button
+                        onClick={() => setCurrentStep(step.id)}
+                        className={`text-xs hover:text-primary transition-colors text-center leading-none px-0.5 ${
+                          currentStep >= step.id
+                            ? "text-foreground font-medium"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.name}
+                      </button>
+                      
+                      {/* ✅ FASE 5: Badges de status */}
+                      <div className="flex gap-1">
+                        {stepStatus === 'complete' && !stepIsStale && (
+                          <Badge variant="default" className="text-[10px] px-1 py-0 h-4 bg-green-600">✓</Badge>
+                        )}
+                        {stepIsStale && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-orange-600 border-orange-600">!</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <Progress value={progress} className="h-2" />

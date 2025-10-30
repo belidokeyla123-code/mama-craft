@@ -19,6 +19,56 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ✅ FASE 1: VALIDAR PRÉ-REQUISITOS ANTES DE GERAR
+    console.log('[PETITION] 🔍 Validando pré-requisitos...');
+    
+    // 1. Verificar documentos
+    const { data: documentCheck } = await supabase
+      .from('documents')
+      .select('id')
+      .eq('case_id', caseId);
+    
+    if (!documentCheck || documentCheck.length === 0) {
+      throw new Error('❌ Nenhum documento anexado. Complete a aba "Documentos" primeiro.');
+    }
+    
+    // 2. Verificar validação
+    const { data: validation } = await supabase
+      .from('document_validation')
+      .select('is_sufficient')
+      .eq('case_id', caseId)
+      .order('validated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!validation || !validation.is_sufficient) {
+      throw new Error('❌ Documentação insuficiente. Complete a aba "Validação" primeiro.');
+    }
+
+    // 3. Verificar análise
+    const { data: analysisCheck } = await supabase
+      .from('case_analysis')
+      .select('id')
+      .eq('case_id', caseId)
+      .maybeSingle();
+
+    if (!analysisCheck) {
+      throw new Error('❌ Análise jurídica não encontrada. Complete a aba "Análise" primeiro.');
+    }
+
+    // 4. Verificar jurisprudência
+    const { data: jurisCheck } = await supabase
+      .from('jurisprudence_results')
+      .select('selected_ids')
+      .eq('case_id', caseId)
+      .maybeSingle();
+
+    if (!jurisCheck || (jurisCheck.selected_ids as any[]).length === 0) {
+      console.warn('[PETITION] ⚠️ Nenhuma jurisprudência selecionada');
+    }
+    
+    console.log('[PETITION] ✅ Todos os pré-requisitos validados');
+
     // Buscar TODOS os dados incluindo extrações
     const { data: caseData } = await supabase.from('cases').select('*').eq('id', caseId).single();
     const { data: analysis } = await supabase.from('case_analysis').select('*').eq('case_id', caseId).single();

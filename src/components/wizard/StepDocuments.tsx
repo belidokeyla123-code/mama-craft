@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CaseData } from "@/pages/NewCase";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface StepDocumentsProps {
   data: CaseData;
@@ -105,8 +106,41 @@ export const StepDocuments = ({ data, updateData }: StepDocumentsProps) => {
     setDocumentTypes(newTypes);
   };
 
+  // ✅ FASE 1: Salvar tipos de documentos no banco
+  const saveDocumentTypesToDB = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      // Buscar IDs dos documentos no banco
+      const { data: dbDocs } = await supabase
+        .from('documents')
+        .select('id, file_name')
+        .eq('case_id', data.caseId);
+      
+      if (!dbDocs) return;
+      
+      // Atualizar tipo de cada documento
+      for (const doc of dbDocs) {
+        const selectedType = documentTypes[doc.file_name];
+        if (selectedType) {
+          await supabase
+            .from('documents')
+            .update({ document_type: selectedType as any })
+            .eq('id', doc.id);
+        }
+      }
+      
+      console.log('[STEP-DOCUMENTS] ✅ Tipos salvos no banco');
+    } catch (error) {
+      console.error('[STEP-DOCUMENTS] Erro ao salvar tipos:', error);
+    }
+  };
+
   const updateDocumentType = (fileName: string, type: string) => {
     setDocumentTypes(prev => ({ ...prev, [fileName]: type }));
+    
+    // ✅ SALVAR NO BANCO IMEDIATAMENTE
+    saveDocumentTypesToDB();
   };
 
   const getMissingRequiredDocs = () => {

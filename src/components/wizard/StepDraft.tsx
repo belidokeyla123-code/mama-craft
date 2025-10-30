@@ -96,6 +96,16 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [petitionBefore, setPetitionBefore] = useState('');
   const [petitionAfter, setPetitionAfter] = useState('');
 
+  // ✅ FASE 5: Estados para painel de pré-requisitos
+  const [prerequisitesCheck, setPrerequisitesCheck] = useState({
+    hasDocs: false,
+    hasValidation: false,
+    hasAnalysis: false,
+    hasJurisprudence: false,
+    analysisStale: false,
+    jurisprudenceStale: false
+  });
+
   // 🆕 Hook de Auto-Correção
   const autoCorrection = useAutoCorrection(data.caseId || '');
 
@@ -398,6 +408,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     
     // 🔥 GARANTIR SALÁRIO CORRETO AO CARREGAR
     await ensureCorrectSalarioMinimo();
+    
+    // ✅ FASE 5: Verificar pré-requisitos ao carregar
+    await checkPrerequisites();
   };
   
   const loadQualityReport = async () => {
@@ -907,8 +920,162 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     updateStatus();
   }, [data.caseId]);
 
+  // ✅ FASE 5: Função para verificar pré-requisitos
+  const checkPrerequisites = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('case_id', data.caseId);
+      
+      const { data: validation } = await supabase
+        .from('document_validation')
+        .select('is_sufficient')
+        .eq('case_id', data.caseId)
+        .order('validated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      const { data: analysis } = await supabase
+        .from('case_analysis')
+        .select('id, is_stale')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+      
+      const { data: juris } = await supabase
+        .from('jurisprudence_results')
+        .select('selected_ids, is_stale')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+      
+      setPrerequisitesCheck({
+        hasDocs: (docs?.length || 0) > 0,
+        hasValidation: validation?.is_sufficient || false,
+        hasAnalysis: !!analysis,
+        hasJurisprudence: (juris?.selected_ids as any[])?.length > 0 || false,
+        analysisStale: analysis?.is_stale || false,
+        jurisprudenceStale: juris?.is_stale || false
+      });
+    } catch (error) {
+      console.error('[PREREQUISITES] Erro ao verificar:', error);
+    }
+  };
+
+  // ✅ FASE 4: VALIDAÇÃO PRÉ-GERAÇÃO DE PETIÇÃO
+  const validateBeforeGeneration = async (): Promise<{ valid: boolean; errors: string[] }> => {
+    const errors: string[] = [];
+    
+    if (!data.caseId) {
+      errors.push('❌ ID do caso não encontrado');
+      return { valid: false, errors };
+    }
+    
+    try {
+      // 1. Verificar documentos
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('case_id', data.caseId);
+      
+      if (!docs || docs.length === 0) {
+        errors.push('❌ Nenhum documento anexado');
+      }
+      
+      // 2. Verificar validação
+      const { data: validation } = await supabase
+        .from('document_validation')
+        .select('is_sufficient')
+        .eq('case_id', data.caseId)
+        .order('validated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (!validation || !validation.is_sufficient) {
+        errors.push('❌ Validação de documentos não aprovada');
+      }
+      
+      // 3. Verificar análise
+      const { data: analysis } = await supabase
+        .from('case_analysis')
+        .select('id, is_stale')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+      
+      if (!analysis) {
+        errors.push('❌ Análise jurídica não realizada');
+      } else if (analysis.is_stale) {
+        errors.push('⚠️ Análise desatualizada. Clique em "Reanalisar"');
+      }
+      
+      // 4. Verificar jurisprudência
+      const { data: juris } = await supabase
+        .from('jurisprudence_results')
+        .select('selected_ids, is_stale')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+      
+      if (!juris) {
+        errors.push('⚠️ Busca de jurisprudência não realizada (recomendado)');
+      } else if ((juris.selected_ids as any[])?.length === 0) {
+        errors.push('⚠️ Nenhuma jurisprudência selecionada (recomendado)');
+      } else if (juris.is_stale) {
+        errors.push('⚠️ Jurisprudências desatualizadas. Busque novamente');
+      }
+      
+      // 5. Verificar teses
+      const { data: teses } = await supabase
+        .from('teses_juridicas')
+        .select('id, is_stale')
+        .eq('case_id', data.caseId)
+        .maybeSingle();
+      
+      if (teses?.is_stale) {
+        errors.push('⚠️ Teses desatualizadas. Gere novamente');
+      }
+      
+    } catch (error) {
+      console.error('[VALIDATION] Erro:', error);
+      errors.push('❌ Erro ao validar pré-requisitos');
+    }
+    
+    return {
+      valid: errors.filter(e => e.startsWith('❌')).length === 0,
+      errors
+    };
+  };
+
   const generatePetition = async () => {
     if (!data.caseId) return;
+    
+    // ✅ FASE 4: VALIDAR ANTES DE GERAR
+    const { valid, errors } = await validateBeforeGeneration();
+    
+    if (!valid) {
+      toast.error('Não é possível gerar a petição', {
+        description: (
+          <ul className="list-disc ml-4 mt-2 space-y-1">
+            {errors.map((err, i) => <li key={i} className="text-xs">{err}</li>)}
+          </ul>
+        ),
+        duration: 10000
+      });
+      return;
+    }
+    
+    // Avisos (não bloqueiam geração)
+    const warnings = errors.filter(e => e.startsWith('⚠️'));
+    if (warnings.length > 0) {
+      toast.warning('Avisos sobre a geração', {
+        description: (
+          <ul className="list-disc ml-4 mt-2 space-y-1">
+            {warnings.map((warn, i) => <li key={i} className="text-xs">{warn}</li>)}
+          </ul>
+        ),
+        duration: 8000
+      });
+    }
     
     setLoading(true);
     try {
@@ -2576,6 +2743,88 @@ ${tabelaDocumentos}
 
   return (
     <div className="space-y-6">
+      {/* ✅ FASE 5: PAINEL DE PRÉ-REQUISITOS */}
+      {!petition && (
+        <Card className="border-2 border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Shield className="h-5 w-5 text-primary" />
+              Pré-requisitos para Geração
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex items-center gap-2">
+              {prerequisitesCheck.hasDocs ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              )}
+              <span className={prerequisitesCheck.hasDocs ? 'text-green-600' : 'text-red-600'}>
+                Documentos anexados
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {prerequisitesCheck.hasValidation ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              )}
+              <span className={prerequisitesCheck.hasValidation ? 'text-green-600' : 'text-red-600'}>
+                Validação aprovada
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {prerequisitesCheck.hasAnalysis ? (
+                prerequisitesCheck.analysisStale ? (
+                  <AlertTriangle className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                )
+              ) : (
+                <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              )}
+              <span className={
+                prerequisitesCheck.hasAnalysis ? 
+                  (prerequisitesCheck.analysisStale ? 'text-orange-600' : 'text-green-600') : 
+                  'text-red-600'
+              }>
+                Análise jurídica {prerequisitesCheck.analysisStale && '(desatualizada)'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {prerequisitesCheck.hasJurisprudence ? (
+                prerequisitesCheck.jurisprudenceStale ? (
+                  <AlertTriangle className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                )
+              ) : (
+                <Lightbulb className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              )}
+              <span className={
+                prerequisitesCheck.hasJurisprudence ? 
+                  (prerequisitesCheck.jurisprudenceStale ? 'text-orange-600' : 'text-green-600') : 
+                  'text-muted-foreground'
+              }>
+                Jurisprudência selecionada {prerequisitesCheck.jurisprudenceStale && '(desatualizada)'} (recomendado)
+              </span>
+            </div>
+            
+            {!prerequisitesCheck.hasDocs || !prerequisitesCheck.hasValidation || !prerequisitesCheck.hasAnalysis ? (
+              <Alert className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  Complete as abas anteriores antes de gerar a petição
+                </AlertDescription>
+              </Alert>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold flex items-center gap-3">
           <FileText className="h-7 w-7 text-primary" />
