@@ -15,10 +15,66 @@ serve(async (req) => {
 
   try {
     console.log('[EDGE] Parsing request body...');
-    const { petition, judgeAnalysis } = await req.json();
+    const { petition, judgeAnalysis, caseId } = await req.json();
     console.log('[EDGE] Petition length:', petition?.length);
     console.log('[EDGE] JudgeAnalysis exists:', !!judgeAnalysis);
     console.log('[EDGE] JudgeAnalysis brechas:', judgeAnalysis?.brechas?.length || 0);
+    console.log('[EDGE] Case ID:', caseId);
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🔥 BUSCAR DADOS DO CASO PARA CONTEXTO TEMPORAL
+    // ═══════════════════════════════════════════════════════════════
+    let contextoTemporal = '';
+    
+    if (caseId) {
+      try {
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.76.1');
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        const { data: caseData } = await supabase
+          .from('cases')
+          .select('child_birth_date, event_date, event_type, salario_minimo_history')
+          .eq('id', caseId)
+          .single();
+        
+        if (caseData) {
+          const fatoGeradorDate = caseData.child_birth_date || caseData.event_date;
+          const fatoGeradorYear = new Date(fatoGeradorDate).getFullYear();
+          const salarioMinimoCorreto = caseData.salario_minimo_history?.find(
+            (h: any) => h.year === fatoGeradorYear
+          )?.value || 1212.00;
+          
+          contextoTemporal = `
+
+═══════════════════════════════════════════════════════════════
+# ⏰ CONTEXTO TEMPORAL CRÍTICO - LEIA COM ATENÇÃO
+
+**Data do Fato Gerador:** ${new Date(fatoGeradorDate).toLocaleDateString('pt-BR')}
+**Ano do Fato Gerador:** ${fatoGeradorYear}
+**Salário Mínimo Vigente na Época:** R$ ${salarioMinimoCorreto.toFixed(2)}
+**Valor da Causa CORRETO:** R$ ${(salarioMinimoCorreto * 4).toFixed(2)} (${salarioMinimoCorreto.toFixed(2)} × 4 meses)
+
+⚠️ **REGRA ABSOLUTA:** Todos os cálculos de valor da causa e RMI devem usar o salário mínimo vigente NA DATA DO FATO GERADOR (${fatoGeradorYear}), NÃO o salário atual.
+
+❌ **ERRADO:** Usar salário mínimo de 2025 (R$ 1.518,00)
+✅ **CORRETO:** Usar salário mínimo de ${fatoGeradorYear} (R$ ${salarioMinimoCorreto.toFixed(2)})
+
+Se a petição mencionar valores baseados em salário mínimo incorreto, VOCÊ DEVE corrigir TODOS os valores na petição.
+═══════════════════════════════════════════════════════════════
+`;
+          
+          console.log('[EDGE] Contexto temporal adicionado:', {
+            ano: fatoGeradorYear,
+            salario_minimo: salarioMinimoCorreto,
+            valor_causa: salarioMinimoCorreto * 4
+          });
+        }
+      } catch (supabaseError) {
+        console.error('[EDGE] Erro ao buscar dados do caso:', supabaseError);
+      }
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // 🔥 CONSTRUIR LISTA COMPLETA DE TODAS AS CORREÇÕES
@@ -89,6 +145,7 @@ ${texto}
     }
 
     const prompt = `Você é um advogado previdenciarista SÊNIOR. Sua tarefa é REESCREVER a petição aplicando TODAS as ${totalCorrecoes} correções abaixo.
+${contextoTemporal}
 
 # PETIÇÃO ORIGINAL
 ${petition}

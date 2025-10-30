@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Calculator } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
@@ -317,6 +317,96 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       
     } catch (error) {
       console.error('[REVALIDATE-QR] Erro na revalidação:', error);
+    }
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🔥 FUNÇÃO PARA RECALCULAR VALOR DA CAUSA COM ANO CORRETO
+  // ═══════════════════════════════════════════════════════════════
+  const recalculateValorCausa = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      // Buscar dados do caso
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select('child_birth_date, event_date, salario_minimo_history')
+        .eq('id', data.caseId)
+        .single();
+      
+      if (!caseData) return;
+      
+      // Determinar ano do fato gerador
+      const fatoGeradorDate = caseData.child_birth_date || caseData.event_date;
+      const fatoGeradorYear = new Date(fatoGeradorDate).getFullYear();
+      
+      // Buscar salário mínimo correto
+      const salarioMinimoHistory = (caseData.salario_minimo_history as any[]) || [];
+      const salarioMinimoCorreto = salarioMinimoHistory.find(
+        (h: any) => h.year === fatoGeradorYear
+      )?.value;
+      
+      if (!salarioMinimoCorreto) {
+        toast.error('Salário mínimo do ano não encontrado');
+        return;
+      }
+      
+      // Calcular valor da causa correto
+      const valorCausaCorreto = salarioMinimoCorreto * 4;
+      
+      console.log('[RECALC] Recalculando valor da causa:', {
+        ano: fatoGeradorYear,
+        salario_minimo: salarioMinimoCorreto,
+        valor_causa: valorCausaCorreto
+      });
+      
+      // Atualizar no banco
+      const { error } = await supabase
+        .from('cases')
+        .update({
+          salario_minimo_ref: salarioMinimoCorreto,
+          valor_causa: valorCausaCorreto
+        })
+        .eq('id', data.caseId);
+      
+      if (error) throw error;
+      
+      // Atualizar petição substituindo valores incorretos
+      if (petition) {
+        const salarioIncorreto = 1518.00; // Salário de 2025
+        const valorCausaIncorreto = salarioIncorreto * 4;
+        
+        let petitionCorrigida = petition
+          .replace(new RegExp(`R\\$\\s*${salarioIncorreto.toFixed(2).replace('.', ',')}`, 'g'), 
+                   `R$ ${salarioMinimoCorreto.toFixed(2).replace('.', ',')}`)
+          .replace(new RegExp(`R\\$\\s*${valorCausaIncorreto.toFixed(2).replace('.', ',')}`, 'g'), 
+                   `R$ ${valorCausaCorreto.toFixed(2).replace('.', ',')}`);
+        
+        setPetition(petitionCorrigida);
+        
+        // Salvar no banco
+        await supabase.from('drafts').insert([{
+          case_id: data.caseId,
+          markdown_content: petitionCorrigida,
+          payload: { 
+            recalculated_valor_causa: true,
+            old_salario: salarioIncorreto,
+            new_salario: salarioMinimoCorreto,
+            timestamp: new Date().toISOString() 
+          } as any
+        }]);
+      }
+      
+      toast.success(`✅ Valor da causa recalculado! Ano base: ${fatoGeradorYear}, Salário: R$ ${salarioMinimoCorreto.toFixed(2)}`, {
+        duration: 5000
+      });
+      
+      // Revalidar Quality Report
+      await revalidateQualityReport();
+      
+    } catch (error: any) {
+      console.error('[RECALC] Erro:', error);
+      toast.error('Erro ao recalcular: ' + error.message);
     }
   };
 
@@ -1316,7 +1406,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             pontos_fortes: judgeAnalysis.pontos_fortes || [],
             pontos_fracos: judgeAnalysis.pontos_fracos || [],
             recomendacoes: judgeAnalysis.recomendacoes || []
-          }
+          },
+          caseId: data.caseId
         }
       });
       
@@ -1454,7 +1545,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
         body: {
           petition: petition,
-          judgeAnalysis: analysisConsolidada
+          judgeAnalysis: analysisConsolidada,
+          caseId: data.caseId
         }
       });
       
@@ -1485,13 +1577,22 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         } as any
       }]);
       
-      // Reanalisar com Módulo Juiz para atualizar validacao_abas
-      toast.info('🔄 Revalidando com Módulo Juiz...', { duration: 2000 });
-      await analyzeWithJudgeModule();
-      
+      // Reanalisar de forma assíncrona (não bloquear)
       toast.success(`✅ ${abasComProblemas.length} contradição(ões) corrigida(s)!`, {
+        description: 'Revalidação automática em andamento...',
         duration: 5000
       });
+
+      // Reanalisar sem await (assíncrono)
+      setTimeout(async () => {
+        try {
+          await analyzeWithJudgeModule();
+          toast.success('✅ Revalidação concluída!');
+        } catch (error) {
+          console.error('[FIX-TABS] Erro na reanálise:', error);
+          // Não mostrar erro ao usuário, apenas logar
+        }
+      }, 1000);
       
     } catch (error: any) {
       console.error('[FIX-TABS] Erro ao corrigir:', error);
@@ -2242,6 +2343,15 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         >
           <RefreshCw className="h-4 w-4" />
           Revalidar Controle de Qualidade
+        </Button>
+        <Button
+          onClick={recalculateValorCausa}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          <Calculator className="h-4 w-4" />
+          Recalcular Valor da Causa (Ano Correto)
         </Button>
         {!templateFile ? (
           <div>
