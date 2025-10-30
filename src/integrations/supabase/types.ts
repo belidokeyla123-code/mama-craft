@@ -415,6 +415,7 @@ export type Database = {
           marriage_date: string | null
           mother_cpf: string | null
           nit: string | null
+          petition_type: string | null
           profile: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date: string | null
           ra_denial_reason: string | null
@@ -478,6 +479,7 @@ export type Database = {
           marriage_date?: string | null
           mother_cpf?: string | null
           nit?: string | null
+          petition_type?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null
@@ -541,6 +543,7 @@ export type Database = {
           marriage_date?: string | null
           mother_cpf?: string | null
           nit?: string | null
+          petition_type?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
           ra_denial_reason?: string | null

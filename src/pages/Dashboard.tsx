@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2, Trash2 } from "lucide-react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2, Trash2, MessageSquare, FileEdit, Gavel } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +30,7 @@ interface Case {
   child_birth_date?: string;
   salario_minimo_ref: number;
   valor_causa?: number;
+  petition_type?: string;
 }
 
 const statusConfig = {
@@ -43,24 +46,49 @@ const statusConfig = {
 
 type FilterStatus = "all" | "drafted" | "ready" | "pending_docs" | "protocolada" | "intake";
 
+const petitionTypeLabels: Record<string, string> = {
+  peticao_inicial: "Petição Inicial",
+  recurso_apelacao: "Recurso Nominado/Apelação",
+  embargos: "Embargos",
+  pilf: "PILF"
+};
+
+const petitionTypeIcons: Record<string, any> = {
+  peticao_inicial: FileText,
+  recurso_apelacao: MessageSquare,
+  embargos: FileEdit,
+  pilf: Gavel
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
 
+  const searchParams = new URLSearchParams(location.search);
+  const petitionType = searchParams.get("type");
+
   useEffect(() => {
     loadCases();
-  }, []);
+  }, [petitionType]);
 
   const loadCases = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("cases")
         .select("*")
         .order("created_at", { ascending: false });
+      
+      // Filtrar por tipo de peça se especificado
+      if (petitionType) {
+        query = query.eq("petition_type", petitionType);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setCases(data || []);
@@ -162,21 +190,36 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle p-4 md:p-8">
-      <div className="container mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Meus Casos</h1>
-            <p className="text-muted-foreground">Gestão de processos de salário-maternidade</p>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        {/* Sidebar */}
+        <DashboardSidebar />
+        
+        {/* Main Content */}
+        <div className="flex-1 bg-gradient-subtle">
+          {/* Header com Trigger da Sidebar */}
+          <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="container mx-auto p-4 flex items-center gap-4">
+              <SidebarTrigger />
+              <div className="flex-1">
+                <h1 className="text-2xl font-bold text-foreground">Meus Casos</h1>
+                <p className="text-sm text-muted-foreground">
+                  {petitionType 
+                    ? `${petitionTypeLabels[petitionType]} - Auxílio Maternidade` 
+                    : "Todos os casos - Auxílio Maternidade"}
+                </p>
+              </div>
+              <Link to="/novo-caso">
+                <Button size="lg" className="gap-2">
+                  <Plus className="h-5 w-5" />
+                  Novo Caso
+                </Button>
+              </Link>
+            </div>
           </div>
-          <Link to="/novo-caso">
-            <Button size="lg" className="gap-2">
-              <Plus className="h-5 w-5" />
-              Novo Caso
-            </Button>
-          </Link>
-        </div>
+          
+          {/* Conteúdo */}
+          <div className="container mx-auto p-4 md:p-8">
 
         {/* Stats - Agora clicáveis */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
@@ -276,17 +319,29 @@ export default function Dashboard() {
               >
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                   <div className="flex-1 space-y-3">
-                    <div className="flex items-start gap-4">
+                     <div className="flex items-start gap-4">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-foreground mb-1 group-hover:text-primary transition-smooth">
                           {caso.author_name}
                         </h3>
-                        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground items-center">
                           <span>Caso #{caso.id.slice(0, 8)}</span>
                           <span>•</span>
                           <span>Evento: {new Date(caso.event_date).toLocaleDateString("pt-BR")}</span>
                           <span>•</span>
                           <span className="capitalize">{caso.profile === "especial" ? "Segurada Especial" : "Segurada Urbana"}</span>
+                          {caso.petition_type && (
+                            <>
+                              <span>•</span>
+                              <Badge variant="outline" className="gap-1">
+                                {(() => {
+                                  const Icon = petitionTypeIcons[caso.petition_type];
+                                  return Icon ? <Icon className="h-3 w-3" /> : null;
+                                })()}
+                                {petitionTypeLabels[caso.petition_type]}
+                              </Badge>
+                            </>
+                          )}
                         </div>
                       </div>
                       {statusStyle && (
@@ -374,7 +429,9 @@ export default function Dashboard() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+          </div>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

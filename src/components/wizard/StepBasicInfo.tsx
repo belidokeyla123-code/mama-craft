@@ -117,6 +117,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           profile: data.profile,
           event_type: data.eventType,
           event_date: cleanDate(data.eventDate),
+          petition_type: data.petitionType,
           land_owner_name: data.landOwnerName,
           land_owner_cpf: data.landOwnerCpf,
           land_owner_rg: data.landOwnerRg,
@@ -151,7 +152,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     data.profile, data.eventType, data.hasRa, data.raProtocol,
     data.landOwnerName, data.landOwnerCpf, data.landOwnershipType,
     data.ruralPeriods, data.urbanPeriods, data.salarioMinimoRef,
-    data.manualBenefits,
+    data.manualBenefits, data.petitionType,
   ]);
 
   // ✅ CORREÇÃO #3: Carregar benefícios anteriores
@@ -522,6 +523,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           father_name: data.fatherName,
           event_date: cleanDateField(data.eventDate),
           profile: data.profile,
+          petition_type: data.petitionType,
           rural_periods: data.ruralPeriods as any,
           urban_periods: data.urbanPeriods as any,
           land_owner_name: data.landOwnerName,

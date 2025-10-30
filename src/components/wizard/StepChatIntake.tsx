@@ -167,6 +167,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             event_date: new Date().toISOString().split('T')[0],
             status: "intake",
             started_with_chat: true,
+            petition_type: data.petitionType || "peticao_inicial",
           })
           .select()
           .single();

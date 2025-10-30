@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FileText, MessageSquare, FileEdit, Gavel } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
 import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
 import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
@@ -75,6 +77,9 @@ export interface CaseData {
   
   // Perfil
   profile: "especial" | "urbana";
+  
+  // Tipo de peça
+  petitionType?: string;
   
   // Proprietário da terra
   landOwnerName?: string;
@@ -174,6 +179,7 @@ const NewCase = () => {
     eventType: "parto",
     eventDate: "",
     profile: "especial",
+    petitionType: "peticao_inicial",
     hasRa: false,
     salarioMinimoRef: 1412.00,
     ruralPeriods: [],
@@ -225,7 +231,53 @@ const NewCase = () => {
       case 0:
         return <StepChatIntake data={caseData} updateData={updateCaseData} onComplete={handleNext} />;
       case 1:
-        return <StepBasicInfo data={caseData} updateData={updateCaseData} />;
+        return (
+          <>
+            <div className="mb-6">
+              <Label htmlFor="petition_type" className="text-base font-semibold">
+                Tipo de Peça
+              </Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Selecione o tipo de peça processual que será criada
+              </p>
+              <Select 
+                value={caseData.petitionType} 
+                onValueChange={(value) => updateCaseData({ petitionType: value })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione o tipo de peça" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="peticao_inicial">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Petição Inicial
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="recurso_apelacao">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Recurso Nominado/Apelação
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="embargos">
+                    <div className="flex items-center gap-2">
+                      <FileEdit className="h-4 w-4" />
+                      Embargos
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="pilf">
+                    <div className="flex items-center gap-2">
+                      <Gavel className="h-4 w-4" />
+                      PILF
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <StepBasicInfo data={caseData} updateData={updateCaseData} />
+          </>
+        );
       case 2:
         return caseData.caseId ? (
           <StepDocumentsManager 
