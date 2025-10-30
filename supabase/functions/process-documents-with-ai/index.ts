@@ -508,9 +508,36 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     
     // Atividade rural com períodos estruturados
     if (extractedData.ruralPeriods && Array.isArray(extractedData.ruralPeriods) && extractedData.ruralPeriods.length > 0) {
-      updateData.rural_periods = extractedData.ruralPeriods;
+      // ✅ BUSCAR PERÍODOS EXISTENTES
+      const { data: currentCase } = await supabase
+        .from('cases')
+        .select('rural_periods')
+        .eq('id', caseId)
+        .single();
+      
+      const existingPeriods = currentCase?.rural_periods || [];
+      
+      // ✅ MESCLAR SEM DUPLICAR
+      const mergedPeriods = [...existingPeriods];
+      
+      for (const newPeriod of extractedData.ruralPeriods) {
+        const exists = existingPeriods.some((ep: any) => 
+          ep.startDate === newPeriod.startDate && 
+          ep.endDate === newPeriod.endDate
+        );
+        
+        if (!exists) {
+          console.log('[PROCESS-DOCS] ✅ Adicionando novo período:', newPeriod);
+          mergedPeriods.push(newPeriod);
+        } else {
+          console.log('[PROCESS-DOCS] ⚠️ Período já existe, pulando:', newPeriod);
+        }
+      }
+      
+      updateData.rural_periods = mergedPeriods;
+      
       // Usar a data mais antiga como "rural_activity_since"
-      const oldestPeriod = extractedData.ruralPeriods.reduce((oldest: any, current: any) => {
+      const oldestPeriod = mergedPeriods.reduce((oldest: any, current: any) => {
         return new Date(current.startDate) < new Date(oldest.startDate) ? current : oldest;
       });
       updateData.rural_activity_since = oldestPeriod.startDate;

@@ -176,47 +176,83 @@ Retorne um JSON estruturado com:
       let insertions: any[] = [];
 
       if (extracted.type === 'benefit_history' && extracted.data.nb) {
-        console.log('[PROCESS-CHAT] 💊 Salvando benefício anterior em benefit_history');
+        console.log('[PROCESS-CHAT] 💊 Verificando benefício anterior...');
         
-        // ✅ Inserir benefício anterior DIRETAMENTE em benefit_history (não em cases)
-        insertions.push({
-          table: 'benefit_history',
-          data: {
-            case_id: caseId,
-            nb: extracted.data.nb,
-            benefit_type: extracted.data.benefitType || 'Salário-Maternidade',
-            start_date: extracted.data.startDate || null,
-            end_date: extracted.data.endDate || null,
-            status: extracted.data.status || 'cessado'
-          }
-        });
+        // ✅ VERIFICAR SE JÁ EXISTE NA TABELA
+        const { data: existingBenefit } = await supabase
+          .from('benefit_history')
+          .select('id')
+          .eq('case_id', caseId)
+          .eq('nb', extracted.data.nb)
+          .maybeSingle();
+        
+        if (existingBenefit) {
+          console.log('[PROCESS-CHAT] ⚠️ Benefício já existe, pulando inserção');
+        } else {
+          console.log('[PROCESS-CHAT] ✅ Novo benefício, inserindo...');
+          insertions.push({
+            table: 'benefit_history',
+            data: {
+              case_id: caseId,
+              nb: extracted.data.nb,
+              benefit_type: extracted.data.benefitType || 'Salário-Maternidade',
+              start_date: extracted.data.startDate || null,
+              end_date: extracted.data.endDate || null,
+              status: extracted.data.status || 'cessado'
+            }
+          });
+        }
 
-        // Se o período tem datas, adicionar aos períodos rurais
+        // ✅ VERIFICAR DUPLICATA EM PERÍODOS RURAIS
         if (extracted.data.startDate && extracted.data.endDate) {
           const currentRuralPeriods = caseData.rural_periods || [];
-          updates.rural_periods = [
-            ...currentRuralPeriods,
-            {
-              startDate: extracted.data.startDate,
-              endDate: extracted.data.endDate,
-              location: 'Reconhecido pelo INSS (benefício anterior)',
-              activityType: extracted.data.benefitType
-            }
-          ];
+          
+          // Verificar se já existe período com as mesmas datas
+          const periodExists = currentRuralPeriods.some((period: any) => 
+            period.startDate === extracted.data.startDate && 
+            period.endDate === extracted.data.endDate
+          );
+          
+          if (!periodExists) {
+            console.log('[PROCESS-CHAT] ✅ Adicionando período rural do benefício');
+            updates.rural_periods = [
+              ...currentRuralPeriods,
+              {
+                startDate: extracted.data.startDate,
+                endDate: extracted.data.endDate,
+                location: 'Reconhecido pelo INSS (benefício anterior)',
+                activityType: extracted.data.benefitType
+              }
+            ];
+          } else {
+            console.log('[PROCESS-CHAT] ⚠️ Período rural já existe, pulando');
+          }
         }
       }
 
       if (extracted.type === 'rural_period' && extracted.data.startDate) {
         const currentRuralPeriods = caseData.rural_periods || [];
-        updates.rural_periods = [
-          ...currentRuralPeriods,
-          {
-            startDate: extracted.data.startDate,
-            endDate: extracted.data.endDate || new Date().toISOString().split('T')[0],
-            location: extracted.data.location || '',
-            activityType: extracted.data.activityType || ''
-          }
-        ];
+        
+        // ✅ VERIFICAR DUPLICATA
+        const periodExists = currentRuralPeriods.some((period: any) => 
+          period.startDate === extracted.data.startDate && 
+          period.endDate === (extracted.data.endDate || new Date().toISOString().split('T')[0])
+        );
+        
+        if (!periodExists) {
+          console.log('[PROCESS-CHAT] ✅ Adicionando novo período rural');
+          updates.rural_periods = [
+            ...currentRuralPeriods,
+            {
+              startDate: extracted.data.startDate,
+              endDate: extracted.data.endDate || new Date().toISOString().split('T')[0],
+              location: extracted.data.location || '',
+              activityType: extracted.data.activityType || ''
+            }
+          ];
+        } else {
+          console.log('[PROCESS-CHAT] ⚠️ Período rural já existe, pulando');
+        }
       }
 
       if (extracted.type === 'cnis_analysis') {
