@@ -28,6 +28,9 @@ verify_jwt = false
 [functions.voice-to-text]
 verify_jwt = false
 
+[functions.replicate-case-structure]
+verify_jwt = false
+
 [functions.validate-case-documents]
 verify_jwt = false
 timeout = 45

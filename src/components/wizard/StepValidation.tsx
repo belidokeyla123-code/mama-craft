@@ -12,6 +12,7 @@ import { toast as sonnerToast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 import { useTabSync } from "@/hooks/useTabSync";
+import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
 interface StepValidationProps {
   data: CaseData;
@@ -22,6 +23,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
   const { toast } = useToast();
+  const { triggerFullPipeline } = useCaseOrchestration({ caseId: data.caseId || '', enabled: true });
 
   // Invalidar caches quando revalidar manualmente
   useCacheInvalidation({
@@ -107,17 +109,12 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
 
       // Auto-disparar análise se documentos suficientes
       if (result.is_sufficient) {
-        sonnerToast.info('Documentos suficientes! Iniciando análise jurídica...');
+        sonnerToast.success('✅ Documentos suficientes! Iniciando pipeline completo...');
         
-        setTimeout(async () => {
-          try {
-            await supabase.functions.invoke('analyze-case-legal', {
-              body: { caseId: data.caseId }
-            });
-          } catch (error) {
-            console.error('Erro na análise automática:', error);
-          }
-        }, 2000);
+        // Disparar pipeline completo após 3 segundos
+        setTimeout(() => {
+          triggerFullPipeline('Validação aprovada com documentos suficientes');
+        }, 3000);
       }
     } catch (error: any) {
       console.error('Erro na validação:', error);

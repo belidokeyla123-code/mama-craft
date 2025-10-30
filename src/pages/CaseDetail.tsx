@@ -14,6 +14,7 @@ import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
 import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
+import { PipelineReplicateButton } from "@/components/wizard/PipelineReplicateButton";
 
 import type { CaseData } from "./NewCase";
 
@@ -376,6 +377,13 @@ export default function CaseDetail() {
             <Progress value={progress} className="h-2" />
           </div>
         </Card>
+
+        {/* Pipeline Replicate Button - Visível apenas no passo 3 (Validação) */}
+        {currentStep === 3 && id && (
+          <div className="mb-6">
+            <PipelineReplicateButton caseId={id} caseName={caseData.authorName} />
+          </div>
+        )}
 
         {/* Step Content */}
         <Card className="p-8 mb-6 relative">

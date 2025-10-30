@@ -19,6 +19,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2, Trash2, MessageSquare, FileEdit, Gavel } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { BatchReplicateButton } from "@/components/dashboard/BatchReplicateButton";
 
 interface Case {
   id: string;
@@ -209,12 +210,17 @@ export default function Dashboard() {
                     : "Todos os casos - Auxílio Maternidade"}
                 </p>
               </div>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex gap-2">
               <Link to="/novo-caso">
                 <Button size="lg" className="gap-2">
                   <Plus className="h-5 w-5" />
                   Novo Caso
                 </Button>
               </Link>
+              <BatchReplicateButton />
+            </div>
+          </div>
             </div>
           </div>
           
