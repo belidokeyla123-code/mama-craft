@@ -21,10 +21,30 @@ export const useFullPipelineOrchestration = () => {
   const [currentStep, setCurrentStep] = useState<string>('');
   const [progress, setProgress] = useState(0);
 
-  const runFullPipeline = async (caseId: string, forceReprocess = false): Promise<PipelineResult | null> => {
+  const runFullPipeline = async (caseId: string, forceReprocess = false, skipUnfreezeCheck = false): Promise<PipelineResult | null> => {
     if (!caseId) {
       toast.error('ID do caso não fornecido');
       return null;
+    }
+
+    // Verificar se tem versão final (a menos que skipUnfreezeCheck seja true)
+    if (!skipUnfreezeCheck) {
+      const { data: finalDraft } = await supabase
+        .from('drafts')
+        .select('id, is_final')
+        .eq('case_id', caseId)
+        .eq('is_final', true)
+        .maybeSingle();
+
+      if (finalDraft) {
+        toast.error('⚠️ Versão final detectada! Use o diálogo de confirmação para descongelar antes de reprocessar.');
+        return {
+          success: false,
+          message: 'Versão final congelada. Descongelar primeiro.',
+          steps: [],
+          readyToProtocol: false,
+        };
+      }
     }
 
     setIsRunning(true);
@@ -94,3 +114,4 @@ export const useFullPipelineOrchestration = () => {
     progress,
   };
 };
+

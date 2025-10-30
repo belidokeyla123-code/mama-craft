@@ -27,6 +27,26 @@ serve(async (req) => {
 
     console.log(`[REPLICATE] 🚀 Iniciando replicação para caso ${caseId}`);
 
+    // Verificar se tem versão final congelada
+    const { data: finalDraft } = await supabase
+      .from('drafts')
+      .select('id, is_final')
+      .eq('case_id', caseId)
+      .eq('is_final', true)
+      .single();
+
+    if (finalDraft && !forceReprocess) {
+      console.log('[REPLICATE] ⚠️ Caso possui versão final congelada');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: 'Este caso já tem uma versão final congelada. Não é possível reprocessar automaticamente.',
+          is_locked: true,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Buscar dados do caso
     const { data: caseData, error: caseError } = await supabase
       .from('cases')

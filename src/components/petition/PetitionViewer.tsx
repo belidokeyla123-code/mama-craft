@@ -1,14 +1,60 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, AlertCircle, Lock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useFinalizeVersion } from "@/hooks/useFinalizeVersion";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PetitionViewerProps {
   petition: string;
   qualityReport?: any;
+  caseId?: string;
+  currentDraftId?: string;
 }
 
-export const PetitionViewer = ({ petition, qualityReport }: PetitionViewerProps) => {
+export const PetitionViewer = ({ petition, qualityReport, caseId, currentDraftId }: PetitionViewerProps) => {
+  const { finalizeVersion } = useFinalizeVersion();
+  const [isFinal, setIsFinal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Verificar se já é final ao carregar
+  useEffect(() => {
+    const checkIfFinal = async () => {
+      if (!caseId || !currentDraftId) return;
+      
+      const { data } = await supabase
+        .from('drafts')
+        .select('is_final')
+        .eq('id', currentDraftId)
+        .single();
+      
+      if (data) {
+        setIsFinal(data.is_final || false);
+      }
+    };
+    
+    checkIfFinal();
+  }, [caseId, currentDraftId]);
+
+  const handleFinalize = async () => {
+    if (!caseId || !currentDraftId) return;
+    
+    const confirmed = window.confirm(
+      '⚠️ ATENÇÃO: Ao salvar como versão final, você NÃO poderá mais modificar esta minuta automaticamente sem descongelá-la.\n\nDeseja continuar?'
+    );
+    
+    if (!confirmed) return;
+    
+    setIsLoading(true);
+    const success = await finalizeVersion(caseId, currentDraftId);
+    if (success) {
+      setIsFinal(true);
+    }
+    setIsLoading(false);
+  };
+
   if (!petition) {
     return (
       <Card className="border-dashed">
@@ -22,6 +68,28 @@ export const PetitionViewer = ({ petition, qualityReport }: PetitionViewerProps)
 
   return (
     <div className="space-y-4">
+      {/* Botão Salvar Versão Final */}
+      {caseId && currentDraftId && (
+        <div className="flex justify-end">
+          {isFinal ? (
+            <Badge variant="outline" className="gap-2 py-2 px-4">
+              <Lock className="h-4 w-4" />
+              Versão Final Congelada
+            </Badge>
+          ) : (
+            <Button 
+              onClick={handleFinalize}
+              disabled={isLoading}
+              variant="default"
+              className="gap-2"
+            >
+              <Lock className="h-4 w-4" />
+              {isLoading ? 'Salvando...' : 'Salvar Versão Final'}
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Quality Report Summary */}
       {qualityReport && (
         <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">

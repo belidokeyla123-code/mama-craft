@@ -11,6 +11,8 @@ import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { PasteDataInline } from "./PasteDataInline";
+import { UnfreezeConfirmDialog } from "./UnfreezeConfirmDialog";
+import { useUnfreeze } from "@/hooks/useUnfreeze";
 
 interface Message {
   role: "assistant" | "user";
@@ -37,6 +39,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const [userInput, setUserInput] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [failedPdfs, setFailedPdfs] = useState<string[]>([]);
+  const [showUnfreezeDialog, setShowUnfreezeDialog] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -47,6 +51,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     caseId: data.caseId || '', 
     enabled: !!data.caseId 
   });
+
+  const { unfreezeCase } = useUnfreeze();
 
   // ✅ CORREÇÃO #6: Chamar migração automática ao montar
   useEffect(() => {
@@ -250,6 +256,23 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   };
 
   const processDocuments = async (files: File[]) => {
+    // Verificar se existe versão final antes de processar
+    if (data.caseId) {
+      const { data: finalDraft } = await supabase
+        .from('drafts')
+        .select('id, is_final')
+        .eq('case_id', data.caseId)
+        .eq('is_final', true)
+        .maybeSingle();
+
+      if (finalDraft) {
+        console.log('[CHAT] ⚠️ Versão final detectada, solicitando confirmação');
+        setPendingFiles(files);
+        setShowUnfreezeDialog(true);
+        return;
+      }
+    }
+
     setIsProcessing(true);
     
     try {
@@ -615,6 +638,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           }]);
         }
       }
+      
+      // 🆕 FASE 3: Disparar pipeline completo após upload
+      console.log('[SEQUENTIAL] 🚀 Disparando pipeline completo...');
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `🔄 Iniciando validação, análise jurídica, jurisprudência e tese...`
+      }]);
+      
+      await triggerFullPipeline('Documentos adicionados via chat');
       
       // Atualizar status do caso para "ready"
       await supabase
@@ -1762,6 +1794,24 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           Próximo
         </Button>
       </div>
+
+      {/* Diálogo de Confirmação para Descongelar */}
+      <UnfreezeConfirmDialog
+        open={showUnfreezeDialog}
+        onOpenChange={setShowUnfreezeDialog}
+        action="adicionar novos documentos"
+        onConfirm={async () => {
+          if (!data.caseId) return;
+          
+          const success = await unfreezeCase(data.caseId);
+          if (success && pendingFiles.length > 0) {
+            setShowUnfreezeDialog(false);
+            // Continuar com o processamento
+            await processDocuments(pendingFiles);
+            setPendingFiles([]);
+          }
+        }}
+      />
     </div>
   );
 };

@@ -24,6 +24,8 @@ import { ManualReclassifyDialog } from "./ManualReclassifyDialog";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 import { useTabSync } from "@/hooks/useTabSync";
+import { UnfreezeConfirmDialog } from "./UnfreezeConfirmDialog";
+import { useUnfreeze } from "@/hooks/useUnfreeze";
 
 interface Document {
   id: string;
@@ -50,6 +52,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     caseId: caseId || '', 
     enabled: true 
   });
+
+  const { unfreezeCase } = useUnfreeze();
 
   // Invalidar caches quando documentos mudarem
   useCacheInvalidation({
@@ -83,6 +87,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [uploadProgress, setUploadProgress] = useState("");
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [bypassDuplicateCheck, setBypassDuplicateCheck] = useState(false);
+  const [showUnfreezeDialog, setShowUnfreezeDialog] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [reclassifyDoc, setReclassifyDoc] = useState<Document | null>(null);
@@ -344,6 +350,22 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     if (files.length === 0) return;
 
     console.log('[UPLOAD] 📤 Arquivos selecionados:', files.map(f => f.name));
+
+    // Verificar se existe versão final antes de fazer upload
+    const { data: finalDraft } = await supabase
+      .from('drafts')
+      .select('id, is_final')
+      .eq('case_id', caseId)
+      .eq('is_final', true)
+      .maybeSingle();
+
+    if (finalDraft) {
+      console.log('[UPLOAD] ⚠️ Versão final detectada, solicitando confirmação');
+      setPendingFiles(files);
+      setShowUnfreezeDialog(true);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     // Verificar duplicatas (apenas se não estiver em modo bypass)
     if (!bypassDuplicateCheck) {
@@ -1000,6 +1022,28 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         onSuccess={async () => {
           await loadDocuments();
           if (onDocumentsChange) onDocumentsChange();
+        }}
+      />
+
+      {/* Diálogo de Confirmação para Descongelar */}
+      <UnfreezeConfirmDialog
+        open={showUnfreezeDialog}
+        onOpenChange={setShowUnfreezeDialog}
+        action="fazer upload de novos documentos"
+        onConfirm={async () => {
+          const success = await unfreezeCase(caseId);
+          if (success && pendingFiles.length > 0) {
+            setShowUnfreezeDialog(false);
+            // Simular o evento de file select com os arquivos pendentes
+            const dataTransfer = new DataTransfer();
+            pendingFiles.forEach(file => dataTransfer.items.add(file));
+            const fakeEvent = {
+              target: { files: dataTransfer.files },
+            } as React.ChangeEvent<HTMLInputElement>;
+            
+            await handleFileSelect(fakeEvent);
+            setPendingFiles([]);
+          }
         }}
       />
     </>

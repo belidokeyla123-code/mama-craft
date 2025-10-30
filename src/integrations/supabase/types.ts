@@ -154,6 +154,7 @@ export type Database = {
           draft_payload: Json | null
           fundamentos: string[] | null
           id: string
+          is_locked: boolean | null
           is_stale: boolean | null
           lacunas: string[] | null
           last_document_hash: string | null
@@ -170,6 +171,7 @@ export type Database = {
           draft_payload?: Json | null
           fundamentos?: string[] | null
           id?: string
+          is_locked?: boolean | null
           is_stale?: boolean | null
           lacunas?: string[] | null
           last_document_hash?: string | null
@@ -186,6 +188,7 @@ export type Database = {
           draft_payload?: Json | null
           fundamentos?: string[] | null
           id?: string
+          is_locked?: boolean | null
           is_stale?: boolean | null
           lacunas?: string[] | null
           last_document_hash?: string | null
@@ -734,9 +737,12 @@ export type Database = {
         Row: {
           case_id: string
           docx_path: string | null
+          finalized_at: string | null
+          finalized_by: string | null
           generated_at: string
           html_content: string | null
           id: string
+          is_final: boolean | null
           is_stale: boolean | null
           last_analysis_hash: string | null
           markdown_content: string | null
@@ -746,9 +752,12 @@ export type Database = {
         Insert: {
           case_id: string
           docx_path?: string | null
+          finalized_at?: string | null
+          finalized_by?: string | null
           generated_at?: string
           html_content?: string | null
           id?: string
+          is_final?: boolean | null
           is_stale?: boolean | null
           last_analysis_hash?: string | null
           markdown_content?: string | null
@@ -758,9 +767,12 @@ export type Database = {
         Update: {
           case_id?: string
           docx_path?: string | null
+          finalized_at?: string | null
+          finalized_by?: string | null
           generated_at?: string
           html_content?: string | null
           id?: string
+          is_final?: boolean | null
           is_stale?: boolean | null
           last_analysis_hash?: string | null
           markdown_content?: string | null
@@ -958,6 +970,7 @@ export type Database = {
           case_id: string
           created_at: string | null
           id: string
+          is_locked: boolean | null
           is_stale: boolean | null
           last_case_hash: string | null
           results: Json
@@ -967,6 +980,7 @@ export type Database = {
           case_id: string
           created_at?: string | null
           id?: string
+          is_locked?: boolean | null
           is_stale?: boolean | null
           last_case_hash?: string | null
           results: Json
@@ -976,6 +990,7 @@ export type Database = {
           case_id?: string
           created_at?: string | null
           id?: string
+          is_locked?: boolean | null
           is_stale?: boolean | null
           last_case_hash?: string | null
           results?: Json
@@ -1228,6 +1243,7 @@ export type Database = {
           case_id: string
           created_at: string | null
           id: string
+          is_locked: boolean | null
           is_stale: boolean | null
           selected_ids: string[] | null
           teses: Json
@@ -1236,6 +1252,7 @@ export type Database = {
           case_id: string
           created_at?: string | null
           id?: string
+          is_locked?: boolean | null
           is_stale?: boolean | null
           selected_ids?: string[] | null
           teses: Json
@@ -1244,6 +1261,7 @@ export type Database = {
           case_id?: string
           created_at?: string | null
           id?: string
+          is_locked?: boolean | null
           is_stale?: boolean | null
           selected_ids?: string[] | null
           teses?: Json
