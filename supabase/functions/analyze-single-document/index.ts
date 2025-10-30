@@ -420,121 +420,133 @@ Além das informações específicas deste tipo de documento, SEMPRE extraia (se
 **IMPORTANTE:** Retorne esses campos no objeto \`universalData\` separado dos dados específicos do documento.
 `;
     
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: ESPECIALISTA_MATERNIDADE_PROMPT + `
+    // ⏱️ FASE 4: Timeout de 10 segundos para evitar travamentos
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    let aiResponse;
+    try {
+      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${lovableApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash-lite', // ⚡ FASE 1: Modelo 3x mais rápido
+          messages: [
+            {
+              role: 'system',
+              content: ESPECIALISTA_MATERNIDADE_PROMPT + `
 
-📋 **INSTRUÇÕES ESPECÍFICAS PARA EXTRAÇÃO DE DADOS**
+📋 **EXTRAÇÃO DE DOCUMENTOS PREVIDENCIÁRIOS**
 
-Você é um especialista altamente experiente em análise de documentos previdenciários brasileiros, com foco em:
+Você é especialista em análise de documentos previdenciários brasileiros com foco em:
+• Processos INSS (indeferimentos, concessões)
+• Certidões (nascimento, casamento)
+• Identificação (RG, CPF)
+• Documentos rurais (autodeclarações, ITR, terra)
+• Declarações de saúde/escolares
 
-1. **Processos administrativos do INSS** (indeferimentos, concessões, despachos)
-2. **Certidões de nascimento** (formato brasileiro RCPN)
-3. **Documentos de identificação** (RG, CPF)
-4. **Comprovantes de atividade rural** (autodeclarações, ITR, documentos de terra)
-5. **Históricos escolares e declarações de saúde** (UBS/Postos rurais)
+🎯 **REGRAS DE EXTRAÇÃO:**
 
-🎯 **REGRAS CRÍTICAS:**
+1. **Datas:** formato DD/MM/AAAA → YYYY-MM-DD
+2. **CPF:** 11 dígitos, remover pontos/traços
+3. **Protocolo/NB:** geralmente 10+ dígitos
+4. **PROCESSO INSS:** extraia protocolo, datas (requerimento e indeferimento), motivo LITERAL completo
+5. **CERTIDÃO NASCIMENTO:** nome da criança ≠ nome da mãe (são pessoas diferentes)
+6. **DOCUMENTOS TERRA/RURAL:** nome proprietário, CPF, área, períodos, atividades
 
-- Extraia **TODAS** as informações visíveis com **precisão máxima**
-- Use OCR com atenção especial a:
-  - Datas (formato brasileiro DD/MM/AAAA → converter para YYYY-MM-DD)
-  - Números de protocolo/NB (geralmente 10+ dígitos)
-  - CPFs (11 dígitos, remover pontos/traços)
-  - Nomes completos (respeitar maiúsculas/minúsculas originais)
-  
-- **PROCESSO INSS (Indeferimento):** Extraia protocolo/NB, data do requerimento, data do indeferimento, motivo literal completo
-- **CERTIDÃO DE NASCIMENTO:** Nome da criança ≠ Nome da mãe (são pessoas diferentes!)
-- **DOCUMENTOS DE TERRA:** Extrair nome do proprietário, CPF, área, localização
-- **AUTODECLARAÇÃO RURAL:** Períodos de trabalho, membros da família, atividades
+⚠️ **CRÍTICO:**
+- Extraia TODAS as informações visíveis com precisão máxima
+- SE não estiver visível: omita o campo (NUNCA retorne "Não identificado")
+- SEMPRE use a função extract_document_data fornecida`
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `${prompt}
 
-⚠️ **RESPONDA SEMPRE EM PORTUGUÊS BRASILEIRO** usando a função extract_document_data fornecida.`
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `${prompt}
+📋 **DADOS UNIVERSAIS** (extrair de TODOS os documentos, se visíveis):
 
-📋 **EXTRAÇÃO UNIVERSAL (aplicável a TODOS os documentos):**
+• Nome completo da autora/autor
+• CPF (11 dígitos, sem pontos/traços)
+• RG, Data de nascimento (YYYY-MM-DD)
+• Endereço completo, Telefone/WhatsApp, Estado civil
+• Cônjuge: nome e CPF
+• Filho(a): nome e data de nascimento
 
-Além das informações específicas do tipo de documento, SEMPRE extraia (se visíveis):
-- Nome completo da autora/autor
-- CPF (11 dígitos, apenas números)
-- RG
-- Data de nascimento (formato YYYY-MM-DD)
-- Endereço completo
-- Telefone/WhatsApp
-- Estado civil
-- Nome do cônjuge e CPF (se mencionado)
-- Nome do filho(a) e data de nascimento (se mencionado)
+Retorne no objeto \`universalData\` separado.
 
-Retorne esses campos no objeto \`universalData\` separado.
-
-⚠️ **INSTRUÇÕES CRÍTICAS:**
-- Use OCR para ler TODAS as informações visíveis nesta imagem
-- Para datas: sempre use formato YYYY-MM-DD (exemplo: "2022-11-19")
-- Para CPF: extraia apenas números, sem pontos/traços
-- **SE UMA INFORMAÇÃO NÃO ESTIVER VISÍVEL, DEIXE O CAMPO VAZIO OU OMITA-O**
-- **NUNCA retorne texto explicativo como "Não identificado" ou "Não é possível extrair"**
-- **SEMPRE use a função extract_document_data para retornar dados estruturados**`
-              },
-              {
-                type: 'image_url',
-                image_url: { url: base64Image }
-              }
-            ]
-          }
-        ],
-        tools: [{
-          type: 'function',
-          function: {
-            name: 'extract_document_data',
-            description: 'Extrair dados estruturados do documento',
-            parameters: {
-              type: 'object',
-              properties: {
-                documentType: { type: 'string', description: 'Tipo do documento' },
-                extractionConfidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                extractedData: getSchemaForDocType(docType),
-                universalData: {
-                  type: 'object',
-                  description: 'Dados universais extraídos de qualquer documento',
-                  properties: {
-                    authorName: { type: 'string' },
-                    authorCpf: { type: 'string' },
-                    authorRg: { type: 'string' },
-                    authorBirthDate: { type: 'string' },
-                    authorAddress: { type: 'string' },
-                    authorPhone: { type: 'string' },
-                    authorWhatsapp: { type: 'string' },
-                    authorMaritalStatus: { type: 'string' },
-                    spouseName: { type: 'string' },
-                    spouseCpf: { type: 'string' },
-                    marriageDate: { type: 'string' },
-                    childName: { type: 'string' },
-                    childBirthDate: { type: 'string' },
-                    childCpf: { type: 'string' }
-                  }
+🔍 Use OCR para ler TODAS as informações visíveis. Omita campos não visíveis.`
+                },
+                {
+                  type: 'image_url',
+                  image_url: { url: base64Image }
                 }
-              },
-              required: ['documentType', 'extractionConfidence', 'extractedData']
+              ]
             }
-          }
-        }],
-        tool_choice: { type: 'function', function: { name: 'extract_document_data' } }
-      })
-    });
+          ],
+          tools: [{
+            type: 'function',
+            function: {
+              name: 'extract_document_data',
+              description: 'Extrair dados estruturados do documento',
+              parameters: {
+                type: 'object',
+                properties: {
+                  documentType: { type: 'string', description: 'Tipo do documento' },
+                  extractionConfidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+                  extractedData: getSchemaForDocType(docType),
+                  universalData: {
+                    type: 'object',
+                    description: 'Dados universais extraídos de qualquer documento',
+                    properties: {
+                      authorName: { type: 'string' },
+                      authorCpf: { type: 'string' },
+                      authorRg: { type: 'string' },
+                      authorBirthDate: { type: 'string' },
+                      authorAddress: { type: 'string' },
+                      authorPhone: { type: 'string' },
+                      authorWhatsapp: { type: 'string' },
+                      authorMaritalStatus: { type: 'string' },
+                      spouseName: { type: 'string' },
+                      spouseCpf: { type: 'string' },
+                      marriageDate: { type: 'string' },
+                      childName: { type: 'string' },
+                      childBirthDate: { type: 'string' },
+                      childCpf: { type: 'string' }
+                    }
+                  }
+                },
+                required: ['documentType', 'extractionConfidence', 'extractedData']
+              }
+            }
+          }],
+          tool_choice: { type: 'function', function: { name: 'extract_document_data' } }
+        })
+      });
+    } catch (timeoutError: any) {
+      clearTimeout(timeoutId);
+      if (timeoutError.name === 'AbortError') {
+        console.error('[ANALYZE-SINGLE] ⏱️ Timeout de 10s excedido');
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Análise excedeu tempo limite de 10 segundos',
+            documentId,
+            docType: docType || 'outro'
+          }),
+          { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw timeoutError;
+    }
+
+    clearTimeout(timeoutId);
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
@@ -562,7 +574,7 @@ Retorne esses campos no objeto \`universalData\` separado.
           validationWarnings: ['⚠️ Não foi possível extrair dados deste documento - imagem pode estar ilegível ou de baixa qualidade'],
           isValid: true,
           debug: {
-            modelUsed: 'google/gemini-2.5-flash',
+            modelUsed: 'google/gemini-2.5-flash-lite',
             processingType: 'failed_extraction',
             aiMessage: aiResult.choices?.[0]?.message?.content || 'No content'
           }

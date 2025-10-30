@@ -130,6 +130,64 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     childBirthDate: data.childBirthDate
   });
 
+  /**
+   * ⚡ FASE 2: Compressão adaptativa de imagens
+   * Reduz tamanho de imagens grandes para acelerar upload e análise
+   */
+  const compressImageForAI = async (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        
+        // Compressão adaptativa baseada no tamanho do arquivo
+        let MAX_SIZE: number;
+        if (file.size > 1024 * 1024) {
+          MAX_SIZE = 1024; // Imagens >1MB: reduzir para 1024px
+        } else if (file.size > 500 * 1024) {
+          MAX_SIZE = 1536; // Imagens 500KB-1MB: reduzir para 1536px
+        } else {
+          // <500KB: não comprimir
+          resolve(file);
+          return;
+        }
+        
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height && width > MAX_SIZE) {
+          height = (height * MAX_SIZE) / width;
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width = (width * MAX_SIZE) / height;
+          height = MAX_SIZE;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Converter para blob com qualidade 0.7
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], file.name, {
+              type: file.type,
+              lastModified: Date.now()
+            });
+            resolve(compressedFile);
+          } else {
+            reject(new Error('Falha ao comprimir imagem'));
+          }
+        }, file.type, 0.7);
+      };
+      
+      img.onerror = () => reject(new Error('Erro ao carregar imagem'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   // Helper para labels de tipos de documentos
   const getDocTypeLabel = (docType: string): string => {
     const labels: Record<string, string> = {
@@ -334,6 +392,24 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             
             console.log(`[SEQUENTIAL] 📤 Fazendo upload${pageNum}...`);
             
+            // ⚡ FASE 2: Compressão adaptativa de imagens antes do upload
+            let fileToUpload = pageFile;
+            
+            // Comprimir apenas imagens PNG/JPG grandes
+            const isPng = pageFile.type === 'image/png' || pageFile.name.toLowerCase().endsWith('.png');
+            const isJpg = pageFile.type === 'image/jpeg' || pageFile.name.toLowerCase().endsWith('.jpg') || pageFile.name.toLowerCase().endsWith('.jpeg');
+            
+            if ((isPng || isJpg) && pageFile.size > 500 * 1024) {
+              try {
+                console.log(`[COMPRESS] 📦 Comprimindo ${pageFile.name} (${(pageFile.size / 1024).toFixed(0)}KB)`);
+                fileToUpload = await compressImageForAI(pageFile);
+                console.log(`[COMPRESS] ✅ ${pageFile.name}: ${(pageFile.size / 1024).toFixed(0)}KB → ${(fileToUpload.size / 1024).toFixed(0)}KB`);
+              } catch (compressError) {
+                console.warn(`[COMPRESS] ⚠️ Erro ao comprimir, usando original:`, compressError);
+                fileToUpload = pageFile;
+              }
+            }
+            
             // Upload para o Storage
             const fileExt = pageFile.name.split('.').pop();
             const timestamp = Date.now();
@@ -342,7 +418,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             
             const { error: uploadError } = await supabase.storage
               .from("case-documents")
-              .upload(fileName, pageFile);
+              .upload(fileName, fileToUpload);
 
             if (uploadError) throw uploadError;
 
