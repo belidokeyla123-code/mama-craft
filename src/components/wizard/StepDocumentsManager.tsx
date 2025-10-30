@@ -462,34 +462,9 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         description: "Processamento será iniciado em breve. Você pode navegar livremente.",
       });
 
-      const pollInterval = setInterval(async () => {
-        const { data: queue } = await supabase
-          .from('processing_queue')
-          .select('status, completed_at')
-          .eq('case_id', caseId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-          
-        if (queue?.status === 'completed') {
-          clearInterval(pollInterval);
-          await loadDocuments();
-          if (onDocumentsChange) onDocumentsChange();
-          toast({
-            title: "✅ Atualização concluída!",
-            description: "Documentos reprocessados com sucesso.",
-          });
-        } else if (queue?.status === 'failed') {
-          clearInterval(pollInterval);
-          toast({
-            title: "❌ Erro no processamento",
-            description: "Tente novamente.",
-            variant: "destructive"
-          });
-        }
-      }, 5000);
-      
-      setTimeout(() => clearInterval(pollInterval), 180000);
+      // ✅ FASE 4: POLLING REMOVIDO - Agora usamos eventos em tempo real via useTabSync
+      // O evento 'processing-completed' será disparado automaticamente quando o processamento terminar
+      // e o useTabSync irá recarregar os documentos automaticamente
 
     } catch (error: any) {
       console.error("Erro ao reprocessar:", error);

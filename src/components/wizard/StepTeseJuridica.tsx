@@ -8,6 +8,7 @@ import { Scale, Loader2, CheckCircle2, ChevronDown, Edit2, Save, X } from "lucid
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface StepTeseJuridicaProps {
   data: CaseData;
@@ -31,6 +32,18 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [editedText, setEditedText] = useState("");
   const [hasCache, setHasCache] = useState(false);
+
+  // ✅ FASE 3: Sincronização em tempo real
+  useTabSync({
+    caseId: data.caseId || '',
+    events: ['teses-updated', 'jurisprudence-updated'],
+    onSync: (detail) => {
+      console.log('[StepTeseJuridica] 🔄 Teses atualizadas remotamente, recarregando...');
+      if (detail.timestamp && !loading) {
+        loadCachedTeses();
+      }
+    }
+  });
 
   useEffect(() => {
     if (data.caseId) {

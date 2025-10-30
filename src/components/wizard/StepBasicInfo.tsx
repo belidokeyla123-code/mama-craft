@@ -19,6 +19,7 @@ import { PasteDataInline } from "./PasteDataInline";
 import { StepBasicInfoBenefits } from "./StepBasicInfoBenefits";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface StepBasicInfoProps {
   data: CaseData;
@@ -59,6 +60,20 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     caseId: data.caseId || '',
     triggerType: 'basic_info',
     watchFields: [data.profile, data.eventType, data.hasRa],
+  });
+
+  // ✅ FASE 3: Sincronização em tempo real
+  useTabSync({
+    caseId: data.caseId || '',
+    events: ['case-updated', 'extractions-updated', 'benefits-updated'],
+    onSync: (detail) => {
+      console.log('[StepBasicInfo] 🔄 Dados atualizados remotamente, recarregando...');
+      // Recarregar dados quando houver mudanças remotas
+      if (detail.timestamp && data.caseId) {
+        // Trigger reload via re-mounting do useEffect que carrega os dados
+        window.location.reload(); // Reload simplificado por enquanto
+      }
+    }
   });
 
   // ✅ CORREÇÃO #3: Estado para benefícios anteriores

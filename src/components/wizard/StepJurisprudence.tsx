@@ -8,6 +8,7 @@ import { ExternalLink, Scale, Download, Loader2, CheckCircle2, ChevronDown, Book
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface StepJurisprudenceProps {
   data: CaseData;
@@ -72,6 +73,18 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [hasCache, setHasCache] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // ✅ FASE 3: Sincronização em tempo real
+  useTabSync({
+    caseId: data.caseId || '',
+    events: ['jurisprudence-updated', 'analysis-updated'],
+    onSync: (detail) => {
+      console.log('[StepJurisprudence] 🔄 Jurisprudências atualizadas remotamente, recarregando...');
+      if (detail.timestamp && !loading) {
+        loadCachedResults();
+      }
+    }
+  });
 
   // Carregar do cache ao entrar na aba
   useEffect(() => {

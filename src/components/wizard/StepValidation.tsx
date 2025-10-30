@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface StepValidationProps {
   data: CaseData;
@@ -27,6 +28,18 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     caseId: data.caseId || '',
     triggerType: 'validation',
     watchFields: [isValidating],
+  });
+
+  // ✅ FASE 3: Sincronização em tempo real
+  useTabSync({
+    caseId: data.caseId || '',
+    events: ['validation-updated', 'documents-updated', 'processing-completed'],
+    onSync: (detail) => {
+      console.log('[StepValidation] 🔄 Validação ou documentos atualizados, recarregando...');
+      if (detail.timestamp && !isValidating) {
+        handleValidate();
+      }
+    }
   });
 
   useEffect(() => {

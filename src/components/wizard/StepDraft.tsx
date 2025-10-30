@@ -19,6 +19,7 @@ import { AutoCorrectionProgress } from "@/components/correction/AutoCorrectionPr
 import { CorrectionHistory } from "@/components/correction/CorrectionHistory";
 import { DiffDialog } from "@/components/wizard/DiffDialog";
 import { ProgressCard } from "@/components/wizard/ProgressCard";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface StepDraftProps {
   data: CaseData;
@@ -108,6 +109,19 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
   // 🆕 Hook de Auto-Correção
   const autoCorrection = useAutoCorrection(data.caseId || '');
+
+  // ✅ FASE 3: Sincronização em tempo real
+  useTabSync({
+    caseId: data.caseId || '',
+    events: ['draft-updated', 'case-updated', 'analysis-updated', 'teses-updated'],
+    onSync: (detail) => {
+      console.log('[StepDraft] 🔄 Minuta ou dados atualizados remotamente, recarregando...');
+      if (detail.timestamp && !loading && data.caseId) {
+        // Recarregar petição do cache
+        loadQualityReport();
+      }
+    }
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // 🆕 FUNÇÕES AUXILIARES PARA VALIDAÇÃO CRITERIOSA

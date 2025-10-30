@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { TimelineChart } from "@/components/case/TimelineChart";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface StepAnalysisProps {
   data: CaseData;
@@ -73,6 +74,18 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   const { triggerFullPipeline } = useCaseOrchestration({
     caseId: data.caseId || '',
     enabled: !!data.caseId
+  });
+
+  // ✅ FASE 3: Sincronização em tempo real
+  useTabSync({
+    caseId: data.caseId || '',
+    events: ['analysis-updated', 'extractions-updated', 'benefits-updated'],
+    onSync: (detail) => {
+      console.log('[StepAnalysis] 🔄 Análise atualizada remotamente, recarregando...');
+      if (detail.timestamp && !loading) {
+        loadCachedAnalysis();
+      }
+    }
   });
 
   // ✅ CORREÇÃO #4: Carregar benefícios e verificar sobreposição
