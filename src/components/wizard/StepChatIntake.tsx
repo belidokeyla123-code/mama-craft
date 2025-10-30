@@ -299,7 +299,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 file_path: fileName,
                 file_size: pageFile.size,
                 mime_type: pageFile.type,
-                document_type: "OUTROS",
+                document_type: "outro" as any, // ✅ Será atualizado após análise
               })
               .select()
               .single();
@@ -334,6 +334,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               }]);
             } else {
               console.log(`[SEQUENTIAL] ✅ Análise concluída${pageNum}:`, analysisResult);
+              
+              // ✅ ATUALIZAR DOCUMENT_TYPE após análise
+              if (analysisResult?.docType && analysisResult.docType !== 'outro') {
+                await supabase
+                  .from('documents')
+                  .update({ document_type: analysisResult.docType })
+                  .eq('id', doc.id);
+                console.log(`[SEQUENTIAL] ✅ Tipo de documento atualizado: ${analysisResult.docType}`);
+              }
               
               // Merge dos dados extraídos
               if (analysisResult?.extracted) {

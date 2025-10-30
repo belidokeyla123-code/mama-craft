@@ -604,6 +604,34 @@ Você é um especialista altamente experiente em análise de documentos previden
       }
     }
 
+    // 12. Salvar dados de historico_escolar
+    if (docType === 'historico_escolar' && extracted.extractedData?.school_history) {
+      const { error: updateError } = await supabase
+        .from('cases')
+        .update({ school_history: extracted.extractedData.school_history })
+        .eq('id', caseId);
+      
+      if (updateError) {
+        console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar histórico escolar:`, updateError);
+      } else {
+        console.log(`[ANALYZE-SINGLE] ✅ Histórico escolar salvo:`, extracted.extractedData.school_history);
+      }
+    }
+    
+    // 13. Salvar dados de declaracao_saude_ubs
+    if (docType === 'declaracao_saude_ubs' && extracted.extractedData?.health_declaration_ubs) {
+      const { error: updateError } = await supabase
+        .from('cases')
+        .update({ health_declaration_ubs: extracted.extractedData.health_declaration_ubs })
+        .eq('id', caseId);
+      
+      if (updateError) {
+        console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar declaração de saúde:`, updateError);
+      } else {
+        console.log(`[ANALYZE-SINGLE] ✅ Declaração de saúde salva:`, extracted.extractedData.health_declaration_ubs);
+      }
+    }
+
     console.log('[ANALYZE-SINGLE] ✅ Documento processado com sucesso');
     
     // ✅ FASE 1: VALIDAÇÃO PÓS-EXTRAÇÃO
