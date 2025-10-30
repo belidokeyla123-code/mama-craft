@@ -320,40 +320,51 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
-  const analyzeWithJudgeModule = async (isRevalidation = false) => {
-    // 🔍 Buscar a última draft do banco (GARANTIR FRESH - Invalidar Cache)
-    const timestamp = Date.now();
-    const { data: latestDraft, error: fetchError } = await supabase
-      .from('drafts')
-      .select('markdown_content, id, generated_at')
-      .eq('case_id', data.caseId)
-      .order('generated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    console.log('[JUDGE] 🔍 Draft buscada:', {
-      id: latestDraft?.id,
-      timestamp: latestDraft?.generated_at,
-      length: latestDraft?.markdown_content?.length,
-      stateLength: petition.length,
-      match: latestDraft?.markdown_content?.length === petition.length,
-      invalidationTimestamp: timestamp
-    });
-
-    if (fetchError) {
-      console.error('[JUDGE] Erro ao buscar draft:', fetchError);
-    }
+  const analyzeWithJudgeModule = async (isRevalidation = false, forcedPetition?: string) => {
+    let petitionToAnalyze: string;
     
-    const petitionToAnalyze = latestDraft?.markdown_content || petition;
+    if (forcedPetition) {
+      console.log('[JUDGE] 🎯 Usando petition forçada (bypass DB):', {
+        length: forcedPetition.length,
+        source: 'forced'
+      });
+      petitionToAnalyze = forcedPetition;
+    } else {
+      // 🔍 Buscar a última draft do banco (GARANTIR FRESH - Invalidar Cache)
+      const timestamp = Date.now();
+      const { data: latestDraft, error: fetchError } = await supabase
+        .from('drafts')
+        .select('markdown_content, id, generated_at')
+        .eq('case_id', data.caseId)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      console.log('[JUDGE] 🔍 Draft buscada:', {
+        id: latestDraft?.id,
+        timestamp: latestDraft?.generated_at,
+        length: latestDraft?.markdown_content?.length,
+        stateLength: petition.length,
+        match: latestDraft?.markdown_content?.length === petition.length,
+        invalidationTimestamp: timestamp
+      });
+      
+      if (fetchError) {
+        console.error('[JUDGE] Erro ao buscar draft:', fetchError);
+        return;
+      }
+      
+      petitionToAnalyze = latestDraft?.markdown_content || petition;
+    }
     
     if (!petitionToAnalyze) {
       toast.error("Gere a petição primeiro");
       return;
     }
 
-    // Sincronizar estado local com versão do banco se diferente
-    if (latestDraft?.markdown_content && latestDraft.markdown_content !== petition) {
-      setPetition(latestDraft.markdown_content);
+    // Sincronizar estado local com versão do banco se diferente  
+    if (!forcedPetition && petitionToAnalyze && petitionToAnalyze !== petition) {
+      setPetition(petitionToAnalyze);
     }
 
     if (isRevalidation) {
@@ -2072,7 +2083,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                     {appellateAnalysis.adaptacoes_regionais.map((adapt: any, index: number) => (
                       <Card key={index} className="p-4 border-l-4 border-purple-500">
                         <Badge variant="outline" className="mb-2">{adapt.tipo}</Badge>
-                        <p className="text-sm mb-2">{adapt.sugestao}</p>
+                        <p className="text-sm mb-2">{adapt.adaptacao}</p>
                         <p className="text-xs text-muted-foreground mb-3">
                           <strong>Justificativa:</strong> {adapt.justificativa}
                         </p>

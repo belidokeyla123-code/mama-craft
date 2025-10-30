@@ -411,6 +411,7 @@ export type Database = {
           land_ownership_type: string | null
           land_property_name: string | null
           land_total_area: number | null
+          manual_benefits: Json | null
           marriage_date: string | null
           mother_cpf: string | null
           nit: string | null
@@ -473,6 +474,7 @@ export type Database = {
           land_ownership_type?: string | null
           land_property_name?: string | null
           land_total_area?: number | null
+          manual_benefits?: Json | null
           marriage_date?: string | null
           mother_cpf?: string | null
           nit?: string | null
@@ -535,6 +537,7 @@ export type Database = {
           land_ownership_type?: string | null
           land_property_name?: string | null
           land_total_area?: number | null
+          manual_benefits?: Json | null
           marriage_date?: string | null
           mother_cpf?: string | null
           nit?: string | null

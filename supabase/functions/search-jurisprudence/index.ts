@@ -168,6 +168,16 @@ Com base na ANÁLISE JURÍDICA COMPLETA e nas SITUAÇÕES ESPECÍFICAS acima, bu
 4. NÃO REPITA autores de doutrina - máximo 1 citação por autor
 5. Priorize: STJ > TRF > TNU > TJ
 
+⚠️⚠️⚠️ REGRAS CRÍTICAS DE JURISPRUDÊNCIA ⚠️⚠️⚠️
+1. **NÃO INVENTE JULGADOS:** Use APENAS jurisprudência REAL que você conhece
+2. **SE NÃO SOUBER:** Indique "buscar em repositórios oficiais" em vez de inventar
+3. **NÚMEROS DE PROCESSO:** Use formato real ou indique "a pesquisar"
+4. **DATAS DE JULGAMENTO:** Apenas se souber com certeza
+5. **TESES FIXADAS:** Cite exatamente como está no acórdão, não parafraseie
+6. **LINKS:** Apenas se souber o link real, senão deixe vazio
+
+**CRÍTICO:** Jurisprudência inventada é conduta antiética. NUNCA faça isso.
+
 Retorne JSON com NO MÁXIMO 3 de cada tipo:
 {
   "jurisprudencias": [

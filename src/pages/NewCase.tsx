@@ -144,6 +144,14 @@ export interface CaseData {
     beneficios_anteriores?: Array<{tipo: string; data: string}>;
     tempo_reconhecido_inss?: {anos: number; meses: number};
   };
+  
+  // Benefícios manuais (adicionados pelo usuário)
+  manualBenefits?: Array<{
+    inicio: string;      // YYYY-MM-DD
+    fim: string;         // YYYY-MM-DD
+    tipo: string;        // Ex: "Salário-maternidade", "Auxílio-doença rural"
+    numero_beneficio?: string; // Opcional
+  }>;
 }
 
 const STEPS = [

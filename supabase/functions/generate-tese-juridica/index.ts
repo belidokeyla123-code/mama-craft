@@ -117,6 +117,15 @@ ${JSON.stringify(selectedDoutrinas, null, 2)}
 5. Priorize QUALIDADE sobre quantidade
 6. Se não houver material suficiente para 3 teses únicas, retorne menos
 
+⚠️⚠️⚠️ REGRAS CRÍTICAS PARA TESES ⚠️⚠️⚠️
+1. **BASE EM JURISPRUDÊNCIA REAL:** Cite apenas julgados que você conhece
+2. **FUNDAMENTAÇÃO LEGAL PRECISA:** Artigos, incisos e parágrafos devem estar corretos
+3. **NÃO INVENTE INTERPRETAÇÕES:** Use interpretação jurídica consolidada
+4. **SCORE DE PERSUASÃO REALISTA:** Não inflacione artificialmente
+5. **TÉCNICAS DE PERSUASÃO:** Devem ser éticas e baseadas em retórica jurídica válida
+
+**LEMBRE-SE:** Teses fracas prejudicam a credibilidade do advogado. Seja RIGOROSO.
+
 AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes ao caso concreto. Use técnicas de PNL, retórica e persuasão. Seja eloquente mas técnico. RETORNE JSON VÁLIDO.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');

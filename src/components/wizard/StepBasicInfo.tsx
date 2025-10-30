@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { PasteDataInline } from "./PasteDataInline";
+import { StepBasicInfoBenefits } from "./StepBasicInfoBenefits";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
@@ -126,6 +127,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           rural_periods: data.ruralPeriods as any,
           urban_periods: data.urbanPeriods as any,
           family_members: data.familyMembers as any,
+          manual_benefits: data.manualBenefits as any,
           has_ra: data.hasRa,
           ra_protocol: data.raProtocol,
           ra_request_date: cleanDate(data.raRequestDate),
@@ -1771,6 +1773,9 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </div>
         )}
       </Card>
+
+      {/* BENEFÍCIOS MANUAIS */}
+      <StepBasicInfoBenefits data={data} updateData={updateData} />
 
       {/* SEÇÃO 8: SALÁRIO MÍNIMO DE REFERÊNCIA COM HISTÓRICO */}
       <Card className="p-6">
