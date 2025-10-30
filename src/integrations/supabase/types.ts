@@ -1021,6 +1021,62 @@ export type Database = {
           },
         ]
       }
+      quality_reports: {
+        Row: {
+          campos_faltantes: string[] | null
+          case_id: string | null
+          created_at: string | null
+          dados_completos: boolean | null
+          document_type: string
+          enderecamento_ok: boolean | null
+          fonte: string | null
+          generated_at: string | null
+          id: string
+          issues: Json | null
+          jurisdicao_confianca: string | null
+          jurisdicao_validada: Json | null
+          status: string
+        }
+        Insert: {
+          campos_faltantes?: string[] | null
+          case_id?: string | null
+          created_at?: string | null
+          dados_completos?: boolean | null
+          document_type: string
+          enderecamento_ok?: boolean | null
+          fonte?: string | null
+          generated_at?: string | null
+          id?: string
+          issues?: Json | null
+          jurisdicao_confianca?: string | null
+          jurisdicao_validada?: Json | null
+          status: string
+        }
+        Update: {
+          campos_faltantes?: string[] | null
+          case_id?: string | null
+          created_at?: string | null
+          dados_completos?: boolean | null
+          document_type?: string
+          enderecamento_ok?: boolean | null
+          fonte?: string | null
+          generated_at?: string | null
+          id?: string
+          issues?: Json | null
+          jurisdicao_confianca?: string | null
+          jurisdicao_validada?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_reports_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       templates: {
         Row: {
           created_at: string

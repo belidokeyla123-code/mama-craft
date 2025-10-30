@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText, Loader2, Brain } from "lucide-react";
 import { CaseData, RuralPeriod, UrbanPeriod } from "@/pages/NewCase";
 import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMinimo";
 import { useEffect, useState } from "react";
@@ -62,6 +62,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
   // ✅ CORREÇÃO #3: Estado para benefícios anteriores
   const [benefitHistory, setBenefitHistory] = useState<any[]>([]);
+  const [aiValidation, setAiValidation] = useState<any>(null);
+  const [validatingWithAI, setValidatingWithAI] = useState(false);
 
   const isAutoFilled = (fieldName: string) => {
     return autoFilledFields.includes(fieldName);
@@ -173,6 +175,47 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
     loadBenefitHistory();
   }, [data.caseId]);
+
+  // IA Contributiva: Validar dados básicos
+  const validateWithAI = async () => {
+    if (!data.caseId || !data.birthCity || !data.birthState) return;
+    
+    setValidatingWithAI(true);
+    try {
+      const { data: validation, error } = await supabase.functions.invoke('validate-jurisdiction', {
+        body: { 
+          city: data.birthCity, 
+          uf: data.birthState,
+          address: data.authorAddress 
+        }
+      });
+
+      if (!error && validation) {
+        setAiValidation(validation);
+        
+        if (validation.confianca === 'baixa') {
+          toast.warning('⚠️ A IA identificou possíveis inconsistências nos dados de endereço', {
+            duration: 5000
+          });
+        } else if (validation.confianca === 'alta') {
+          toast.success('✅ Dados validados pela IA com alta confiança', {
+            duration: 3000
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao validar com IA:', error);
+    } finally {
+      setValidatingWithAI(false);
+    }
+  };
+
+  // Executar validação quando dados mudarem
+  useEffect(() => {
+    if (data.birthCity && data.birthState && data.authorAddress) {
+      validateWithAI();
+    }
+  }, [data.birthCity, data.birthState, data.authorAddress]);
 
   // Carregar análise do CNIS quando o componente montar
   useEffect(() => {
@@ -566,6 +609,69 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               {criticalFieldsEmpty.authorName && <li>Nome da autora/mãe está vazio</li>}
               {criticalFieldsEmpty.authorCpf && <li>CPF da autora/mãe está vazio</li>}
             </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* IA CONTRIBUTIVA: VALIDAÇÃO DE DADOS */}
+      {aiValidation && (
+        <Alert className={
+          aiValidation.confianca === 'alta' ? 'border-green-500 bg-green-50' :
+          aiValidation.confianca === 'media' ? 'border-yellow-500 bg-yellow-50' :
+          'border-red-500 bg-red-50'
+        }>
+          <Brain className={`h-4 w-4 ${
+            aiValidation.confianca === 'alta' ? 'text-green-600' :
+            aiValidation.confianca === 'media' ? 'text-yellow-600' :
+            'text-red-600'
+          }`} />
+          <AlertTitle className="font-semibold flex items-center gap-2">
+            🤖 IA Contributiva
+            <Badge variant={
+              aiValidation.confianca === 'alta' ? 'default' :
+              aiValidation.confianca === 'media' ? 'secondary' :
+              'destructive'
+            }>
+              Confiança: {aiValidation.confianca}
+            </Badge>
+          </AlertTitle>
+          <AlertDescription className="mt-2">
+            {aiValidation.confianca === 'alta' ? (
+              <div className="text-green-800">
+                <p className="font-semibold">✅ Dados validados com sucesso!</p>
+                <div className="mt-2 text-sm">
+                  <p><strong>Jurisdição:</strong> {aiValidation.subsecao}/{aiValidation.uf}</p>
+                  {aiValidation.observacao && (
+                    <p className="mt-1"><strong>Observação:</strong> {aiValidation.observacao}</p>
+                  )}
+                  {aiValidation.fonte && aiValidation.fonte !== 'dados do caso' && (
+                    <p className="mt-2 text-xs">
+                      <strong>Fonte:</strong>{' '}
+                      <a 
+                        href={aiValidation.fonte} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        {aiValidation.fonte}
+                      </a>
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className={aiValidation.confianca === 'media' ? 'text-yellow-800' : 'text-red-800'}>
+                <p className="font-semibold">
+                  {aiValidation.confianca === 'media' ? '⚠️ ' : '🔴 '}
+                  {aiValidation.observacao || 'Dados precisam de verificação'}
+                </p>
+                <div className="mt-2 text-sm">
+                  {aiValidation.subsecao && (
+                    <p><strong>Jurisdição sugerida:</strong> {aiValidation.subsecao}/{aiValidation.uf}</p>
+                  )}
+                </div>
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       )}

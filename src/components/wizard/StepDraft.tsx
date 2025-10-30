@@ -1,10 +1,11 @@
 import { CaseData } from "@/pages/NewCase";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,6 +72,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [applyingRegionalAdaptations, setApplyingRegionalAdaptations] = useState(false);
   const [applyingIndividualSuggestion, setApplyingIndividualSuggestion] = useState<number | null>(null);
   const [applyingIndividualAdaptation, setApplyingIndividualAdaptation] = useState<number | null>(null);
+  const [qualityReport, setQualityReport] = useState<any>(null);
 
   // ✅ CORREÇÃO #1: Verificar e regeração automática de petição com placeholders
   useEffect(() => {
@@ -127,23 +129,70 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             toast.success('✅ Petição regerada com sucesso!', { id: 'regen' });
           } else {
             // Cache válido, carregar
-            setPetition(draft.markdown_content);
-            setHasCache(true);
-            console.log('[DRAFT] ✅ Carregado do cache (sem placeholders)');
-          }
+          setPetition(draft.markdown_content);
+          setHasCache(true);
+          console.log('[DRAFT] ✅ Carregado do cache (sem placeholders)');
+          
+          // ✅ Carregar relatório de qualidade
+          await loadQualityReport();
         }
-      } catch (error) {
-        console.error('[DRAFT] Erro ao verificar cache:', error);
       }
+    } catch (error) {
+      console.error('[DRAFT] Erro ao verificar cache:', error);
+    }
+    
+    // Carregar template também
+    await loadExistingTemplate();
+  };
+  
+  const loadQualityReport = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: report, error } = await supabase
+        .from('quality_reports')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .eq('document_type', 'petition')
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       
-      // Carregar template também
-      await loadExistingTemplate();
-    };
+      if (!error && report) {
+        setQualityReport(report);
+        console.log('[QUALITY] Relatório carregado:', report);
+      }
+    } catch (error) {
+      console.error('[QUALITY] Erro ao carregar relatório:', error);
+    }
+  };
     
     if (data.caseId && !petition) {
       checkAndRegeneratePetition();
     }
   }, [data.caseId]);
+
+  const loadQualityReport = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: report, error } = await supabase
+        .from('quality_reports')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .eq('document_type', 'petition')
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (!error && report) {
+        setQualityReport(report);
+        console.log('[QUALITY] Relatório carregado:', report);
+      }
+    } catch (error) {
+      console.error('[QUALITY] Erro ao carregar relatório:', error);
+    }
+  };
 
   // ✅ CORREÇÃO #5: Função para limpar cache e regerar tudo
   const clearCacheAndRegenerate = async () => {
@@ -254,6 +303,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (petitionContent) {
         setPetition(petitionContent);
         setHasCache(true);
+        
+        // Carregar relatório de qualidade
+        await loadQualityReport();
       }
     } catch (error) {
       console.error('Erro ao gerar petição:', error);
@@ -870,6 +922,111 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           </Button>
         </h2>
       </div>
+
+      {/* ✅ CONTROLE DE QUALIDADE */}
+      {qualityReport && (
+        <Card className="border-2 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              🤖 Controle de Qualidade - IA Devolutiva
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Status Geral</span>
+                <Badge variant={
+                  qualityReport.status === 'aprovado' ? 'default' :
+                  qualityReport.status === 'corrigido_automaticamente' ? 'secondary' :
+                  'destructive'
+                }>
+                  {qualityReport.status === 'aprovado' ? '✅ Aprovado' :
+                   qualityReport.status === 'corrigido_automaticamente' ? '⚡ Corrigido Automaticamente' :
+                   '⚠️ Requer Revisão'}
+                </Badge>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Endereçamento</span>
+                {qualityReport.enderecamento_ok ? (
+                  <Badge variant="default" className="bg-green-600">✅ Correto</Badge>
+                ) : (
+                  <Badge variant="destructive">❌ Corrigido pela IA</Badge>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Dados Completos</span>
+                {qualityReport.dados_completos ? (
+                  <Badge variant="default" className="bg-green-600">✅ Todos preenchidos</Badge>
+                ) : (
+                  <Badge variant="secondary">⚠️ {qualityReport.campos_faltantes?.length || 0} campos faltando</Badge>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Jurisdição (validada online)</span>
+                <Badge variant={
+                  qualityReport.jurisdicao_confianca === 'alta' ? 'default' :
+                  qualityReport.jurisdicao_confianca === 'media' ? 'secondary' :
+                  'outline'
+                }>
+                  {qualityReport.jurisdicao_confianca === 'alta' ? '✅ Alta confiança' :
+                   qualityReport.jurisdicao_confianca === 'media' ? '⚠️ Média confiança' :
+                   '📍 Baixa confiança'}
+                </Badge>
+              </div>
+              
+              {qualityReport.jurisdicao_validada && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 mb-1">
+                    Jurisdição Validada:
+                  </p>
+                  <p className="text-sm text-blue-800">
+                    <strong>Subseção:</strong> {qualityReport.jurisdicao_validada.subsecao}/{qualityReport.jurisdicao_validada.uf}
+                  </p>
+                  {qualityReport.jurisdicao_validada.observacao && (
+                    <p className="text-sm text-blue-800 mt-1">
+                      <strong>Observação:</strong> {qualityReport.jurisdicao_validada.observacao}
+                    </p>
+                  )}
+                  {qualityReport.fonte && qualityReport.fonte !== 'dados do caso' && (
+                    <p className="text-xs text-blue-600 mt-2">
+                      <strong>Fonte:</strong>{' '}
+                      <a 
+                        href={qualityReport.fonte} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        {qualityReport.fonte}
+                      </a>
+                    </p>
+                  )}
+                </div>
+              )}
+              
+              {qualityReport.issues && qualityReport.issues.length > 0 && (
+                <Alert variant={qualityReport.issues.some((i: any) => i.gravidade === 'CRÍTICO') ? 'destructive' : 'default'}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Problemas Detectados e Corrigidos</AlertTitle>
+                  <AlertDescription>
+                    <ul className="list-disc ml-4 mt-2 text-sm">
+                      {qualityReport.issues.map((issue: any, idx: number) => (
+                        <li key={idx}>
+                          <strong>{issue.tipo}:</strong> {issue.problema}
+                          {issue.acao && <span className="text-green-600 ml-2">({issue.acao})</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Ações da Petição */}
       <div className="flex flex-wrap items-center gap-3">

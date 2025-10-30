@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.migrate-extractions-to-history]
 verify_jwt = false
+
+[functions.validate-jurisdiction]
+verify_jwt = false

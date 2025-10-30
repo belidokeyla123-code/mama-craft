@@ -99,6 +99,40 @@ serve(async (req) => {
 
     console.log(`[ENDEREÇAMENTO FINAL] Cidade: ${city} | UF: ${uf}`);
     
+    // ═══ VALIDAÇÃO ONLINE DE JURISDIÇÃO ═══
+    console.log('🔍 Validando jurisdição na internet...');
+    let subsecao = city;
+    let enderecoJusticaFederal = '';
+    let jurisdicaoValidada: any = {
+      confianca: 'media',
+      fonte: 'dados do caso'
+    };
+
+    try {
+      const { data: validation, error: validationError } = await supabase.functions.invoke('validate-jurisdiction', {
+        body: { city, uf, address: autoraEndereco }
+      });
+
+      if (!validationError && validation?.subsecao) {
+        subsecao = validation.subsecao;
+        enderecoJusticaFederal = validation.endereco || '';
+        jurisdicaoValidada = validation;
+        
+        console.log('✅ Jurisdição validada online:', {
+          cidade_autora: city,
+          subsecao_correta: subsecao,
+          confianca: validation.confianca,
+          fonte: validation.fonte
+        });
+      } else {
+        console.warn('⚠️ Não foi possível validar jurisdição online. Usando cidade como fallback.');
+        subsecao = city;
+      }
+    } catch (validationError) {
+      console.error('❌ Erro ao validar jurisdição:', validationError);
+      subsecao = city;
+    }
+    
     // Mapear tribunal por UF
     const trfMap: Record<string, string> = {
       'AC': 'TRF1', 'AM': 'TRF1', 'AP': 'TRF1', 'BA': 'TRF1', 'DF': 'TRF1', 'GO': 'TRF1',
@@ -111,6 +145,11 @@ serve(async (req) => {
     };
     const trf = trfMap[uf] || 'TRF3';
     const trfNumber = trf.replace('TRF', '');
+    
+    // Se não conseguiu endereço específico, usar padrão
+    if (!enderecoJusticaFederal) {
+      enderecoJusticaFederal = `JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}`;
+    }
 
     // BANCO DE ENDEREÇOS DO INSS POR CIDADE
     const inssAddresses: Record<string, string> = {
@@ -153,10 +192,15 @@ Você DEVE gerar uma petição inicial seguindo EXATAMENTE este formato. PREENCH
 
 **I. ENDEREÇAMENTO (PRIMEIRA LINHA DA PETIÇÃO):**
 
-🚨 ATENÇÃO: A autora mora em ${city}/${uf}, NÃO em São Paulo!
+🚨🚨🚨 ATENÇÃO CRÍTICA - VALIDADO NA INTERNET:
+- A autora mora em: ${city}/${uf}
+- Subseção Judiciária CORRETA: ${subsecao}/${uf}
+${jurisdicaoValidada.observacao ? `- Observação: ${jurisdicaoValidada.observacao}` : ''}
+- Fonte de validação: ${jurisdicaoValidada.fonte}
+- Confiança na validação: ${jurisdicaoValidada.confianca}
 
 EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA ${trfNumber}ª REGIÃO
-JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}
+${enderecoJusticaFederal}
 
 ═══════════════════════════════════════════════════════════════
 
@@ -358,21 +402,64 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
       const aiData = await aiResponse.json();
       let petitionText = aiData.choices[0].message.content;
 
-      // ✅ CORREÇÃO #4: Validação pós-geração - Verificar cidade incorreta
-      if (petitionText.includes('SÃO PAULO/SP') && city.toUpperCase() !== 'SÃO PAULO') {
-        console.error('🔴 ERRO CRÍTICO: IA gerou petição para São Paulo mas deveria ser', city, uf);
-        console.error('Substituindo automaticamente...');
+      // ═══ CONTROLE DE QUALIDADE PÓS-GERAÇÃO ═══
+      console.log('🔍 Executando controle de qualidade...');
+      
+      const qualityIssues = [];
+
+      // 1. Verificar se usou a subseção correta
+      if (subsecao && subsecao !== city && !petitionText.includes(subsecao.toUpperCase())) {
+        qualityIssues.push({
+          tipo: 'ENDEREÇAMENTO_INCORRETO',
+          gravidade: 'CRÍTICO',
+          problema: `Petição não menciona a subseção correta "${subsecao}"`,
+          linha_esperada: `JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}`,
+          acao: 'Corrigindo automaticamente...'
+        });
         
-        // Corrigir automaticamente
+        console.error('🔴 ERRO CRÍTICO: IA não usou subseção correta. Corrigindo...');
+        
+        // Correção automática
+        petitionText = petitionText.replace(
+          new RegExp(`JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}`, 'g'),
+          `JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}`
+        );
+        
+        petitionText = petitionText.replace(
+          new RegExp(`${city}/${uf}`, 'g'),
+          `${subsecao}/${uf}`
+        );
+      }
+
+      // 2. Verificar cidade incorreta (fallback adicional)
+      if (petitionText.includes('SÃO PAULO/SP') && city.toUpperCase() !== 'SÃO PAULO' && subsecao.toUpperCase() !== 'SÃO PAULO') {
+        qualityIssues.push({
+          tipo: 'CIDADE_INCORRETA',
+          gravidade: 'CRÍTICO',
+          problema: 'Petição menciona São Paulo incorretamente'
+        });
+        
+        console.error('🔴 ERRO CRÍTICO: IA gerou petição para São Paulo mas deveria ser', subsecao || city, uf);
+        
         petitionText = petitionText.replace(
           /JUIZADO ESPECIAL FEDERAL DE SÃO PAULO\/SP/g,
-          `JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}`
+          `JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}`
         );
         
         petitionText = petitionText.replace(
           /São Paulo\/SP/g,
-          `${city}/${uf}`
+          `${subsecao}/${uf}`
         );
+      }
+
+      // 3. Verificar cidade no corpo do texto
+      const wrongCityPattern = new RegExp(`(em|de|município de)\\s+(?!${city})(?!${subsecao})\\w+/${uf}`, 'gi');
+      if (wrongCityPattern.test(petitionText)) {
+        qualityIssues.push({
+          tipo: 'CIDADE_INCONSISTENTE',
+          gravidade: 'ALTO',
+          problema: 'Petição menciona cidade diferente da autora no corpo do texto'
+        });
       }
 
       // VALIDAÇÃO PÓS-GERAÇÃO - Verificar campos obrigatórios
@@ -412,11 +499,48 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
         .replace(/\[inserir\]/gi, '')
         .replace(/\[preencher\]/gi, '');
       
+      // 4. Verificar RG/CPF placeholders
+      if (petitionText.includes('[RG]') || petitionText.includes('[CPF]')) {
+        qualityIssues.push({
+          tipo: 'DADOS_INCOMPLETOS',
+          gravidade: 'ALTO',
+          problema: 'RG ou CPF não foram substituídos'
+        });
+      }
+
       if (missingFields.length > 0) {
         console.error('❌ Campos obrigatórios faltantes:', missingFields);
       } else {
         console.log('✅ Petição validada com sucesso');
       }
+
+      // Salvar relatório de qualidade
+      const qualityStatus = qualityIssues.length === 0 ? 'aprovado' : 
+                           qualityIssues.some(i => i.gravidade === 'CRÍTICO') ? 'corrigido_automaticamente' : 
+                           'aprovado_com_avisos';
+
+      const camposFaltantes = missingFields.filter(f => f !== 'Endereçamento do Juízo');
+      
+      await supabase
+        .from('quality_reports')
+        .insert({
+          case_id: caseId,
+          document_type: 'petition',
+          issues: qualityIssues,
+          status: qualityStatus,
+          jurisdicao_validada: jurisdicaoValidada,
+          enderecamento_ok: !qualityIssues.some(i => i.tipo.includes('ENDEREÇAMENTO')),
+          dados_completos: camposFaltantes.length === 0,
+          campos_faltantes: camposFaltantes,
+          jurisdicao_confianca: jurisdicaoValidada.confianca,
+          fonte: jurisdicaoValidada.fonte,
+        });
+
+      console.log('📊 Relatório de qualidade salvo:', {
+        status: qualityStatus,
+        problemas: qualityIssues.length,
+        confianca: jurisdicaoValidada.confianca
+      });
 
       // Salvar draft no banco
       await supabase
@@ -424,7 +548,7 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
         .insert({
           case_id: caseId,
           markdown_content: petitionText,
-          payload: { selectedJurisprudencias }
+          payload: { selectedJurisprudencias, jurisdicaoValidada }
         });
 
       return new Response(JSON.stringify({ petitionText }), {
