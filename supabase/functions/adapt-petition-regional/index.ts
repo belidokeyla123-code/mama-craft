@@ -125,7 +125,7 @@ IMPORTANTE: Mantenha a estrutura e argumentos principais, apenas adapte o estilo
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-pro', // 🆕 Mais preciso para análise regional crítica
+        model: 'google/gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: "json_object" }
       }),

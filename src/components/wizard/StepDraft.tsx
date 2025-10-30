@@ -76,8 +76,11 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [applyingRegionalAdaptations, setApplyingRegionalAdaptations] = useState(false);
   const [applyingIndividualSuggestion, setApplyingIndividualSuggestion] = useState<number | null>(null);
   const [applyingIndividualAdaptation, setApplyingIndividualAdaptation] = useState<number | null>(null);
+  const [applyingIndividualAppellateAdaptation, setApplyingIndividualAppellateAdaptation] = useState<number | null>(null);
   const [qualityReport, setQualityReport] = useState<any>(null);
   const [selectedBrechas, setSelectedBrechas] = useState<number[]>([]);
+  const [selectedAdaptations, setSelectedAdaptations] = useState<number[]>([]);
+  const [selectedAppellateAdaptations, setSelectedAppellateAdaptations] = useState<number[]>([]);
 
   // ✅ CORREÇÃO #1: Verificar e regeração automática de petição com placeholders
   useEffect(() => {
@@ -1306,7 +1309,78 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   };
 
   const applyRegionalAdaptations = async () => {
+    if (!regionalAdaptation?.adaptacoes_sugeridas || regionalAdaptation.adaptacoes_sugeridas.length === 0) {
+      toast.error('Nenhuma adaptação disponível');
+      return;
+    }
+
     setApplyingRegionalAdaptations(true);
+    try {
+      console.log('[REGIONAL] Aplicando adaptações:', regionalAdaptation.adaptacoes_sugeridas.length);
+      
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: {
+          petition,
+          judgeAnalysis: {
+            brechas: [],
+            pontos_fortes: [],
+            pontos_fracos: [],
+            recomendacoes: regionalAdaptation.adaptacoes_sugeridas.map(a => a.adaptacao)
+          }
+        }
+      });
+
+      if (error) {
+        console.error('[REGIONAL] Erro ao aplicar:', error);
+        throw error;
+      }
+
+      if (result?.petition_corrigida) {
+        console.log('[REGIONAL] Petição corrigida recebida:', result.petition_corrigida.length, 'chars');
+        setPetition(result.petition_corrigida);
+        
+        // ✅ Usar INSERT ao invés de UPSERT para garantir que salva
+        const { data: savedDraft, error: saveError } = await supabase
+          .from('drafts')
+          .insert({
+            case_id: data.caseId,
+            markdown_content: result.petition_corrigida,
+            payload: { regional_adaptations_applied: true, trf: regionalAdaptation.trf }
+          })
+          .select()
+          .single();
+        
+        if (saveError) {
+          console.error('[REGIONAL] Erro ao salvar:', saveError);
+        } else {
+          console.log('[REGIONAL] ✅ Salvo no banco - ID:', savedDraft.id);
+        }
+        
+        toast.success(`✅ ${regionalAdaptation.adaptacoes_sugeridas.length} adaptações regionais aplicadas!`);
+        
+        // Flash visual
+        setTimeout(() => {
+          const el = document.querySelector('[data-petition-content]');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.classList.add('ring-4', 'ring-blue-500', 'transition-all');
+            setTimeout(() => el.classList.remove('ring-4', 'ring-blue-500'), 2000);
+          }
+        }, 300);
+      } else {
+        console.warn('[REGIONAL] Resposta sem petition_corrigida');
+        toast.error('Erro: resposta sem conteúdo');
+      }
+    } catch (error: any) {
+      console.error('[REGIONAL] Erro geral:', error);
+      toast.error('Erro: ' + error.message);
+    } finally {
+      setApplyingRegionalAdaptations(false);
+    }
+  };
+
+  const applySingleAppellateAdaptation = async (adaptacao: any, index: number) => {
+    setApplyingIndividualAppellateAdaptation(index);
     try {
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
         body: {
@@ -1315,7 +1389,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             brechas: [],
             pontos_fortes: [],
             pontos_fracos: [],
-            recomendacoes: regionalAdaptation?.adaptacoes_sugeridas.map(a => a.adaptacao) || []
+            recomendacoes: [adaptacao.adaptacao]
           }
         }
       });
@@ -1325,22 +1399,27 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (result?.petition_corrigida) {
         setPetition(result.petition_corrigida);
         
-        await supabase.from('drafts').upsert({
+        await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
-          payload: { regional_adaptations_applied: true }
+          payload: { appellate_adaptation: adaptacao.tipo }
         });
         
-        toast.success(`✅ ${regionalAdaptation?.adaptacoes_sugeridas.length || 0} adaptações regionais aplicadas!`);
+        toast.success(`✅ Adaptação "${adaptacao.tipo}" aplicada!`);
       }
     } catch (error: any) {
       toast.error('Erro: ' + error.message);
     } finally {
-      setApplyingRegionalAdaptations(false);
+      setApplyingIndividualAppellateAdaptation(null);
     }
   };
 
   const applyAppellateAdaptations = async () => {
+    if (!appellateAnalysis?.adaptacoes_regionais || appellateAnalysis.adaptacoes_regionais.length === 0) {
+      toast.error('Nenhuma adaptação recursiva disponível');
+      return;
+    }
+
     setApplyingRegionalAdaptations(true);
     try {
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
@@ -2084,37 +2163,83 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                   </div>
                 )}
 
-                {/* ✅ CORREÇÃO #1: Adaptações Sugeridas com botões individuais */}
+                {/* Adaptações Sugeridas com seleção e exclusão */}
                 {regionalAdaptation.adaptacoes_sugeridas.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="font-semibold">Adaptações Sugeridas por Seção</h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold">Adaptações Sugeridas por Seção</h4>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            if (selectedAdaptations.length === regionalAdaptation.adaptacoes_sugeridas.length) {
+                              setSelectedAdaptations([]);
+                            } else {
+                              setSelectedAdaptations(regionalAdaptation.adaptacoes_sugeridas.map((_, i) => i));
+                            }
+                          }}
+                        >
+                          {selectedAdaptations.length === regionalAdaptation.adaptacoes_sugeridas.length ? 'Desmarcar' : 'Selecionar'} Todas
+                        </Button>
+                        {selectedAdaptations.length > 0 && (
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => {
+                              const remaining = regionalAdaptation.adaptacoes_sugeridas.filter((_, i) => !selectedAdaptations.includes(i));
+                              setRegionalAdaptation({ ...regionalAdaptation, adaptacoes_sugeridas: remaining });
+                              setSelectedAdaptations([]);
+                              toast.success(`${selectedAdaptations.length} adaptação(ões) excluída(s)`);
+                            }}
+                          >
+                            Excluir Selecionadas ({selectedAdaptations.length})
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     {regionalAdaptation.adaptacoes_sugeridas.map((adapt, index) => (
                       <Card key={index} className="p-4 border-l-4 border-blue-500">
-                        <Badge variant="outline" className="mb-2">{adapt.secao}</Badge>
-                        <p className="text-sm mb-2">{adapt.adaptacao}</p>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          <strong>Justificativa:</strong> {adapt.justificativa}
-                        </p>
-                        
-                        <Button
-                          size="sm"
-                          onClick={() => applySingleAdaptation(adapt, index)}
-                          disabled={applyingIndividualAdaptation !== null}
-                          className="gap-2 w-full"
-                          variant="outline"
-                        >
-                          {applyingIndividualAdaptation === index ? (
-                            <>
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Aplicando...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCheck className="h-3 w-3" />
-                              Aplicar esta Adaptação
-                            </>
-                          )}
-                        </Button>
+                        <div className="flex items-start gap-3">
+                          <Checkbox 
+                            checked={selectedAdaptations.includes(index)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedAdaptations([...selectedAdaptations, index]);
+                              } else {
+                                setSelectedAdaptations(selectedAdaptations.filter(i => i !== index));
+                              }
+                            }}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <Badge variant="outline" className="mb-2">{adapt.secao}</Badge>
+                            <p className="text-sm mb-2">{adapt.adaptacao}</p>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              <strong>Justificativa:</strong> {adapt.justificativa}
+                            </p>
+                            
+                            <Button
+                              size="sm"
+                              onClick={() => applySingleAdaptation(adapt, index)}
+                              disabled={applyingIndividualAdaptation !== null}
+                              className="gap-2 w-full"
+                              variant="outline"
+                            >
+                              {applyingIndividualAdaptation === index ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Aplicando...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCheck className="h-3 w-3" />
+                                  Aplicar esta Adaptação
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
                       </Card>
                     ))}
                   </div>
@@ -2176,37 +2301,83 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                   </Button>
                 </div>
 
-                {/* Adaptações Regionais */}
+                {/* Adaptações Regionais com seleção e exclusão */}
                 {appellateAnalysis.adaptacoes_regionais?.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="font-semibold">Adaptações Regionais Sugeridas</h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold">Adaptações Recursivas Sugeridas</h4>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            if (selectedAppellateAdaptations.length === appellateAnalysis.adaptacoes_regionais.length) {
+                              setSelectedAppellateAdaptations([]);
+                            } else {
+                              setSelectedAppellateAdaptations(appellateAnalysis.adaptacoes_regionais.map((_: any, i: number) => i));
+                            }
+                          }}
+                        >
+                          {selectedAppellateAdaptations.length === appellateAnalysis.adaptacoes_regionais.length ? 'Desmarcar' : 'Selecionar'} Todas
+                        </Button>
+                        {selectedAppellateAdaptations.length > 0 && (
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => {
+                              const remaining = appellateAnalysis.adaptacoes_regionais.filter((_: any, i: number) => !selectedAppellateAdaptations.includes(i));
+                              setAppellateAnalysis({ ...appellateAnalysis, adaptacoes_regionais: remaining });
+                              setSelectedAppellateAdaptations([]);
+                              toast.success(`${selectedAppellateAdaptations.length} adaptação(ões) excluída(s)`);
+                            }}
+                          >
+                            Excluir Selecionadas ({selectedAppellateAdaptations.length})
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     {appellateAnalysis.adaptacoes_regionais.map((adapt: any, index: number) => (
                       <Card key={index} className="p-4 border-l-4 border-purple-500">
-                        <Badge variant="outline" className="mb-2">{adapt.tipo}</Badge>
-                        <p className="text-sm mb-2">{adapt.adaptacao}</p>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          <strong>Justificativa:</strong> {adapt.justificativa}
-                        </p>
-                        
-                        <Button
-                          size="sm"
-                          onClick={() => applySingleAdaptation(adapt, index)}
-                          disabled={applyingIndividualAdaptation !== null}
-                          className="gap-2 w-full"
-                          variant="outline"
-                        >
-                          {applyingIndividualAdaptation === index ? (
-                            <>
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Aplicando...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCheck className="h-3 w-3" />
-                              Aplicar esta Adaptação
-                            </>
-                          )}
-                        </Button>
+                        <div className="flex items-start gap-3">
+                          <Checkbox 
+                            checked={selectedAppellateAdaptations.includes(index)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedAppellateAdaptations([...selectedAppellateAdaptations, index]);
+                              } else {
+                                setSelectedAppellateAdaptations(selectedAppellateAdaptations.filter(i => i !== index));
+                              }
+                            }}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <Badge variant="outline" className="mb-2">{adapt.tipo}</Badge>
+                            <p className="text-sm mb-2">{adapt.adaptacao}</p>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              <strong>Justificativa:</strong> {adapt.justificativa}
+                            </p>
+                            
+                            <Button
+                              size="sm"
+                              onClick={() => applySingleAppellateAdaptation(adapt, index)}
+                              disabled={applyingIndividualAppellateAdaptation !== null}
+                              className="gap-2 w-full"
+                              variant="outline"
+                            >
+                              {applyingIndividualAppellateAdaptation === index ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Aplicando...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCheck className="h-3 w-3" />
+                                  Aplicar esta Adaptação
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
                       </Card>
                     ))}
                   </div>
