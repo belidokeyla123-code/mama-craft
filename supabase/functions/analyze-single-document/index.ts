@@ -804,13 +804,6 @@ Retorne esses campos no objeto \`universalData\` separado.
     if (docType === 'procuracao' && extracted.extractedData) {
       const procuracaoUpdates: any = {};
       
-      // Helper para validar datas
-      const isValidDate = (dateStr: any): boolean => {
-        if (!dateStr || typeof dateStr !== 'string') return false;
-        return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
-               !/não|indefinido|identificado|extrair|disponível/i.test(dateStr);
-      };
-      
       // A outorgante (granterName) É a autora do processo
       if (extracted.extractedData.granterName) {
         procuracaoUpdates.author_name = extracted.extractedData.granterName;
@@ -824,8 +817,17 @@ Retorne esses campos no objeto \`universalData\` separado.
         procuracaoUpdates.author_address = extracted.extractedData.granterAddress;
       }
       
-      if (isValidDate(extracted.extractedData.signatureDate)) {
-        procuracaoUpdates.procuracao_date = extracted.extractedData.signatureDate;
+      // Salvar dados do universalData (extraídos pela IA de qualquer documento)
+      if (extracted.universalData?.authorRg) {
+        procuracaoUpdates.author_rg = extracted.universalData.authorRg;
+      }
+      
+      if (extracted.universalData?.authorAddress && !procuracaoUpdates.author_address) {
+        procuracaoUpdates.author_address = extracted.universalData.authorAddress;
+      }
+      
+      if (extracted.universalData?.authorMaritalStatus) {
+        procuracaoUpdates.author_marital_status = extracted.universalData.authorMaritalStatus;
       }
       
       if (Object.keys(procuracaoUpdates).length > 0) {
@@ -878,6 +880,19 @@ Retorne esses campos no objeto \`universalData\` separado.
       
       if (extracted.extractedData.motherCpf && /^\d{11}$/.test(extracted.extractedData.motherCpf)) {
         idUpdates.mother_cpf = extracted.extractedData.motherCpf;
+      }
+      
+      // Salvar dados do universalData (extraídos pela IA de qualquer documento)
+      if (extracted.universalData?.authorAddress) {
+        idUpdates.author_address = extracted.universalData.authorAddress;
+      }
+      
+      if (extracted.universalData?.authorMaritalStatus) {
+        idUpdates.author_marital_status = extracted.universalData.authorMaritalStatus;
+      }
+      
+      if (extracted.universalData?.authorPhone) {
+        idUpdates.author_phone = extracted.universalData.authorPhone;
       }
       
       if (Object.keys(idUpdates).length > 0) {
