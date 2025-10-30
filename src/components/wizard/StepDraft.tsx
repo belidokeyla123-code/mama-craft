@@ -2951,7 +2951,7 @@ ${tabelaDocumentos}
                 
                 {/* Botão Aplicar Correções */}
                 <div className="flex justify-end gap-2 pt-4 border-t">
-                  {judgeAnalysis.brechas.length > 0 && (
+                  {judgeAnalysis.brechas?.length > 0 && (
                     <>
                       <Button 
                         onClick={() => {
@@ -3008,7 +3008,7 @@ ${tabelaDocumentos}
                   </Button>
                 </div>
                 
-                {judgeAnalysis.brechas.length === 0 && (
+                {(judgeAnalysis.brechas?.length ?? 0) === 0 && (
                   <Alert className="bg-green-50 border-green-200">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
                     <AlertTitle className="text-green-800">✅ Petição Sem Brechas</AlertTitle>
@@ -3030,7 +3030,7 @@ ${tabelaDocumentos}
                 </div>
 
                 {/* Brechas Identificadas */}
-                {judgeAnalysis.brechas.length > 0 && (
+                {(judgeAnalysis.brechas?.length ?? 0) > 0 && (
                   <div className="space-y-3">
                     <h4 className="font-semibold flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
@@ -3041,28 +3041,28 @@ ${tabelaDocumentos}
                   <div className="flex items-center gap-4">
                     <Checkbox 
                       id="select-all-brechas"
-                      checked={selectedBrechas.length === judgeAnalysis.brechas.length && judgeAnalysis.brechas.length > 0}
+                      checked={selectedBrechas.length === (judgeAnalysis.brechas?.length ?? 0) && (judgeAnalysis.brechas?.length ?? 0) > 0}
                       onCheckedChange={(checked) => {
                         if (checked) {
-                          setSelectedBrechas(judgeAnalysis.brechas.map((_, i) => i));
+                          setSelectedBrechas(judgeAnalysis.brechas?.map((_, i) => i) ?? []);
                         } else {
                           setSelectedBrechas([]);
                         }
                       }}
                     />
                     <Label htmlFor="select-all-brechas" className="font-medium cursor-pointer text-sm">
-                      {selectedBrechas.length === judgeAnalysis.brechas.length && judgeAnalysis.brechas.length > 0
+                      {selectedBrechas.length === (judgeAnalysis.brechas?.length ?? 0) && (judgeAnalysis.brechas?.length ?? 0) > 0
                         ? "Desmarcar Todas" 
                         : "Selecionar Todas"}
                     </Label>
                   </div>
                   
                   <Badge variant="secondary" className="text-xs">
-                    {selectedBrechas.length} de {judgeAnalysis.brechas.length} selecionada(s)
+                    {selectedBrechas.length} de {judgeAnalysis.brechas?.length ?? 0} selecionada(s)
                   </Badge>
                 </div>
 
-                {judgeAnalysis.brechas.map((brecha, index) => (
+                {judgeAnalysis.brechas?.map((brecha, index) => (
                   <Card key={index} className="p-4 border-l-4" style={{
                     borderLeftColor: brecha.gravidade === 'alta' ? 'hsl(var(--destructive))' : 
                                    brecha.gravidade === 'media' ? 'hsl(var(--warning))' : 
@@ -3146,7 +3146,7 @@ ${tabelaDocumentos}
                   <Card className="p-4">
                     <h4 className="font-semibold text-green-600 mb-2">Pontos Fortes</h4>
                     <ul className="list-disc list-inside space-y-1 text-sm">
-                      {judgeAnalysis.pontos_fortes.map((ponto, index) => (
+                      {judgeAnalysis.pontos_fortes?.map((ponto, index) => (
                         <li key={index}>{ponto}</li>
                       ))}
                     </ul>
@@ -3154,7 +3154,7 @@ ${tabelaDocumentos}
                   <Card className="p-4">
                     <h4 className="font-semibold text-red-600 mb-2">Pontos Fracos</h4>
                     <ul className="list-disc list-inside space-y-1 text-sm">
-                      {judgeAnalysis.pontos_fracos.map((ponto, index) => (
+                      {judgeAnalysis.pontos_fracos?.map((ponto, index) => (
                         <li key={index}>{ponto}</li>
                       ))}
                     </ul>
@@ -3162,11 +3162,11 @@ ${tabelaDocumentos}
                 </div>
 
                 {/* Recomendações */}
-                {judgeAnalysis.recomendacoes.length > 0 && (
+                {(judgeAnalysis.recomendacoes?.length ?? 0) > 0 && (
                   <div className="space-y-2">
                     <h4 className="font-semibold">Recomendações</h4>
                     <ul className="list-disc list-inside space-y-1 text-sm">
-                      {judgeAnalysis.recomendacoes.map((rec, index) => (
+                      {judgeAnalysis.recomendacoes?.map((rec, index) => (
                         <li key={index}>{rec}</li>
                       ))}
                     </ul>
