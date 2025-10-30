@@ -1104,6 +1104,39 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         // Detect special situation from transcribed text
         await detectSpecialSituation(transcribedText);
         
+        // ✅ PROCESSAR TRANSCRIÇÃO COM IA (igual handleSendMessage)
+        if (data.caseId) {
+          console.log('[AUDIO] Processando transcrição com IA...');
+          
+          const { data: result, error } = await supabase.functions.invoke(
+            'process-chat-message',
+            { body: { caseId: data.caseId, messageText: transcribedText } }
+          );
+
+          if (error) {
+            console.error('[AUDIO] Erro ao processar:', error);
+          } else if (result?.extracted) {
+            console.log('[AUDIO] Informações extraídas:', result.extracted);
+            
+            // Mostrar resumo
+            setMessages(prev => [...prev, { 
+              role: "assistant", 
+              content: `📊 **Dados extraídos do áudio:**\n${result.extracted.summary}\n\n✅ Campos atualizados: ${result.updatedFields?.length || 0}\n📝 Registros: ${result.insertedRecords || 0}` 
+            }]);
+
+            // Disparar pipeline se houver mudanças
+            if ((result.updatedFields?.length > 0 || result.insertedRecords > 0) && triggerFullPipeline) {
+              console.log('[AUDIO] Disparando pipeline após extração...');
+              await triggerFullPipeline('Informação extraída de áudio');
+            }
+            
+            // ✅ DISPARAR EVENTO DE SINCRONIZAÇÃO
+            window.dispatchEvent(new CustomEvent('case-updated', { 
+              detail: { caseId: data.caseId, source: 'audio-extraction' } 
+            }));
+          }
+        }
+        
         // Add assistant confirmation
         setMessages(prev => [...prev, {
           role: "assistant",
