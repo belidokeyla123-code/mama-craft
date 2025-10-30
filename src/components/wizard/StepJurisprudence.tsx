@@ -164,6 +164,13 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
         setSelectedIds(new Set<string>(savedSelections));
         setHasCache(true);
         
+        // 🆕 TOAST DE CONFIRMAÇÃO
+        if (savedSelections.length > 0) {
+          toast.success(`✅ ${savedSelections.length} jurisprudência(s) carregada(s)`, { 
+            duration: 2000 
+          });
+        }
+        
         console.log('[JURISPRUDENCE LOAD] ✅ Cache carregado:', {
           jurisprudencias: results.jurisprudencias?.length || 0,
           sumulas: results.sumulas?.length || 0,
@@ -450,14 +457,29 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
-          <Scale className="h-7 w-7 text-primary" />
-          Jurisprudências, Súmulas e Doutrinas
-        </h2>
-        <p className="text-muted-foreground">
-          Fontes jurídicas reais e relevantes para fundamentar a petição
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+            <Scale className="h-7 w-7 text-primary" />
+            Jurisprudências, Súmulas e Doutrinas
+          </h2>
+          <p className="text-muted-foreground">
+            Fontes jurídicas reais e relevantes para fundamentar a petição
+          </p>
+        </div>
+        
+        {/* 🆕 BADGE DE STATUS VISUAL */}
+        {isSaving ? (
+          <Badge variant="secondary" className="gap-2 px-4 py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Salvando seleções...
+          </Badge>
+        ) : selectedIds.size > 0 ? (
+          <Badge variant="default" className="gap-2 px-4 py-2 bg-green-600">
+            <CheckCircle2 className="h-4 w-4" />
+            {selectedIds.size} selecionada(s) • Salvo ✓
+          </Badge>
+        ) : null}
       </div>
 
       <div className="flex gap-3">
@@ -473,11 +495,6 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
             "Buscar Jurisprudências"
           )}
         </Button>
-        <Badge variant="outline" className="px-3 py-2 flex items-center gap-2">
-          {selectedIds.size} selecionadas
-          {isSaving && <Loader2 className="h-3 w-3 animate-spin" />}
-          {!isSaving && selectedIds.size > 0 && <CheckCircle2 className="h-3 w-3 text-green-600" />}
-        </Badge>
       </div>
 
       {loading ? (

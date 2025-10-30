@@ -808,6 +808,12 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       // ✅ Coletar todas as brechas selecionadas
       const selectedBrechasData = selectedBrechas.map(idx => judgeAnalysis.brechas[idx]);
       
+      // 🆕 LOGS DETALHADOS
+      console.log('[CORRECTIONS] 🔧 Aplicando correções');
+      console.log('[CORRECTIONS] Total de brechas:', totalSelected);
+      console.log('[CORRECTIONS] Tipos:', selectedBrechasData.map(b => b.tipo));
+      console.log('[CORRECTIONS] Petition length:', petition.length);
+      
       toast.info(`⚙️ Aplicando ${totalSelected} correção(ões)...`, { duration: 3000 });
       
       // ✅ Invocar edge function UMA VEZ com TODAS as brechas selecionadas
@@ -822,6 +828,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           }
         }
       });
+      
+      console.log('[CORRECTIONS] ✅ Edge function respondeu');
+      console.log('[CORRECTIONS] Result:', result ? 'OK' : 'NULL');
+      console.log('[CORRECTIONS] Error:', error || 'NONE');
 
       if (error) throw error;
 

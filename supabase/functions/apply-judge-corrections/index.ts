@@ -50,9 +50,11 @@ Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     console.log('[EDGE] LOVABLE_API_KEY exists:', !!LOVABLE_API_KEY);
+    console.log('[EDGE] Número de brechas:', judgeAnalysis?.brechas?.length || 0);
+    console.log('[EDGE] Tipos de brechas:', judgeAnalysis?.brechas?.map((b: any) => b.tipo) || []);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 🆕 60s timeout (aumentado)
 
     try {
       console.log('[EDGE] Chamando Lovable AI Gateway...');
