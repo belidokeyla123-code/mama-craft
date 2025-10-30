@@ -122,12 +122,25 @@ TAREFA: Faça uma análise jurídica completa e retorne JSON com:
   "cnis_analysis": {
     "periodos_urbanos": [{"inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "empregador": "Nome"}],
     "periodos_rurais": [{"inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "detalhes": "Descrição"}],
-    "beneficios_anteriores": [{"tipo": "auxilio-maternidade", "data": "YYYY-MM-DD"}],
+    "beneficios_anteriores": [{"tipo": "salário-maternidade", "nb": "123.456.789-0", "inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD"}],
     "tempo_reconhecido_inss": {"anos": 0, "meses": 0},
     "interpretacao": "CNIS sem vínculos urbanos - FAVORÁVEL ao perfil rural",
     "analise_prospectiva": "Se procedente, período de [data parto] até [data atual] (~X anos) será reconhecido como tempo rural",
     "impacto_futuro": "Tempo reconhecido facilitará aposentadoria por idade rural no futuro"
   },
+
+⚠️⚠️⚠️ REGRA CRÍTICA SOBRE BENEFÍCIOS ANTERIORES ⚠️⚠️⚠️
+- NUNCA classifique DOCUMENTOS (autodeclaração, certidões, etc) como "beneficios_anteriores"
+- Benefícios anteriores são APENAS benefícios do INSS com NB (Número de Benefício)
+- Se não houver NB no CNIS, retorne array vazio: "beneficios_anteriores": []
+- Exemplos VÁLIDOS de benefícios anteriores:
+  * {"tipo": "salário-maternidade", "nb": "123.456.789-0", "inicio": "2020-01-15", "fim": "2020-05-15"}
+  * {"tipo": "auxílio-doença", "nb": "987.654.321-0", "inicio": "2019-03-01", "fim": "2019-06-01"}
+- Exemplos INVÁLIDOS (NÃO adicione):
+  * Autodeclaração rural
+  * Certidões de nascimento/casamento
+  * Documentos da terra
+  * Declarações de sindicato ou UBS
   "timeline": [
     {"periodo": "2015-2020", "tipo": "rural", "status": "reconhecido", "detalhes": "Atividade rural comprovada"}
   ],

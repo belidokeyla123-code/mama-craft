@@ -254,89 +254,74 @@ Use "medium" para documentos complementares.`;
 
       const validationResult = JSON.parse(aiData.choices[0].message.content);
 
-      // Adicionar document_id aos itens do checklist com logging detalhado
-      // Agrupar extrações de páginas do mesmo PDF
-      const groupedExtractions: Record<string, any[]> = {};
-      if (extractions) {
-        extractions.forEach(ext => {
-          // Buscar documento associado para pegar parent_document_id
-          const doc = documents.find(d => d.id === ext.document_id);
-          const parentId = doc?.parent_document_id || ext.document_id;
-          
-          if (!groupedExtractions[parentId]) {
-            groupedExtractions[parentId] = [];
-          }
-          groupedExtractions[parentId].push(ext);
-        });
-      }
-      
+      // ✅ MELHORIA: Matching robusto de document_id
       const enrichedChecklist = validationResult.checklist.map((checkItem: any) => {
-        // Extrair o tipo de documento do nome do item
         const itemLower = checkItem.item.toLowerCase();
         
-        // Mapeamento mais agressivo de strings para tipos
-        let itemType = '';
-        if (itemLower.includes('rg') || itemLower.includes('cpf') || itemLower.includes('identifica')) {
-          itemType = 'identificacao';
-        } else if (itemLower.includes('certid') && itemLower.includes('nasc')) {
-          itemType = 'certidao_nascimento';
-        } else if (itemLower.includes('autodecl') || itemLower.includes('rural')) {
-          itemType = 'autodeclaracao_rural';
-        } else if (itemLower.includes('terra') || itemLower.includes('itr') || itemLower.includes('propriedade')) {
-          itemType = 'documento_terra';
-        } else if (itemLower.includes('processo') || itemLower.includes('administrativo') || itemLower.includes('ra')) {
-          itemType = 'processo_administrativo';
-        } else if (itemLower.includes('resid') || itemLower.includes('endereco') || itemLower.includes('comprovante')) {
-          itemType = 'comprovante_residencia';
-        } else if (itemLower.includes('cnis')) {
-          itemType = 'cnis';
-        } else if (itemLower.includes('carteira')) {
-          itemType = 'carteira_trabalho';
-        }
+        // Normalizar nome do item (remover acentos, plural, etc)
+        const normalizeText = (text: string) => {
+          return text
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+            .replace(/[^a-z0-9\s]/g, '') // Remove pontuação
+            .replace(/\s+/g, ' ') // Normaliza espaços
+            .trim();
+        };
         
-        // Priorizar match por extraction com document_id
-        let matchingDoc = null;
-        if (extractions) {
-          for (const [parentId, exts] of Object.entries(groupedExtractions)) {
-            const ext = exts[0]; // Pegar primeira extraction do grupo
-            const doc = documents.find(d => d.id === ext.document_id);
-            const docTypeNorm = normalizeDocType(doc?.document_type || '');
+        const normalizedItem = normalizeText(itemLower);
+        
+        console.log(`[MATCHING] Procurando documento para: "${checkItem.item}" (normalizado: "${normalizedItem}")`);
+        
+        // Buscar documento correspondente com matching mais flexível
+        const matchingDoc = documents.find(doc => {
+          const docTypeLower = doc.document_type.toLowerCase();
+          const normalizedDocType = normalizeText(docTypeLower);
+          
+          // Mapeamento de sinônimos
+          const synonyms: Record<string, string[]> = {
+            'identificacao': ['rg', 'cpf', 'identidade', 'documento'],
+            'certidao_nascimento': ['certidao', 'nascimento', 'crianca'],
+            'autodeclaracao_rural': ['autodeclaracao', 'declaracao', 'rural', 'segurada especial'],
+            'documento_terra': ['terra', 'itr', 'propriedade', 'ccir', 'escritura'],
+            'processo_administrativo': ['processo', 'administrativo', 'ra', 'requerimento'],
+            'comprovante_residencia': ['residencia', 'endereco', 'comprovante'],
+            'declaracao_saude_ubs': ['ubs', 'saude', 'posto', 'unidade basica'],
+            'historico_escolar': ['escola', 'escolar', 'historico'],
+            'cnis': ['cnis', 'previdenciario', 'inss']
+          };
+          
+          // Verificar match direto
+          if (normalizedDocType.includes(normalizedItem) || normalizedItem.includes(normalizedDocType)) {
+            console.log(`  ✅ Match direto: ${doc.document_type} ↔ ${checkItem.item}`);
+            return true;
+          }
+          
+          // Verificar sinônimos
+          for (const [key, syns] of Object.entries(synonyms)) {
+            const itemMatchesSyns = syns.some(syn => normalizedItem.includes(syn));
+            const docMatchesSyns = syns.some(syn => normalizedDocType.includes(syn));
             
-            if (docTypeNorm === itemType) {
-              // Encontrar o documento original (PDF ou página)
-              matchingDoc = documents.find(d => d.id === parentId);
-              break;
+            if (itemMatchesSyns && docMatchesSyns) {
+              console.log(`  ✅ Match por sinônimo (${key}): ${doc.document_type} ↔ ${checkItem.item}`);
+              return true;
             }
           }
-        }
-        
-        // Verificação especial para documento da terra (verifica se campos foram preenchidos)
-        if (itemType === 'documento_terra') {
-          const hasDocumentoTerra = documents.some(d => normalizeDocType(d.document_type) === 'documento_terra');
-          const hasLandOwnerData = caseData.land_owner_cpf && caseData.land_owner_name;
           
-          if (hasDocumentoTerra && hasLandOwnerData) {
-            matchingDoc = documents.find(d => normalizeDocType(d.document_type) === 'documento_terra');
-            console.log(`[VALIDAÇÃO] ✅ Documento da Terra OK - CPF proprietário: ${caseData.land_owner_cpf}`);
-          }
+          return false;
+        });
+        
+        if (matchingDoc) {
+          console.log(`  🎯 Documento encontrado: ID=${matchingDoc.id} tipo=${matchingDoc.document_type}`);
+          return {
+            ...checkItem,
+            document_id: matchingDoc.id,
+            document_name: matchingDoc.file_name
+          };
+        } else {
+          console.log(`  ❌ Documento não encontrado para: ${checkItem.item}`);
+          return checkItem;
         }
-        
-        // Fallback: buscar por document_type
-        if (!matchingDoc) {
-          matchingDoc = documents.find(d => {
-            const docTypeNorm = normalizeDocType(d.document_type);
-            return docTypeNorm === itemType || 
-                   d.document_type.toLowerCase().includes(itemType) ||
-                   itemType.includes(docTypeNorm);
-          });
-        }
-        
-        console.log(`[MATCH] Item: "${checkItem.item}" -> Type: "${itemType}" -> Doc: ${matchingDoc?.id || 'NOT FOUND'}`);
-        
-        return {
-          ...checkItem,
-          document_id: matchingDoc?.id || null
-        };
       });
 
       validationResult.checklist = enrichedChecklist;

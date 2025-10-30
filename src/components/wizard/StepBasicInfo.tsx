@@ -320,73 +320,8 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     loadCnisAnalysis();
   }, [data.caseId]);
 
-  // Carregar períodos rurais E urbanos automaticamente das extrações
-  useEffect(() => {
-    const loadPeriodsFromExtractions = async () => {
-      if (!data.caseId) return;
-      // Só carregar se ainda não tem períodos
-      if ((data.ruralPeriods?.length || 0) > 0 && (data.urbanPeriods?.length || 0) > 0) return;
-
-      try {
-        const { data: extractions, error } = await supabase
-          .from("extractions")
-          .select("*")
-          .eq("case_id", data.caseId)
-          .order("extracted_at", { ascending: false });
-
-        if (error) throw error;
-
-        let foundRuralPeriods: RuralPeriod[] = [];
-        let foundUrbanPeriods: UrbanPeriod[] = [];
-        
-        for (const extraction of extractions || []) {
-          // Buscar em periodos_rurais (campo direto)
-          if (extraction.periodos_rurais && Array.isArray(extraction.periodos_rurais) && extraction.periodos_rurais.length > 0) {
-            foundRuralPeriods = [...foundRuralPeriods, ...extraction.periodos_rurais as unknown as RuralPeriod[]];
-          }
-          
-          // Buscar também em entities.ruralPeriods e entities.urbanPeriods
-          if (extraction.entities && typeof extraction.entities === 'object') {
-            const entities = extraction.entities as any;
-            
-            if (entities.ruralPeriods && Array.isArray(entities.ruralPeriods) && entities.ruralPeriods.length > 0) {
-              foundRuralPeriods = [...foundRuralPeriods, ...entities.ruralPeriods];
-            }
-            
-            if (entities.urbanPeriods && Array.isArray(entities.urbanPeriods) && entities.urbanPeriods.length > 0) {
-              foundUrbanPeriods = [...foundUrbanPeriods, ...entities.urbanPeriods];
-            }
-          }
-        }
-
-        if (foundRuralPeriods.length > 0 || foundUrbanPeriods.length > 0) {
-          console.log('[AUTO-FILL] Períodos encontrados:', {
-            rural: foundRuralPeriods.length,
-            urban: foundUrbanPeriods.length
-          });
-          
-          // Mesclar com períodos existentes (não sobrescrever)
-          updateData({ 
-            ruralPeriods: foundRuralPeriods.length > 0 
-              ? [...(data.ruralPeriods || []), ...foundRuralPeriods]
-              : data.ruralPeriods,
-            urbanPeriods: foundUrbanPeriods.length > 0 
-              ? [...(data.urbanPeriods || []), ...foundUrbanPeriods]
-              : data.urbanPeriods
-          });
-          
-          toast.success(
-            `✅ ${foundRuralPeriods.length + foundUrbanPeriods.length} período(s) carregado(s) automaticamente da autodeclaração`,
-            { duration: 5000 }
-          );
-        }
-      } catch (error) {
-        console.error("Erro ao carregar períodos:", error);
-      }
-    };
-
-    loadPeriodsFromExtractions();
-  }, [data.caseId]);
+  // ❌ REMOVIDO: Auto-adição de períodos rurais
+  // Os períodos devem ser adicionados manualmente pelo usuário
 
   // Calcular histórico do salário mínimo quando a data de nascimento da criança mudar
   useEffect(() => {

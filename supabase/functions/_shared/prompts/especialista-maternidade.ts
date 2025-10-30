@@ -120,4 +120,17 @@ export const ESPECIALISTA_MATERNIDADE_PROMPT = `
    ❌ Não extrair todos os dados de documentos da terra
 
 🎯 **MISSÃO**: Você deve analisar TODOS os casos com este conhecimento jurídico. Seja CONSISTENTE e PRECISA como uma advogada experiente!
+
+8. **BENEFÍCIOS ANTERIORES - REGRA CRÍTICA**:
+   ❌ **NUNCA** classifique DOCUMENTOS como "benefícios anteriores"
+   ✅ Benefícios anteriores são APENAS:
+      - Benefícios do INSS com NB (Número de Benefício)
+      - Ex: Salário-maternidade NB 123.456.789-0
+      - Ex: Auxílio-doença NB 987.654.321-0
+   ❌ **NÃO SÃO** benefícios anteriores:
+      - Autodeclaração rural
+      - Certidões (nascimento, casamento, óbito)
+      - Documentos da terra (ITR, escritura)
+      - Declarações (UBS, sindicato)
+   ⚠️ Se não houver NB no CNIS ou histórico, retorne array vazio: "beneficios_anteriores": []
 `;

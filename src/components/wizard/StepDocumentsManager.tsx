@@ -631,16 +631,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       
       <Card className="p-6">
         <div className="space-y-4">
-          {/* Alerta inteligente se muitos documentos são "OUTROS" */}
-          {hasHighOutrosPercentage && (
-            <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <AlertDescription className="text-amber-800 dark:text-amber-200">
-                <strong>Atenção:</strong> {outrosCount} de {documents.length} documentos ({outrosPercentage.toFixed(0)}%) estão classificados como "OUTROS". 
-                Clique em <strong>"🔄 Corrigir Classificação"</strong> para reclassificar automaticamente.
-              </AlertDescription>
-            </Alert>
-          )}
+          {/* ❌ REMOVIDO: Alerta de documentos classificados como OUTROS */}
           
           <div className="flex items-center justify-between">
             <div>
@@ -648,27 +639,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
               <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
             </div>
             <div className="flex gap-2">
-              <Button
-                onClick={handleReclassify}
-                disabled={isReprocessing}
-                variant={hasHighOutrosPercentage ? "default" : "outline"}
-                className={hasHighOutrosPercentage ? "gap-2 bg-amber-500 hover:bg-amber-600 text-white" : "gap-2"}
-                title={hasHighOutrosPercentage 
-                  ? "⚠️ Recomendado: Muitos documentos estão como 'OUTROS'. Clique para reclassificar automaticamente." 
-                  : "Corrigir classificação dos documentos baseado nos nomes dos arquivos"}
-              >
-                {isReprocessing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Reclassificando...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4" />
-                    {hasHighOutrosPercentage ? "🔄 Corrigir Classificação" : "Reclassificar"}
-                  </>
-                )}
-              </Button>
+              {/* ❌ REMOVIDO: Botão "Corrigir Classificação" - movido para ícone individual */}
               <Button
                 onClick={handleReprocess}
                 disabled={isReprocessing}

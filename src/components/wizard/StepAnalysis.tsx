@@ -616,14 +616,50 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                   </div>
                 )}
 
-                {/* Benefícios anteriores */}
-                {analysis.cnis_analysis.beneficios_anteriores && analysis.cnis_analysis.beneficios_anteriores.length > 0 && (
+                {/* ✅ Filtrar benefícios anteriores: Só exibir se tiver NB ou tipo válido */}
+                {analysis.cnis_analysis.beneficios_anteriores && 
+                 analysis.cnis_analysis.beneficios_anteriores
+                   .filter((ben: any) => {
+                     // Lista de tipos válidos de benefícios
+                     const validTypes = [
+                       'salário-maternidade', 'salario-maternidade',
+                       'auxílio-doença', 'auxilio-doenca',
+                       'aposentadoria', 'pensão por morte', 'pensao por morte',
+                       'auxílio-acidente', 'auxilio-acidente'
+                     ];
+                     // Só exibir se tem NB (Número de Benefício) OU é tipo válido
+                     const hasNB = ben.nb && ben.nb.trim() !== '';
+                     const isValidType = ben.tipo && validTypes.some(t => 
+                       ben.tipo.toLowerCase().includes(t.toLowerCase())
+                     );
+                     return hasNB || isValidType;
+                   })
+                   .length > 0 && (
                   <div>
                     <p className="font-medium mb-2">Benefícios Anteriores</p>
                     <ul className="list-disc list-inside space-y-1 text-sm">
-                      {analysis.cnis_analysis.beneficios_anteriores.map((ben: any, index: number) => (
-                        <li key={index}>{ben.tipo} - {ben.data}</li>
-                      ))}
+                      {analysis.cnis_analysis.beneficios_anteriores
+                        .filter((ben: any) => {
+                          const validTypes = [
+                            'salário-maternidade', 'salario-maternidade',
+                            'auxílio-doença', 'auxilio-doenca',
+                            'aposentadoria', 'pensão por morte', 'pensao por morte',
+                            'auxílio-acidente', 'auxilio-acidente'
+                          ];
+                          const hasNB = ben.nb && ben.nb.trim() !== '';
+                          const isValidType = ben.tipo && validTypes.some(t => 
+                            ben.tipo.toLowerCase().includes(t.toLowerCase())
+                          );
+                          return hasNB || isValidType;
+                        })
+                        .map((ben: any, index: number) => (
+                          <li key={index}>
+                            {ben.tipo}
+                            {ben.nb && ` - NB ${ben.nb}`}
+                            {ben.inicio && ben.fim && ` (${ben.inicio} a ${ben.fim})`}
+                            {ben.data && ` - ${ben.data}`}
+                          </li>
+                        ))}
                     </ul>
                   </div>
                 )}
