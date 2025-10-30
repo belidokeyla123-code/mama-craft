@@ -631,7 +631,35 @@ Você é um especialista altamente experiente em análise de documentos previden
     if (docType === 'autodeclaracao_rural' && extracted.extractedData) {
       const ruralUpdates: any = {};
       
-      if (extracted.extractedData.rural_periods) ruralUpdates.rural_periods = extracted.extractedData.rural_periods;
+      // ✅ CORREÇÃO #3: Validar rural_periods antes de salvar
+      if (extracted.extractedData.rural_periods) {
+        const validPeriods = extracted.extractedData.rural_periods.filter((p: any) => {
+          const hasStart = p.startDate && /^\d{4}-\d{2}-\d{2}$/.test(p.startDate);
+          const hasEnd = p.endDate && /^\d{4}-\d{2}-\d{2}$/.test(p.endDate);
+          const hasLocation = p.location || p.municipality;
+          
+          if (!hasStart || !hasEnd || !hasLocation) {
+            console.warn(`[ANALYZE-SINGLE] ⚠️ Período rural inválido descartado:`, p);
+            console.warn(`  - startDate válido: ${hasStart}`);
+            console.warn(`  - endDate válido: ${hasEnd}`);
+            console.warn(`  - localização: ${hasLocation}`);
+            return false;
+          }
+          return true;
+        });
+        
+        if (validPeriods.length === 0) {
+          console.error(`[ANALYZE-SINGLE] ❌ NENHUM período rural válido extraído!`);
+          console.error(`[ANALYZE-SINGLE] 📄 Arquivo: ${doc.file_name}`);
+          console.error(`[ANALYZE-SINGLE] 🔍 Períodos originais:`, extracted.extractedData.rural_periods);
+        } else {
+          ruralUpdates.rural_periods = validPeriods;
+          if (validPeriods.length !== extracted.extractedData.rural_periods.length) {
+            console.warn(`[ANALYZE-SINGLE] ⚠️ ${extracted.extractedData.rural_periods.length - validPeriods.length} período(s) descartado(s) por dados incompletos`);
+          }
+        }
+      }
+      
       if (extracted.extractedData.family_members) ruralUpdates.family_members = extracted.extractedData.family_members;
       if (extracted.extractedData.landOwnerName) ruralUpdates.land_owner_name = extracted.extractedData.landOwnerName;
       if (extracted.extractedData.landOwnerCpf) ruralUpdates.land_owner_cpf = extracted.extractedData.landOwnerCpf;
@@ -804,35 +832,57 @@ function buildPromptForDocType(docType: string, fileName: string): string {
   }
   
   if (docType === 'autodeclaracao_rural') {
-    return basePrompt + `🌾 AUTODECLARAÇÃO RURAL - EXTRAIR:
+    return basePrompt + `🌾 AUTODECLARAÇÃO RURAL - INSTRUÇÕES CRÍTICAS
 
-**INSTRUÇÕES:**
-Extraia todos os períodos de atividade rural e informações do grupo familiar.
+⚠️ **ATENÇÃO: CAMPOS OBRIGATÓRIOS**
 
-**RETORNAR JSON:**
+O campo "rural_periods" é OBRIGATÓRIO e DEVE conter:
+
+✅ **startDate** (YYYY-MM-DD) - OBRIGATÓRIO - Data de INÍCIO do trabalho rural
+✅ **endDate** (YYYY-MM-DD) - OBRIGATÓRIO - Data de FIM (ou data atual se ainda trabalha)
+✅ **location** OU **municipality** - OBRIGATÓRIO - Cidade/município onde trabalhou
+
+⚠️ **REGRAS CRÍTICAS:**
+
+1. Se NÃO conseguir extrair **startDate**, **NÃO** adicione o período!
+2. Se NÃO conseguir extrair **endDate**, **NÃO** adicione o período!
+3. Se NÃO conseguir extrair **location/municipality**, **NÃO** adicione o período!
+4. Se o documento estiver ilegível, retorne: { "rural_periods": [] }
+5. Se as datas estiverem parcialmente visíveis, tente inferir (ex: "...2019" → usar "2019-01-01")
+
+**ESTRUTURA ESPERADA:**
 {
   "rural_periods": [
     {
-      "startDate": "Data início (YYYY-MM-DD)",
-      "endDate": "Data fim (YYYY-MM-DD) - vazio se ainda ativo",
-      "location": "Local (Sítio/Fazenda, Município - UF)",
-      "activities": "Atividades desenvolvidas",
-      "withWhom": "Com quem morava"
+      "startDate": "YYYY-MM-DD",  ← OBRIGATÓRIO
+      "endDate": "YYYY-MM-DD",    ← OBRIGATÓRIO
+      "location": "Município - UF", ← OBRIGATÓRIO
+      "municipality": "Nome do município",
+      "activities": "Plantio de café, milho, criação de gado"
     }
   ],
-  "landOwnerName": "Nome do proprietário da terra",
-  "landOwnerCpf": "CPF do proprietário (apenas números)",
-  "landOwnerRg": "RG do proprietário",
-  "familyMembers": [
-    {
-      "name": "Nome completo",
-      "relationship": "Relação (ex: filho, cônjuge, mãe)",
-      "birthDate": "Data nascimento (YYYY-MM-DD)"
-    }
-  ]
+  "landOwnerName": "Nome completo do proprietário",
+  "landOwnerCpf": "00000000000",
+  "familyMembers": [...]
 }
 
-**IMPORTANTE:** O campo principal deve ser "rural_periods" como array de períodos.`;
+🔍 **EXEMPLO VÁLIDO:**
+{
+  "rural_periods": [{
+    "startDate": "2015-03-10",
+    "endDate": "2023-12-25",
+    "location": "Zona Rural, Porto Velho - RO",
+    "municipality": "Porto Velho",
+    "activities": "Plantio de café, cacau, criação de porcos"
+  }]
+}
+
+❌ **EXEMPLO INVÁLIDO (será rejeitado):**
+{
+  "rural_periods": [{
+    "activities": "trabalho rural"  ← FALTAM DATAS E LOCALIZAÇÃO!
+  }]
+}`;
   }
   
   if (docType === 'documento_terra') {

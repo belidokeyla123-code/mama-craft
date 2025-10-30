@@ -36,6 +36,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [userInput, setUserInput] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [failedPdfs, setFailedPdfs] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -78,6 +79,44 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     };
 
     migrateBenefits();
+  }, [data.caseId]);
+
+  // ✅ CORREÇÃO #2: Detectar PDFs não processados
+  useEffect(() => {
+    const detectUnprocessedPdfs = async () => {
+      if (!data.caseId) return;
+      
+      try {
+        // Buscar documentos PDF sem extrações
+        const { data: docs, error } = await supabase
+          .from('documents')
+          .select(`
+            file_name,
+            extractions (count)
+          `)
+          .eq('case_id', data.caseId)
+          .or('mime_type.eq.application/pdf,file_name.ilike.%.pdf');
+
+        if (error) throw error;
+
+        // Filtrar PDFs que não foram processados (extraction_count = 0)
+        const unprocessedPdfs = docs
+          ?.filter((doc: any) => {
+            const count = doc.extractions?.[0]?.count || 0;
+            return count === 0;
+          })
+          .map((doc: any) => doc.file_name) || [];
+
+        if (unprocessedPdfs.length > 0) {
+          console.log('[CHAT] ⚠️ PDFs não processados:', unprocessedPdfs);
+          setFailedPdfs(unprocessedPdfs);
+        }
+      } catch (error) {
+        console.error('[CHAT] Erro ao detectar PDFs não processados:', error);
+      }
+    };
+
+    detectUnprocessedPdfs();
   }, [data.caseId]);
 
   // 🆕 DEBUG: Log quando o componente monta e quando há caseId
@@ -315,6 +354,18 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             }]);
             
             console.log(`[SEQUENTIAL] 🤖 Chamando IA para análise individual...`);
+            
+            // ✅ CORREÇÃO #4: Verificar se já foi analisado para evitar duplicações
+            const { data: existingExtraction } = await supabase
+              .from('extractions')
+              .select('id')
+              .eq('document_id', doc.id)
+              .maybeSingle();
+
+            if (existingExtraction) {
+              console.log(`[SEQUENTIAL] ⏭️ Documento ${doc.id} já analisado, pulando...`);
+              continue;
+            }
             
             const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
               "analyze-single-document",
@@ -671,15 +722,30 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         console.log('[CHAT] Dados extraídos:', extractedData);
         
         try {
+          // ✅ CORREÇÃO #1: Buscar dados ATUAIS antes de atualizar
+          const { data: currentCase } = await supabase
+            .from('cases')
+            .select('author_cpf, author_name, author_birth_date, mother_cpf, father_cpf')
+            .eq('id', caseId)
+            .single();
+
+          console.log('[CHAT] Dados atuais do banco:', currentCase);
+          
           const { error: updateError } = await supabase
             .from('cases')
             .update({
-              author_name: extractedData.motherName || data.authorName || 'Processando...',
-              author_cpf: extractedData.motherCpf || data.authorCpf || '00000000000',
-              author_rg: extractedData.motherRg || data.authorRg,
-              author_birth_date: extractedData.motherBirthDate || data.authorBirthDate,
-              author_address: extractedData.motherAddress || data.authorAddress,
+              // ✅ Priorizar: extractedData.authorCpf > banco > data.authorCpf > fallback
+              author_name: extractedData.authorName || currentCase?.author_name || data.authorName || 'Processando...',
+              author_cpf: extractedData.authorCpf || currentCase?.author_cpf || data.authorCpf || '00000000000',
+              author_rg: extractedData.authorRg || data.authorRg,
+              author_birth_date: extractedData.authorBirthDate || currentCase?.author_birth_date || data.authorBirthDate,
+              author_address: extractedData.authorAddress || data.authorAddress,
               author_marital_status: extractedData.maritalStatus || data.authorMaritalStatus,
+              
+              // ✅ SEPARAR: CPFs da mãe/pai (não confundir com autora)
+              mother_cpf: extractedData.motherCpf || data.motherCpf,
+              father_cpf: extractedData.fatherCpf || data.fatherCpf,
+              
               child_name: extractedData.childName || data.childName,
               child_birth_date: extractedData.childBirthDate || data.childBirthDate,
               event_date: extractedData.childBirthDate || data.eventDate || new Date().toISOString().split('T')[0],
@@ -1297,6 +1363,65 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 📋 RA: {data.raProtocol ? '✅' : '⚪'}
               </span>
             </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* ✅ CORREÇÃO #2: Alerta de PDFs não processados */}
+      {failedPdfs.length > 0 && (
+        <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription>
+            <p className="font-medium mb-2 text-amber-900 dark:text-amber-100">
+              ⚠️ {failedPdfs.length} PDF(s) não foram processados
+            </p>
+            <ul className="text-sm space-y-1 mb-3 text-amber-800 dark:text-amber-200">
+              {failedPdfs.map((pdf, idx) => (
+                <li key={idx}>📄 {pdf}</li>
+              ))}
+            </ul>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-600 text-amber-900 hover:bg-amber-100 dark:text-amber-100"
+              onClick={async () => {
+                try {
+                  setIsProcessing(true);
+                  const { data: result, error } = await supabase.functions.invoke('reconvert-failed-pdfs', {
+                    body: { caseId: data.caseId }
+                  });
+                  
+                  if (error) {
+                    toast({
+                      title: "Erro ao reconverter",
+                      description: error.message,
+                      variant: "destructive",
+                    });
+                  } else {
+                    toast({
+                      title: "PDFs reconvertendo",
+                      description: `${result.reprocessed} PDFs sendo reconvertidos...`,
+                    });
+                    setFailedPdfs([]);
+                    
+                    // Recarregar após 3 segundos
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 3000);
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Erro",
+                    description: error.message,
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsProcessing(false);
+                }
+              }}
+            >
+              🔄 Reconverter PDFs
+            </Button>
           </AlertDescription>
         </Alert>
       )}
