@@ -11,7 +11,24 @@ serve(async (req) => {
   }
 
   try {
-    const { petition, caseInfo, documents, analysis, jurisprudence, tese } = await req.json();
+    const body = await req.json();
+    console.log('[JUDGE-MODULE] Request body keys:', Object.keys(body));
+    
+    const { petition, caseInfo, documents, analysis, jurisprudence, tese } = body;
+    
+    if (!petition || typeof petition !== 'string') {
+      throw new Error('Petition is required and must be a string');
+    }
+    
+    console.log('[JUDGE-MODULE] Data validation:', {
+      hasPetition: !!petition,
+      petitionLength: petition?.length,
+      hasCaseInfo: !!caseInfo,
+      hasDocuments: !!documents,
+      documentsCount: documents?.length || 0,
+      hasManualBenefits: !!caseInfo?.manual_benefits,
+      manualBenefitsCount: caseInfo?.manual_benefits?.length || 0
+    });
 
     const prompt = `Você é um JUIZ FEDERAL experiente com VISÃO 360° do processo. 
 
@@ -169,7 +186,25 @@ ${petition}
       }
 
       const aiData = await aiResponse.json();
-      const analysis = JSON.parse(aiData.choices[0].message.content);
+      console.log('[JUDGE-MODULE] AI response received, parsing content...');
+      
+      let analysis;
+      try {
+        const content = aiData.choices[0].message.content;
+        console.log('[JUDGE-MODULE] Content to parse (first 200 chars):', content.substring(0, 200));
+        analysis = JSON.parse(content);
+        console.log('[JUDGE-MODULE] Analysis parsed successfully:', {
+          hasBrechas: !!analysis.brechas,
+          brechasCount: analysis.brechas?.length || 0,
+          hasPontosFracos: !!analysis.pontos_fracos,
+          hasRisco: !!analysis.risco_improcedencia
+        });
+      } catch (parseError) {
+        console.error('[JUDGE-MODULE] JSON parse error:', parseError);
+        console.error('[JUDGE-MODULE] Raw content:', aiData.choices[0].message.content);
+        const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+        throw new Error(`Failed to parse AI response: ${errorMsg}`);
+      }
 
       return new Response(JSON.stringify(analysis), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -189,8 +224,19 @@ ${petition}
     }
 
   } catch (error) {
-    console.error('Error in analyze-petition-judge-view:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
+    console.error('[JUDGE-MODULE] Error:', error);
+    console.error('[JUDGE-MODULE] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorDetails = {
+      error: errorMessage,
+      type: error instanceof Error ? error.constructor.name : typeof error,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.error('[JUDGE-MODULE] Error details:', errorDetails);
+    
+    return new Response(JSON.stringify(errorDetails), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
