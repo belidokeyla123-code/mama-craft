@@ -495,12 +495,41 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
 
       if (!aiResponse.ok) {
         const errorText = await aiResponse.text();
-        console.error('AI API error:', aiResponse.status, errorText);
-        throw new Error(`AI API error: ${aiResponse.status}`);
+        console.error('[PETITION] AI API error:', aiResponse.status, errorText);
+        throw new Error(`AI API error: ${aiResponse.status} - ${errorText}`);
       }
 
-      const aiData = await aiResponse.json();
+      console.log('[PETITION] 📥 Recebendo resposta da AI...');
+      
+      let aiData;
+      try {
+        const responseText = await aiResponse.text();
+        console.log('[PETITION] Response length:', responseText.length);
+        console.log('[PETITION] First 500 chars:', responseText.substring(0, 500));
+        
+        aiData = JSON.parse(responseText);
+        console.log('[PETITION] ✅ JSON parsed successfully');
+        
+      } catch (parseError) {
+        console.error('[PETITION] ❌ JSON parse failed:', parseError);
+        console.error('[PETITION] Response was not valid JSON');
+        throw new Error(`Failed to parse AI response as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      }
+      
+      // Validar estrutura da resposta
+      if (!aiData || !aiData.choices || !aiData.choices[0] || !aiData.choices[0].message) {
+        console.error('[PETITION] ❌ Invalid response structure:', JSON.stringify(aiData).substring(0, 500));
+        throw new Error('AI response has invalid structure - missing choices or message');
+      }
+      
       let petitionText = aiData.choices[0].message.content;
+      
+      if (!petitionText || typeof petitionText !== 'string') {
+        console.error('[PETITION] ❌ Invalid petition content type:', typeof petitionText);
+        throw new Error('AI response content is invalid or empty');
+      }
+      
+      console.log('[PETITION] ✅ Petition received, length:', petitionText.length);
 
       // ═══ CONTROLE DE QUALIDADE PÓS-GERAÇÃO ═══
       console.log('🔍 Executando controle de qualidade...');
