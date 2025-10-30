@@ -255,9 +255,86 @@ serve(async (req) => {
     }
 
     const aiData = await aiResponse.json();
-    const analysisResult = JSON.parse(aiData.choices[0].message.content);
+    let analysisResult = JSON.parse(aiData.choices[0].message.content);
 
     console.log(`[DOC ${documentId}] Resposta da IA recebida e parseada.`);
+    
+    // ✅ FALLBACK INTELIGENTE: Se não conseguiu classificar ou classificou como "outro"
+    if (!analysisResult.documentType || analysisResult.documentType === 'outro' || analysisResult.documentType === 'OUTRO') {
+      console.log(`[DOC ${documentId}] ⚠️ Não conseguiu classificar corretamente. Tentando novamente com prompt genérico...`);
+      
+      const genericPrompt = `Analise este documento e identifique o tipo.
+
+TIPOS POSSÍVEIS (escolha apenas um):
+- certidao_nascimento
+- identificacao (RG, CNH, CPF)
+- procuracao
+- cnis
+- autodeclaracao_rural
+- documento_terra
+- processo_administrativo
+- comprovante_residencia
+- historico_escolar
+- declaracao_saude_ubs
+- outro (APENAS se realmente não se encaixar em nenhum dos acima)
+
+RETORNE JSON com análise detalhada:
+{
+  "documentType": "tipo_identificado",
+  "confidence": 0.0-1.0,
+  "reason": "explicação detalhada do porquê você classificou assim",
+  "extracted": {
+    "...dados extraídos..."
+  }
+}`;
+
+      const fallbackRequest = {
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: genericPrompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/png;base64,${fileBase64}`,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 2048,
+        temperature: 0.3,
+      };
+
+      const fallbackResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        },
+        body: JSON.stringify(fallbackRequest),
+      });
+
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json();
+        const fallbackResult = JSON.parse(fallbackData.choices[0].message.content);
+        
+        if (fallbackResult.documentType && fallbackResult.documentType !== 'outro') {
+          console.log(`[DOC ${documentId}] ✅ Segunda tentativa bem-sucedida: ${fallbackResult.documentType}`);
+          analysisResult = fallbackResult;
+          
+          // Atualizar o tipo do documento IMEDIATAMENTE
+          await supabaseClient
+            .from('documents')
+            .update({ document_type: fallbackResult.documentType })
+            .eq('id', documentId);
+        } else {
+          console.log(`[DOC ${documentId}] ⚠️ Segunda tentativa também resultou em "outro"`);
+        }
+      }
+    }
 
     // ==================================================================
     // 5. Salvar os resultados da análise no banco de dados

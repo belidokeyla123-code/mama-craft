@@ -30,6 +30,7 @@ verify_jwt = false
 
 [functions.validate-case-documents]
 verify_jwt = false
+timeout = 45
 
 [functions.analyze-case-legal]
 verify_jwt = false
@@ -41,7 +42,7 @@ timeout = 180
 
 [functions.generate-petition]
 verify_jwt = false
-timeout = 180
+timeout = 90
 
 [functions.analyze-petition-judge-view]
 verify_jwt = false
@@ -63,14 +64,14 @@ verify_jwt = false
 
 [functions.generate-tese-juridica]
 verify_jwt = false
-timeout = 120
+timeout = 60
 
 [functions.apply-judge-corrections]
 verify_jwt = false
 
 [functions.analyze-single-document]
 verify_jwt = false
-timeout = 120
+timeout = 60
 
 [functions.detect-cnis-situation]
 verify_jwt = false
