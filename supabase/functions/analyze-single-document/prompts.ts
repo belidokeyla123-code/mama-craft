@@ -7,6 +7,11 @@ export function buildPromptForDocType(docType: string, fileName: string): string
   const basePrompt = `Você é um especialista em análise documental jurídica para processos previdenciários. 
 Analise o documento "${fileName}" e extraia todas as informações relevantes com MÁXIMA PRECISÃO.
 
+⚠️ CRÍTICO: RETORNE APENAS JSON VÁLIDO! SUA RESPOSTA DEVE COMEÇAR COM { E TERMINAR COM }
+NÃO adicione texto explicativo antes ou depois do JSON.
+NÃO comece com "Aqui está..." ou "Segue..." ou qualquer outro texto.
+APENAS JSON PURO!
+
 REGRAS GERAIS:
 - Extraia APENAS informações explícitas e legíveis no documento
 - Se um campo não estiver visível/legível, retorne null

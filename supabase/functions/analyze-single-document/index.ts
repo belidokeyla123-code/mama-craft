@@ -255,7 +255,17 @@ serve(async (req) => {
     }
 
     const aiData = await aiResponse.json();
-    let analysisResult = JSON.parse(aiData.choices[0].message.content);
+    const rawContent = aiData.choices[0].message.content;
+    
+    console.log(`[DOC ${documentId}] 📝 Resposta bruta da IA:`, rawContent.substring(0, 200));
+    
+    // Usar parseJSONResponse do ai-helpers para lidar com texto misturado
+    const { parseJSONResponse } = await import('../_shared/ai-helpers.ts');
+    let analysisResult = parseJSONResponse(rawContent, { 
+      documentType: 'outro',
+      extracted: {},
+      confidence: 0.0
+    });
 
     console.log(`[DOC ${documentId}] Resposta da IA recebida e parseada.`);
     
@@ -264,6 +274,11 @@ serve(async (req) => {
       console.log(`[DOC ${documentId}] ⚠️ Não conseguiu classificar corretamente. Tentando novamente com prompt genérico...`);
       
       const genericPrompt = `Analise este documento e identifique o tipo.
+
+⚠️ CRÍTICO: RETORNE APENAS JSON VÁLIDO! 
+SUA RESPOSTA DEVE COMEÇAR COM { E TERMINAR COM }
+NÃO adicione "Aqui está o JSON:" ou qualquer texto antes/depois.
+APENAS O JSON PURO!
 
 TIPOS POSSÍVEIS (escolha apenas um):
 - certidao_nascimento
@@ -319,7 +334,8 @@ RETORNE JSON com análise detalhada:
 
       if (fallbackResponse.ok) {
         const fallbackData = await fallbackResponse.json();
-        const fallbackResult = JSON.parse(fallbackData.choices[0].message.content);
+        const fallbackRawContent = fallbackData.choices[0].message.content;
+        const fallbackResult = parseJSONResponse(fallbackRawContent, analysisResult);
         
         if (fallbackResult.documentType && fallbackResult.documentType !== 'outro') {
           console.log(`[DOC ${documentId}] ✅ Segunda tentativa bem-sucedida: ${fallbackResult.documentType}`);
