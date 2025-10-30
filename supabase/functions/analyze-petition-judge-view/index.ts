@@ -147,9 +147,15 @@ ${petition}
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 8 segundos (otimizado para velocidade)
+    console.log('[JUDGE-MODULE] 🚀 Iniciando chamada para AI Gateway...');
+    console.log('[JUDGE-MODULE] Prompt length:', prompt.length);
+    
+    // Timeout de 60 segundos para análises complexas
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => {
+      console.error('[JUDGE-MODULE] ⏰ TIMEOUT após 60 segundos');
+      controller.abort();
+    }, 60000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -166,6 +172,7 @@ ${petition}
         signal: controller.signal,
       });
 
+      console.log('[JUDGE-MODULE] ✅ Resposta recebida, status:', aiResponse.status);
       clearTimeout(timeoutId);
 
       if (!aiResponse.ok) {
