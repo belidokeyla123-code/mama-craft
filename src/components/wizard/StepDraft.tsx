@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Calculator } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Calculator, Zap } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
@@ -13,8 +13,10 @@ import jsPDF from 'jspdf';
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-
 import { extractPlaceholders, generatePlaceholderList } from "@/lib/templatePlaceholders";
+import { useAutoCorrection } from "@/hooks/useAutoCorrection";
+import { AutoCorrectionProgress } from "@/components/correction/AutoCorrectionProgress";
+import { CorrectionHistory } from "@/components/correction/CorrectionHistory";
 
 interface StepDraftProps {
   data: CaseData;
@@ -82,6 +84,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [selectedBrechas, setSelectedBrechas] = useState<number[]>([]);
   const [selectedAdaptations, setSelectedAdaptations] = useState<number[]>([]);
   const [selectedAppellateAdaptations, setSelectedAppellateAdaptations] = useState<number[]>([]);
+
+  // 🆕 Hook de Auto-Correção
+  const autoCorrection = useAutoCorrection(data.caseId || '');
 
   // ✅ CORREÇÃO #1: Verificar e regeração automática de petição com placeholders
   useEffect(() => {

@@ -567,6 +567,65 @@ export type Database = {
         }
         Relationships: []
       }
+      correction_history: {
+        Row: {
+          after_content: string | null
+          applied_at: string | null
+          applied_by: string | null
+          auto_applied: boolean | null
+          before_content: string | null
+          case_id: string
+          changes_summary: Json | null
+          confidence_score: number | null
+          correction_type: string
+          created_at: string | null
+          id: string
+          module: string
+          reverted_at: string | null
+          validation_status: string | null
+        }
+        Insert: {
+          after_content?: string | null
+          applied_at?: string | null
+          applied_by?: string | null
+          auto_applied?: boolean | null
+          before_content?: string | null
+          case_id: string
+          changes_summary?: Json | null
+          confidence_score?: number | null
+          correction_type: string
+          created_at?: string | null
+          id?: string
+          module: string
+          reverted_at?: string | null
+          validation_status?: string | null
+        }
+        Update: {
+          after_content?: string | null
+          applied_at?: string | null
+          applied_by?: string | null
+          auto_applied?: boolean | null
+          before_content?: string | null
+          case_id?: string
+          changes_summary?: Json | null
+          confidence_score?: number | null
+          correction_type?: string
+          created_at?: string | null
+          id?: string
+          module?: string
+          reverted_at?: string | null
+          validation_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correction_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_validation: {
         Row: {
           case_id: string
@@ -966,16 +1025,20 @@ export type Database = {
         Row: {
           analysis_completed_at: string | null
           analysis_status: string | null
+          auto_correction_attempts: number | null
           case_id: string
           completed_at: string | null
+          correction_stage: string | null
           created_at: string | null
           error_message: string | null
           id: string
           jurisprudence_completed_at: string | null
           jurisprudence_status: string | null
+          last_correction_error: string | null
           retry_count: number | null
           started_at: string | null
           status: string
+          total_corrections_applied: number | null
           updated_at: string | null
           validation_completed_at: string | null
           validation_status: string | null
@@ -983,16 +1046,20 @@ export type Database = {
         Insert: {
           analysis_completed_at?: string | null
           analysis_status?: string | null
+          auto_correction_attempts?: number | null
           case_id: string
           completed_at?: string | null
+          correction_stage?: string | null
           created_at?: string | null
           error_message?: string | null
           id?: string
           jurisprudence_completed_at?: string | null
           jurisprudence_status?: string | null
+          last_correction_error?: string | null
           retry_count?: number | null
           started_at?: string | null
           status?: string
+          total_corrections_applied?: number | null
           updated_at?: string | null
           validation_completed_at?: string | null
           validation_status?: string | null
@@ -1000,16 +1067,20 @@ export type Database = {
         Update: {
           analysis_completed_at?: string | null
           analysis_status?: string | null
+          auto_correction_attempts?: number | null
           case_id?: string
           completed_at?: string | null
+          correction_stage?: string | null
           created_at?: string | null
           error_message?: string | null
           id?: string
           jurisprudence_completed_at?: string | null
           jurisprudence_status?: string | null
+          last_correction_error?: string | null
           retry_count?: number | null
           started_at?: string | null
           status?: string
+          total_corrections_applied?: number | null
           updated_at?: string | null
           validation_completed_at?: string | null
           validation_status?: string | null

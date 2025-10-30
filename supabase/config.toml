@@ -80,3 +80,12 @@ verify_jwt = false
 
 [functions.validate-jurisdiction]
 verify_jwt = false
+
+[functions.auto-fix-quality]
+verify_jwt = false
+
+[functions.apply-regional-adaptations]
+verify_jwt = false
+
+[functions.apply-appellate-adaptations]
+verify_jwt = false

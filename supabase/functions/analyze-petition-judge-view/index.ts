@@ -6,29 +6,36 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('[JUDGE-MODULE] ⚖️ Edge function INICIADA');
+  
   if (req.method === 'OPTIONS') {
+    console.log('[JUDGE-MODULE] OPTIONS request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('[JUDGE-MODULE] Parsing request body...');
     const body = await req.json();
     console.log('[JUDGE-MODULE] Request body keys:', Object.keys(body));
     
     const { petition, caseInfo, documents, analysis, jurisprudence, tese } = body;
-    
-    if (!petition || typeof petition !== 'string') {
-      throw new Error('Petition is required and must be a string');
-    }
-    
+
+    // Log detalhado para debug
     console.log('[JUDGE-MODULE] Data validation:', {
       hasPetition: !!petition,
-      petitionLength: petition?.length,
+      petitionLength: petition?.length || 0,
       hasCaseInfo: !!caseInfo,
       hasDocuments: !!documents,
       documentsCount: documents?.length || 0,
       hasManualBenefits: !!caseInfo?.manual_benefits,
       manualBenefitsCount: caseInfo?.manual_benefits?.length || 0
     });
+
+    // Validação básica
+    if (!petition || typeof petition !== 'string' || petition.trim().length === 0) {
+      console.error('[JUDGE-MODULE] ❌ Petição inválida');
+      throw new Error('Petição não fornecida ou inválida');
+    }
 
     const prompt = `Você é um JUIZ FEDERAL experiente com VISÃO 360° do processo. 
 
