@@ -154,6 +154,7 @@ export type Database = {
           draft_payload: Json | null
           fundamentos: string[] | null
           id: string
+          is_stale: boolean | null
           lacunas: string[] | null
           last_document_hash: string | null
           qualidade_segurada: string | null
@@ -169,6 +170,7 @@ export type Database = {
           draft_payload?: Json | null
           fundamentos?: string[] | null
           id?: string
+          is_stale?: boolean | null
           lacunas?: string[] | null
           last_document_hash?: string | null
           qualidade_segurada?: string | null
@@ -184,6 +186,7 @@ export type Database = {
           draft_payload?: Json | null
           fundamentos?: string[] | null
           id?: string
+          is_stale?: boolean | null
           lacunas?: string[] | null
           last_document_hash?: string | null
           qualidade_segurada?: string | null
@@ -734,6 +737,7 @@ export type Database = {
           generated_at: string
           html_content: string | null
           id: string
+          is_stale: boolean | null
           last_analysis_hash: string | null
           markdown_content: string | null
           payload: Json
@@ -745,6 +749,7 @@ export type Database = {
           generated_at?: string
           html_content?: string | null
           id?: string
+          is_stale?: boolean | null
           last_analysis_hash?: string | null
           markdown_content?: string | null
           payload: Json
@@ -756,6 +761,7 @@ export type Database = {
           generated_at?: string
           html_content?: string | null
           id?: string
+          is_stale?: boolean | null
           last_analysis_hash?: string | null
           markdown_content?: string | null
           payload?: Json
@@ -952,6 +958,7 @@ export type Database = {
           case_id: string
           created_at: string | null
           id: string
+          is_stale: boolean | null
           last_case_hash: string | null
           results: Json
           selected_ids: Json | null
@@ -960,6 +967,7 @@ export type Database = {
           case_id: string
           created_at?: string | null
           id?: string
+          is_stale?: boolean | null
           last_case_hash?: string | null
           results: Json
           selected_ids?: Json | null
@@ -968,6 +976,7 @@ export type Database = {
           case_id?: string
           created_at?: string | null
           id?: string
+          is_stale?: boolean | null
           last_case_hash?: string | null
           results?: Json
           selected_ids?: Json | null
@@ -1219,6 +1228,7 @@ export type Database = {
           case_id: string
           created_at: string | null
           id: string
+          is_stale: boolean | null
           selected_ids: string[] | null
           teses: Json
         }
@@ -1226,6 +1236,7 @@ export type Database = {
           case_id: string
           created_at?: string | null
           id?: string
+          is_stale?: boolean | null
           selected_ids?: string[] | null
           teses: Json
         }
@@ -1233,6 +1244,7 @@ export type Database = {
           case_id?: string
           created_at?: string | null
           id?: string
+          is_stale?: boolean | null
           selected_ids?: string[] | null
           teses?: Json
         }
