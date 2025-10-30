@@ -206,12 +206,21 @@ serve(async (req) => {
     console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64.`);
 
     // ==================================================================
-    // 4. Chamar a API da OpenAI para análise
+    // 4. Chamar IA para análise com prompt específico
     // ==================================================================
-    console.log(`[DOC ${documentId}] Chamando API da OpenAI...`);
-    const prompt = buildPromptForDocType(currentType, ESPECIALISTA_MATERNIDADE_PROMPT);
-    const openAiRequestBody = {
-      model: "gpt-4-vision-preview",
+    console.log(`[DOC ${documentId}] 🤖 Chamando IA para extrair dados do tipo: ${currentType}`);
+    
+    // Usar prompt específico por tipo de documento
+    const prompt = buildPromptForDocType(currentType, originalFileName);
+    console.log(`[DOC ${documentId}] 📋 Prompt gerado (${prompt.length} caracteres)`);
+
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY não configurada');
+    }
+
+    const aiRequestBody = {
+      model: "google/gemini-2.5-flash",
       messages: [
         {
           role: "user",
@@ -221,33 +230,34 @@ serve(async (req) => {
               type: "image_url",
               image_url: {
                 url: `data:image/png;base64,${fileBase64}`,
-                detail: "high",
               },
             },
           ],
         },
       ],
-      max_tokens: 1024,
+      max_tokens: 2048,
+      temperature: 0.3,
     };
 
-    const openAiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
       },
-      body: JSON.stringify(openAiRequestBody),
+      body: JSON.stringify(aiRequestBody),
     });
 
-    if (!openAiResponse.ok) {
-      console.error(`[DOC ${documentId}] Erro na resposta da OpenAI:`, openAiResponse.status, openAiResponse.statusText, await openAiResponse.text());
-      throw new Error(`OpenAI API error: ${openAiResponse.statusText}`);
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error(`[DOC ${documentId}] Erro na resposta da IA:`, aiResponse.status, errorText);
+      throw new Error(`AI API error: ${aiResponse.status} - ${errorText}`);
     }
 
-    const aiData = await openAiResponse.json();
+    const aiData = await aiResponse.json();
     const analysisResult = JSON.parse(aiData.choices[0].message.content);
 
-    console.log(`[DOC ${documentId}] Resposta da OpenAI recebida e parseada.`);
+    console.log(`[DOC ${documentId}] Resposta da IA recebida e parseada.`);
 
     // ==================================================================
     // 5. Salvar os resultados da análise no banco de dados
@@ -259,7 +269,7 @@ serve(async (req) => {
         document_id: documentId,
         case_id: caseId,
         analysis_result: analysisResult,
-        model_version: 'gpt-4-vision-preview',
+        model_version: 'google/gemini-2.5-flash',
       }, { onConflict: 'document_id' });
 
     if (upsertError) {
