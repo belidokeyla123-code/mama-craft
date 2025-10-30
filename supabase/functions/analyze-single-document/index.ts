@@ -32,14 +32,24 @@ function generateIntelligentFileName(docType: string, extractedData: any, origin
   const originalExt = originalFileName.split('.').pop() || 'png';
   
   const templates: Record<string, (d: any) => string> = {
-    certidao_nascimento: (d) => `Certidao_Nascimento_${sanitizeName(d.childName)}_${formatDateForFileName(d.childBirthDate) || timestamp}`,
+    certidao_nascimento: (d) => {
+      // ✅ Priorizar nome da CRIANÇA, não da mãe
+      const name = sanitizeName(d.childName || d.motherName || 'Sem_Nome');
+      const date = formatDateForFileName(d.childBirthDate || d.motherBirthDate || timestamp);
+      return `Certidao_Nascimento_${name}_${date}`;
+    },
     identificacao: (d) => {
       const name = sanitizeName(d.fullName);
       if (d.rg) return `RG_${name}_${d.rg.replace(/[^0-9]/g, '').substring(0, 10)}`;
       if (d.cpf) return `CPF_${name}_${d.cpf.replace(/[^0-9]/g, '')}`;
       return `Identificacao_${name}`;
     },
-    procuracao: (d) => `Procuracao_${sanitizeName(d.granterName)}_${timestamp}`,
+    procuracao: (d) => {
+      // ✅ CORRIGIDO: Usar granterName (outorgante), não attorneyName
+      const granterName = d.granterName || d.clientName || 'Outorgante_Nao_Identificado';
+      const cpf = d.granterCpf ? `_${d.granterCpf.substring(0, 11)}` : '';
+      return `Procuracao_${sanitizeName(granterName)}${cpf}_${timestamp}`;
+    },
     processo_administrativo: (d) => `Processo_INSS_${d.raProtocol ? d.raProtocol.replace(/[^0-9]/g, '') : timestamp}`,
     certidao_casamento: (d) => `Certidao_Casamento_${sanitizeName(d.spouseName)}_${formatDateForFileName(d.marriageDate) || timestamp}`,
     cnis: (d) => `CNIS_${d.nit ? d.nit.replace(/[^0-9]/g, '') : 'Cliente'}_${timestamp}`,
@@ -243,14 +253,24 @@ function getSchemaForDocType(docType: string) {
     procuracao: {
       type: 'object',
       properties: {
-        granterName: { type: 'string', description: 'Nome do outorgante (quem dá o poder)' },
-        granterCpf: { type: 'string', description: 'CPF do outorgante' },
-        attorneyName: { type: 'string', description: 'Nome do outorgado (procurador/advogado)' },
-        attorneyCpf: { type: 'string', description: 'CPF do outorgado' },
+        granterName: { 
+          type: 'string', 
+          description: '🚨 CRÍTICO: Nome COMPLETO do OUTORGANTE (pessoa que ASSINA e DÁ os poderes). É o CLIENTE, não o advogado!' 
+        },
+        granterCpf: { 
+          type: 'string', 
+          description: 'CPF do OUTORGANTE/cliente (11 dígitos sem formatação)' 
+        },
+        attorneyName: { 
+          type: 'string', 
+          description: 'Nome do OUTORGADO/PROCURADOR (advogado que RECEBE os poderes)' 
+        },
+        attorneyCpf: { type: 'string', description: 'CPF do outorgado/advogado' },
         oabNumber: { type: 'string', description: 'Número da OAB do advogado' },
         powers: { type: 'string', description: 'Poderes outorgados' },
         signatureDate: { type: 'string', description: 'Data da assinatura (YYYY-MM-DD)' }
-      }
+      },
+      required: ['granterName', 'attorneyName']
     }
   };
 

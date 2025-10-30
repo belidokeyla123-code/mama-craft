@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.check-case-completeness]
 verify_jwt = false
+
+[functions.cleanup-case-documents]
+verify_jwt = false

@@ -789,62 +789,6 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         </Alert>
       )}
 
-      {/* ✅ CORREÇÃO #3: SEÇÃO DE BENEFÍCIOS ANTERIORES */}
-      {benefitHistory.length > 0 && (
-        <Alert className="border-blue-500 bg-blue-50">
-          <FileText className="h-4 w-4 text-blue-600" />
-          <AlertTitle className="text-blue-900 font-semibold">
-            📋 Histórico de Benefícios Anteriores ({benefitHistory.length})
-          </AlertTitle>
-          <AlertDescription className="text-blue-800 mt-3">
-            <div className="space-y-3">
-              {benefitHistory.map((benefit, idx) => {
-                const isOverlapping = data.childBirthDate && benefit.end_date &&
-                  Math.abs(
-                    new Date(benefit.end_date).getTime() - 
-                    new Date(data.childBirthDate).getTime()
-                  ) < 120 * 24 * 60 * 60 * 1000; // 120 dias
-
-                return (
-                  <Card key={idx} className={`p-4 ${isOverlapping ? 'border-red-500 bg-red-50' : 'bg-white'}`}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline" className="font-mono">
-                            NB {benefit.nb}
-                          </Badge>
-                          <Badge variant={benefit.status === 'concedido' ? 'default' : 'secondary'}>
-                            {benefit.status}
-                          </Badge>
-                          {isOverlapping && (
-                            <Badge variant="destructive" className="text-xs">
-                              ⚠️ Mesmo evento
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="font-semibold text-sm">{benefit.benefit_type}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Período: {benefit.start_date || 'Não informado'} até {benefit.end_date || 'atual'}
-                        </p>
-                      </div>
-                    </div>
-                    {isOverlapping && (
-                      <Alert className="mt-3 border-red-500 bg-red-100">
-                        <AlertTriangle className="h-4 w-4 text-red-600" />
-                        <AlertDescription className="text-xs text-red-900">
-                          <strong>⚠️ ATENÇÃO:</strong> Este benefício pode estar relacionado ao mesmo evento de parto.
-                          Risco de indeferimento por duplicidade. Verificar com cuidado na análise jurídica.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* SEÇÃO 1: IDENTIFICAÇÃO DA AUTORA (MÃE) */}
       <Card className="p-6">
         <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -1020,6 +964,62 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </Button>
         </div>
       </Card>
+
+      {/* ✅ HISTÓRICO DE BENEFÍCIOS ANTERIORES - MOVIDO PARA CÁ */}
+      {benefitHistory.length > 0 && (
+        <Alert className="border-blue-500 bg-blue-50">
+          <FileText className="h-4 w-4 text-blue-600" />
+          <AlertTitle className="text-blue-900 font-semibold">
+            📋 Histórico de Benefícios Anteriores ({benefitHistory.length})
+          </AlertTitle>
+          <AlertDescription className="text-blue-800 mt-3">
+            <div className="space-y-3">
+              {benefitHistory.map((benefit, idx) => {
+                const isOverlapping = data.childBirthDate && benefit.end_date &&
+                  Math.abs(
+                    new Date(benefit.end_date).getTime() - 
+                    new Date(data.childBirthDate).getTime()
+                  ) < 120 * 24 * 60 * 60 * 1000; // 120 dias
+
+                return (
+                  <Card key={idx} className={`p-4 ${isOverlapping ? 'border-red-500 bg-red-50' : 'bg-white'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="font-mono">
+                            NB {benefit.nb}
+                          </Badge>
+                          <Badge variant={benefit.status === 'concedido' ? 'default' : 'secondary'}>
+                            {benefit.status}
+                          </Badge>
+                          {isOverlapping && (
+                            <Badge variant="destructive" className="text-xs">
+                              ⚠️ Mesmo evento
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="font-semibold text-sm">{benefit.benefit_type}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Período: {benefit.start_date || 'Não informado'} até {benefit.end_date || 'atual'}
+                        </p>
+                      </div>
+                    </div>
+                    {isOverlapping && (
+                      <Alert className="mt-3 border-red-500 bg-red-100">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-xs text-red-900">
+                          <strong>⚠️ ATENÇÃO:</strong> Este benefício pode estar relacionado ao mesmo evento de parto.
+                          Risco de indeferimento por duplicidade. Verificar com cuidado na análise jurídica.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* SEÇÃO CNIS - CADASTRO NACIONAL DE INFORMAÇÕES SOCIAIS */}
       <Card className="p-6">

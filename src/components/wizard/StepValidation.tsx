@@ -375,14 +375,14 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                   )}
                   
                    {/* Botão de upload se documento faltante */}
-                  {!hasDocumentId && (item.importance === 'critical' || item.importance === 'high') && data.caseId && (
+                   {!hasDocumentId && (item.importance === 'critical' || item.importance === 'high') && data.caseId && (
                     <DocumentUploadInline 
                       caseId={data.caseId}
                       suggestedDocType={item.item}
                       onUploadComplete={async () => {
-                        sonnerToast.info('Documento processado! Aguarde...');
-                        // Aguardar 3 segundos para processamento completo
-                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        sonnerToast.info('Documento enviado! Processando...');
+                        // ⏳ Aguardar 5 segundos para processamento completo
+                        await new Promise(resolve => setTimeout(resolve, 5000));
                         await handleValidate();
                         sonnerToast.success('Checklist atualizado!');
                       }}
@@ -412,9 +412,9 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           caseId={data.caseId}
           suggestedDocType={doc.doc_type}
           onUploadComplete={async () => {
-            sonnerToast.info('Documento processado! Aguarde...');
-            // Aguardar 3 segundos para processamento completo
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            sonnerToast.info('Documento enviado! Processando...');
+            // ⏳ Aguardar 5 segundos para processamento completo
+            await new Promise(resolve => setTimeout(resolve, 5000));
             await handleValidate();
             sonnerToast.success('Checklist atualizado!');
           }}
