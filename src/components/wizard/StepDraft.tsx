@@ -682,6 +682,46 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (result?.petition_corrigida) {
         setPetition(result.petition_corrigida);
         
+        // 1. Remover a brecha corrigida da lista
+        const brechasRestantes = judgeAnalysis.brechas.filter((_, i) => i !== index);
+        
+        // 2. Calcular redução de risco baseada na gravidade
+        const reducao = brecha.gravidade === 'alta' ? 15 : 
+                        brecha.gravidade === 'media' ? 10 : 5;
+        const riscoAnterior = judgeAnalysis.risco_improcedencia;
+        const novoRisco = Math.max(0, riscoAnterior - reducao);
+        
+        // 3. Atualizar o estado judgeAnalysis
+        setJudgeAnalysis({
+          ...judgeAnalysis,
+          brechas: brechasRestantes,
+          risco_improcedencia: novoRisco
+        });
+        
+        // 4. Feedback visual forte
+        toast.success(
+          `✅ Correção aplicada!\n📉 Risco: ${riscoAnterior}% → ${novoRisco}%\n📋 ${brechasRestantes.length} brecha(s) restante(s)`,
+          { duration: 5000 }
+        );
+        
+        // 5. Scroll e flash verde na petição
+        setTimeout(() => {
+          const el = document.querySelector('[data-petition-content]');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.classList.add('ring-4', 'ring-green-500', 'transition-all');
+            setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
+          }
+        }, 300);
+        
+        // 6. Se foi a última brecha, parabenizar
+        if (brechasRestantes.length === 0) {
+          setTimeout(() => {
+            toast.success("🎉 Todas as brechas corrigidas! Petição fortificada!", 
+              { duration: 6000 });
+          }, 1000);
+        }
+        
         // Salvar versão atualizada
         await supabase.from('drafts').insert({
           case_id: data.caseId,
