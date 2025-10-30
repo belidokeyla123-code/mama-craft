@@ -37,6 +37,7 @@ export const useTabSync = ({ caseId, events, onSync }: UseTabSyncOptions) => {
       lastTimestampRef.current[eventName] = timestamp;
       
       console.log(`[TAB-SYNC] 🔄 Evento recebido: ${eventName} para caso ${caseId}`);
+      console.log(`[TAB-SYNC] 📦 Detalhe do evento:`, e.detail);
       onSync(e.detail);
     };
     

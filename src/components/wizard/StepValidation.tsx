@@ -175,113 +175,6 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     }
   };
 
-  const handleReconvertFailedPdfs = async () => {
-    if (!data.caseId) return;
-    
-    setIsValidating(true);
-    try {
-      const { data: result, error } = await supabase.functions.invoke('reconvert-failed-pdfs', {
-        body: { caseId: data.caseId }
-      });
-
-      if (error) throw error;
-
-      if (result.reprocessed === 0) {
-        sonnerToast.info('Todos os documentos já foram processados!');
-      } else {
-        sonnerToast.success(`${result.reprocessed} documento(s) sendo reprocessado(s)!`);
-        
-        // Aguardar 5 segundos e revalidar
-        setTimeout(async () => {
-          await handleValidate();
-          sonnerToast.info('Checklist atualizado!');
-        }, 5000);
-      }
-    } catch (error: any) {
-      console.error('Erro ao reprocessar:', error);
-      toast({
-        title: "Erro ao reprocessar",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  // 🔄 Função para reprocessar TODOS os documentos em lotes de 3
-  const handleReprocessAllDocuments = async () => {
-    if (!data.caseId) return;
-    
-    setIsValidating(true);
-    try {
-      sonnerToast.info('Buscando documentos para reprocessamento...');
-      
-      // Buscar todos os PDFs originais (sem parent_document_id)
-      const { data: allPdfs, error: fetchError } = await supabase
-        .from('documents')
-        .select('id, file_name')
-        .eq('case_id', data.caseId)
-        .is('parent_document_id', null)
-        .order('uploaded_at', { ascending: true });
-      
-      if (fetchError) throw fetchError;
-      
-      if (!allPdfs || allPdfs.length === 0) {
-        sonnerToast.info('Nenhum documento encontrado para reprocessar');
-        return;
-      }
-
-      console.log(`[REPROCESS] Reprocessando ${allPdfs.length} documento(s)...`);
-      sonnerToast.info(`Reprocessando ${allPdfs.length} documento(s) em lotes...`);
-
-      // Processar em lotes de 3
-      const batchSize = 3;
-      let processedCount = 0;
-      
-      for (let i = 0; i < allPdfs.length; i += batchSize) {
-        const batch = allPdfs.slice(i, i + batchSize);
-        console.log(`[REPROCESS] Lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(allPdfs.length / batchSize)}`);
-        
-        const { error: invokeError } = await supabase.functions.invoke('process-documents-with-ai', {
-          body: { 
-            caseId: data.caseId,
-            documentIds: batch.map(d => d.id)
-          }
-        });
-        
-        if (invokeError) {
-          console.error('[REPROCESS] Erro no lote:', invokeError);
-          sonnerToast.error(`Erro ao processar lote ${Math.floor(i / batchSize) + 1}`);
-        } else {
-          processedCount += batch.length;
-          sonnerToast.info(`Processados ${processedCount}/${allPdfs.length} documentos...`);
-        }
-        
-        // Aguardar 3 segundos entre lotes
-        if (i + batchSize < allPdfs.length) {
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        }
-      }
-
-      sonnerToast.success(`${processedCount} documento(s) reprocessado(s)! Aguarde a validação...`);
-      
-      // Aguardar 8 segundos e revalidar
-      setTimeout(async () => {
-        await handleValidate();
-        sonnerToast.info('Checklist atualizado!');
-      }, 8000);
-    } catch (error: any) {
-      console.error('[REPROCESS] Erro:', error);
-      toast({
-        title: "Erro ao reprocessar",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsValidating(false);
-    }
-  };
 
   if (isValidating || !validationResult) {
     return (
@@ -431,28 +324,23 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         </Card>
       )}
 
-      <div className="flex gap-2 flex-wrap">
-        <Button onClick={handleValidate} disabled={isValidating} className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Validar Novamente
-        </Button>
+      <div className="flex justify-end">
         <Button 
-          onClick={handleReconvertFailedPdfs} 
+          onClick={handleValidate} 
           disabled={isValidating}
-          variant="outline" 
           className="gap-2"
         >
-          <RefreshCw className="h-4 w-4" />
-          Reprocessar Falhados
-        </Button>
-        <Button 
-          onClick={handleReprocessAllDocuments} 
-          disabled={isValidating}
-          variant="outline" 
-          className="gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Reprocessar Tudo
+          {isValidating ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Atualizando...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Atualizar
+            </>
+          )}
         </Button>
       </div>
 

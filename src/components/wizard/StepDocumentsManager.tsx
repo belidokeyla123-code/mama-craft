@@ -159,8 +159,18 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       // 🆕 DISPARAR PIPELINE COMPLETO
       await triggerFullPipeline('Documento removido');
       
+      // ✅ Disparar evento global para sincronizar todas as abas
+      window.dispatchEvent(new CustomEvent('documents-updated', {
+        detail: { 
+          caseId,
+          timestamp: Date.now(),
+          action: 'delete'
+        }
+      }));
+      
       // Notificar componente pai
       if (onDocumentsChange) {
+        console.log('[StepDocumentsManager] 🔄 Propagando onDocumentsChange para pai (delete)');
         onDocumentsChange();
       }
     } catch (error: any) {
@@ -401,7 +411,19 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         description: "Validação, análise, jurisprudência e tese atualizadas!"
       });
 
-      if (onDocumentsChange) onDocumentsChange();
+      // ✅ Disparar evento global para sincronizar todas as abas
+      window.dispatchEvent(new CustomEvent('documents-updated', {
+        detail: { 
+          caseId,
+          timestamp: Date.now(),
+          action: 'upload'
+        }
+      }));
+
+      if (onDocumentsChange) {
+        console.log('[StepDocumentsManager] 🔄 Propagando onDocumentsChange para pai (upload)');
+        onDocumentsChange();
+      }
 
     } catch (error: any) {
       console.error("Erro ao enviar documentos:", error);
@@ -480,6 +502,15 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         title: "📥 Documentos na fila",
         description: "Processamento será iniciado em breve. Você pode navegar livremente.",
       });
+
+      // ✅ Disparar evento global para sincronizar todas as abas
+      window.dispatchEvent(new CustomEvent('documents-updated', {
+        detail: { 
+          caseId,
+          timestamp: Date.now(),
+          action: 'reprocess'
+        }
+      }));
 
       // ✅ FASE 4: POLLING REMOVIDO - Agora usamos eventos em tempo real via useTabSync
       // O evento 'processing-completed' será disparado automaticamente quando o processamento terminar
