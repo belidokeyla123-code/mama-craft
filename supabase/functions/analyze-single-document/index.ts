@@ -408,12 +408,28 @@ Você é um especialista altamente experiente em análise de documentos previden
                 type: 'text',
                 text: `${prompt}
 
-📋 **EXTRAÇÃO ADICIONAL:**
-Se visível neste documento, extraia também:
-- Nome completo, CPF, RG, data de nascimento, endereço, telefone
-- Nome de cônjuge/filho(a) e respectivas datas
+📋 **EXTRAÇÃO UNIVERSAL (aplicável a TODOS os documentos):**
 
-Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
+Além das informações específicas do tipo de documento, SEMPRE extraia (se visíveis):
+- Nome completo da autora/autor
+- CPF (11 dígitos, apenas números)
+- RG
+- Data de nascimento (formato YYYY-MM-DD)
+- Endereço completo
+- Telefone/WhatsApp
+- Estado civil
+- Nome do cônjuge e CPF (se mencionado)
+- Nome do filho(a) e data de nascimento (se mencionado)
+
+Retorne esses campos no objeto \`universalData\` separado.
+
+⚠️ **INSTRUÇÕES CRÍTICAS:**
+- Use OCR para ler TODAS as informações visíveis nesta imagem
+- Para datas: sempre use formato YYYY-MM-DD (exemplo: "2022-11-19")
+- Para CPF: extraia apenas números, sem pontos/traços
+- **SE UMA INFORMAÇÃO NÃO ESTIVER VISÍVEL, DEIXE O CAMPO VAZIO OU OMITA-O**
+- **NUNCA retorne texto explicativo como "Não identificado" ou "Não é possível extrair"**
+- **SEMPRE use a função extract_document_data para retornar dados estruturados**`
               },
               {
                 type: 'image_url',
@@ -526,19 +542,26 @@ Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
       if (extracted.universalData) {
         const ud = extracted.universalData;
         
+        // Helper: validar formato de data
+        const isValidDate = (dateStr: any): boolean => {
+          if (!dateStr || typeof dateStr !== 'string') return false;
+          return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
+                 !/não|indefinido|identificado|extrair|disponível/i.test(dateStr);
+        };
+        
         if (ud.authorName) genericUpdates.author_name = ud.authorName;
         if (ud.authorCpf) genericUpdates.author_cpf = ud.authorCpf.replace(/\D/g, '');
         if (ud.authorRg) genericUpdates.author_rg = ud.authorRg;
-        if (ud.authorBirthDate) genericUpdates.author_birth_date = ud.authorBirthDate;
+        if (isValidDate(ud.authorBirthDate)) genericUpdates.author_birth_date = ud.authorBirthDate;
         if (ud.authorAddress) genericUpdates.author_address = ud.authorAddress;
         if (ud.authorPhone) genericUpdates.author_phone = ud.authorPhone;
         if (ud.authorWhatsapp) genericUpdates.author_whatsapp = ud.authorWhatsapp;
         if (ud.authorMaritalStatus) genericUpdates.author_marital_status = ud.authorMaritalStatus;
         if (ud.spouseName) genericUpdates.spouse_name = ud.spouseName;
         if (ud.spouseCpf) genericUpdates.spouse_cpf = ud.spouseCpf.replace(/\D/g, '');
-        if (ud.marriageDate) genericUpdates.marriage_date = ud.marriageDate;
+        if (isValidDate(ud.marriageDate)) genericUpdates.marriage_date = ud.marriageDate;
         if (ud.childName) genericUpdates.child_name = ud.childName;
-        if (ud.childBirthDate) genericUpdates.child_birth_date = ud.childBirthDate;
+        if (isValidDate(ud.childBirthDate)) genericUpdates.child_birth_date = ud.childBirthDate;
         if (ud.childCpf) genericUpdates.child_cpf = ud.childCpf.replace(/\D/g, '');
         
         console.log(`[ANALYZE-SINGLE] 🌍 Dados universais extraídos:`, Object.keys(genericUpdates));
@@ -762,6 +785,13 @@ Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
     if (docType === 'procuracao' && extracted.extractedData) {
       const procuracaoUpdates: any = {};
       
+      // Helper para validar datas
+      const isValidDate = (dateStr: any): boolean => {
+        if (!dateStr || typeof dateStr !== 'string') return false;
+        return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
+               !/não|indefinido|identificado|extrair|disponível/i.test(dateStr);
+      };
+      
       // A outorgante (granterName) É a autora do processo
       if (extracted.extractedData.granterName) {
         procuracaoUpdates.author_name = extracted.extractedData.granterName;
@@ -775,7 +805,7 @@ Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
         procuracaoUpdates.author_address = extracted.extractedData.granterAddress;
       }
       
-      if (extracted.extractedData.signatureDate) {
+      if (isValidDate(extracted.extractedData.signatureDate)) {
         procuracaoUpdates.procuracao_date = extracted.extractedData.signatureDate;
       }
       
@@ -799,6 +829,13 @@ Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
     if (docType === 'identificacao' && extracted.extractedData) {
       const idUpdates: any = {};
       
+      // Helper para validar datas
+      const isValidDate = (dateStr: any): boolean => {
+        if (!dateStr || typeof dateStr !== 'string') return false;
+        return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
+               !/não|indefinido|identificado|extrair|disponível/i.test(dateStr);
+      };
+      
       if (extracted.extractedData.fullName) {
         idUpdates.author_name = extracted.extractedData.fullName;
       }
@@ -811,12 +848,17 @@ Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
         idUpdates.author_rg = extracted.extractedData.rg;
       }
       
-      if (extracted.extractedData.birthDate && /^\d{4}-\d{2}-\d{2}$/.test(extracted.extractedData.birthDate)) {
+      if (isValidDate(extracted.extractedData.birthDate)) {
         idUpdates.author_birth_date = extracted.extractedData.birthDate;
       }
       
+      // ✅ CORRIGIDO: Nome da mãe não é CPF
       if (extracted.extractedData.motherName) {
-        idUpdates.mother_cpf = extracted.extractedData.motherName;
+        idUpdates.mother_name = extracted.extractedData.motherName;
+      }
+      
+      if (extracted.extractedData.motherCpf && /^\d{11}$/.test(extracted.extractedData.motherCpf)) {
+        idUpdates.mother_cpf = extracted.extractedData.motherCpf;
       }
       
       if (Object.keys(idUpdates).length > 0) {
@@ -839,15 +881,22 @@ Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
     if (docType === 'processo_administrativo' && extracted.extractedData) {
       const raUpdates: any = {};
       
+      // Helper para validar datas
+      const isValidDate = (dateStr: any): boolean => {
+        if (!dateStr || typeof dateStr !== 'string') return false;
+        return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
+               !/não|indefinido|identificado|extrair|disponível|aplicável/i.test(dateStr);
+      };
+      
       if (extracted.extractedData.raProtocol && extracted.extractedData.raProtocol !== 'Não aplicável') {
         raUpdates.ra_protocol = extracted.extractedData.raProtocol;
       }
       
-      if (extracted.extractedData.raRequestDate && extracted.extractedData.raRequestDate !== 'Não aplicável') {
+      if (isValidDate(extracted.extractedData.raRequestDate)) {
         raUpdates.ra_request_date = extracted.extractedData.raRequestDate;
       }
       
-      if (extracted.extractedData.raDenialDate && extracted.extractedData.raDenialDate !== 'Não aplicável') {
+      if (isValidDate(extracted.extractedData.raDenialDate)) {
         raUpdates.ra_denial_date = extracted.extractedData.raDenialDate;
       }
       
