@@ -23,6 +23,7 @@ import {
 import { ManualReclassifyDialog } from "./ManualReclassifyDialog";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface Document {
   id: string;
@@ -44,7 +45,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Sistema de orquestração para disparar pipeline completo
+  // ✅ Sistema de orquestração para invalidar caches e disparar pipelines
   const { triggerFullPipeline } = useCaseOrchestration({ 
     caseId: caseId || '', 
     enabled: true 
@@ -56,6 +57,24 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     triggerType: 'documents',
     watchFields: [documents.length],
   });
+
+  // ✅ FASE 3 e 4: Sincronização em tempo real (substituindo polling)
+  useTabSync({
+    caseId: caseId || '',
+    events: ['documents-updated', 'processing-completed'],
+    onSync: (detail) => {
+      console.log('[StepDocumentsManager] 🔄 Documentos ou processamento atualizados');
+      if (detail.timestamp && !isLoading) {
+        loadDocuments();
+        if (onDocumentsChange) onDocumentsChange();
+        toast({
+          title: "✅ Documentos atualizados",
+          description: "Lista de documentos atualizada em tempo real.",
+        });
+      }
+    }
+  });
+
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
