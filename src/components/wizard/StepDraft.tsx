@@ -317,13 +317,18 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
-  const analyzeWithJudgeModule = async () => {
+  const analyzeWithJudgeModule = async (isRevalidation = false) => {
     if (!petition) {
       toast.error("Gere a petição primeiro");
       return;
     }
 
-    setAnalyzingJudge(true);
+    if (isRevalidation) {
+      toast.loading("🔍 Revalidando petição corrigida...", { id: 'judge-revalidation' });
+    } else {
+      setAnalyzingJudge(true);
+    }
+    
     try {
       // 1. Buscar informações básicas do caso
       const { data: caseInfo } = await supabase
@@ -378,12 +383,29 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
       if (result) {
         setJudgeAnalysis(result);
+        
+        // Feedback diferenciado para re-análise
+        if (isRevalidation) {
+          if (result.brechas.length === 0) {
+            toast.success("✅ Validação concluída! Nenhuma brecha detectada. Risco: 0%", 
+              { id: 'judge-revalidation', duration: 6000 });
+          } else {
+            toast.warning(`⚠️ ${result.brechas.length} nova(s) brecha(s) detectada(s) após correção.`, 
+              { id: 'judge-revalidation', duration: 6000 });
+          }
+        }
       }
     } catch (error: any) {
       console.error('Erro ao analisar petição:', error);
-      toast.error('Erro na análise do juiz: ' + error.message);
+      if (isRevalidation) {
+        toast.error('Erro na revalidação: ' + error.message, { id: 'judge-revalidation' });
+      } else {
+        toast.error('Erro na análise do juiz: ' + error.message);
+      }
     } finally {
-      setAnalyzingJudge(false);
+      if (!isRevalidation) {
+        setAnalyzingJudge(false);
+      }
     }
   };
 
@@ -714,11 +736,20 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           }
         }, 300);
         
-        // 6. Se foi a última brecha, parabenizar
+        // 6. Se foi a última brecha, parabenizar e RE-ANALISAR automaticamente
         if (brechasRestantes.length === 0) {
           setTimeout(() => {
             toast.success("🎉 Todas as brechas corrigidas! Petição fortificada!", 
               { duration: 6000 });
+            
+            // ✨ VALIDAÇÃO AUTOMÁTICA: Re-análise para confirmar 0% de risco
+            setTimeout(() => {
+              toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
+              
+              setTimeout(() => {
+                analyzeWithJudgeModule(true); // Re-análise automática
+              }, 1500);
+            }, 2000);
           }, 1000);
         }
         
@@ -835,6 +866,15 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             }, 2000);
           }
         }, 300);
+        
+        // ✨ VALIDAÇÃO AUTOMÁTICA: Re-análise após aplicar todas as correções
+        setTimeout(() => {
+          toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
+          
+          setTimeout(() => {
+            analyzeWithJudgeModule(true); // Re-análise automática
+          }, 1500);
+        }, 2500);
       } else {
         console.warn('[APPLY-CORRECTIONS] Resposta sem petition_corrigida:', result);
         toast.error("A função retornou, mas sem conteúdo de petição corrigida.");
@@ -1418,7 +1458,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" onClick={analyzeWithJudgeModule} disabled={analyzingJudge}>
+                <Button variant="outline" onClick={() => analyzeWithJudgeModule()} disabled={analyzingJudge}>
                   {analyzingJudge ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
