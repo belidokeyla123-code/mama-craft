@@ -20,62 +20,143 @@ serve(async (req) => {
     console.log('[EDGE] JudgeAnalysis exists:', !!judgeAnalysis);
     console.log('[EDGE] JudgeAnalysis brechas:', judgeAnalysis?.brechas?.length || 0);
 
-    // Construir lista detalhada de correções
-    const correcoesList = judgeAnalysis?.brechas?.map((brecha: any, i: number) => {
+    // ═══════════════════════════════════════════════════════════════
+    // 🔥 CONSTRUIR LISTA COMPLETA DE TODAS AS CORREÇÕES
+    // ═══════════════════════════════════════════════════════════════
+
+    // 1️⃣ BRECHAS (falhas graves que comprometem a petição)
+    const brechasList = judgeAnalysis?.brechas?.map((brecha: any, i: number) => {
       return `
 ### BRECHA ${i + 1} - ${brecha.tipo.toUpperCase()} (Gravidade: ${brecha.gravidade})
 **Localização:** ${brecha.localizacao}
 **Problema:** ${brecha.descricao}
-**O QUE FAZER:** ${brecha.sugestao}
+**AÇÃO OBRIGATÓRIA:** ${brecha.sugestao}
 ${brecha.documento_necessario ? `**DOCUMENTO NECESSÁRIO:** ${brecha.documento_necessario}` : ''}
 `;
-    }).join('\n---\n');
+    }).join('\n---\n') || '';
 
-    const prompt = `Você é um advogado especialista em petições previdenciárias. Sua tarefa é REESCREVER a petição aplicando TODAS as correções abaixo.
+    // 2️⃣ PONTOS FRACOS (argumentações que precisam ser fortalecidas)
+    const pontosFracosList = judgeAnalysis?.pontos_fracos?.map((ponto: any, i: number) => {
+      const descricao = typeof ponto === 'string' ? ponto : ponto.descricao || ponto.problema;
+      const secao = typeof ponto === 'object' ? (ponto.secao || ponto.localizacao || 'Não especificada') : 'Não especificada';
+      const recomendacao = typeof ponto === 'object' ? (ponto.recomendacao || ponto.sugestao || 'Reescrever com mais fundamentação') : 'Reescrever com mais fundamentação';
+      
+      return `
+### PONTO FRACO ${i + 1}
+**Localização:** ${secao}
+**Problema:** ${descricao}
+**AÇÃO OBRIGATÓRIA:** ${recomendacao}
+`;
+    }).join('\n---\n') || '';
+
+    // 3️⃣ RECOMENDAÇÕES GERAIS (melhorias sugeridas pelo juiz)
+    const recomendacoesList = judgeAnalysis?.recomendacoes?.map((rec: string | any, i: number) => {
+      const texto = typeof rec === 'string' ? rec : rec.texto || rec.descricao || rec.recomendacao;
+      return `
+### RECOMENDAÇÃO ${i + 1}
+${texto}
+**VOCÊ DEVE IMPLEMENTAR ISSO NA PETIÇÃO!**
+`;
+    }).join('\n---\n') || '';
+
+    // 🔥 CONSOLIDAR TODAS AS CORREÇÕES EM UM ÚNICO PROMPT
+    const todasCorrecoes = [
+      brechasList && `# 🔴 BRECHAS CRÍTICAS (OBRIGATÓRIO CORRIGIR)\n${brechasList}`,
+      pontosFracosList && `# ⚠️ PONTOS FRACOS (FORTALECER ARGUMENTAÇÃO)\n${pontosFracosList}`,
+      recomendacoesList && `# 💡 RECOMENDAÇÕES DO JUIZ (IMPLEMENTAR)\n${recomendacoesList}`
+    ].filter(Boolean).join('\n\n═══════════════════════════════════════════════\n\n');
+
+    const totalCorrecoes = 
+      (judgeAnalysis?.brechas?.length || 0) + 
+      (judgeAnalysis?.pontos_fracos?.length || 0) + 
+      (judgeAnalysis?.recomendacoes?.length || 0);
+
+    console.log('[EDGE] 📊 Correções a aplicar:', {
+      brechas: judgeAnalysis?.brechas?.length || 0,
+      pontos_fracos: judgeAnalysis?.pontos_fracos?.length || 0,
+      recomendacoes: judgeAnalysis?.recomendacoes?.length || 0,
+      total: totalCorrecoes
+    });
+
+    if (totalCorrecoes === 0) {
+      console.warn('[EDGE] ⚠️ Nenhuma correção fornecida!');
+      return new Response(JSON.stringify({ 
+        petition_corrigida: petition,
+        mudancas_realizadas: 'Nenhuma correção foi especificada'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const prompt = `Você é um advogado previdenciarista SÊNIOR. Sua tarefa é REESCREVER a petição aplicando TODAS as ${totalCorrecoes} correções abaixo.
 
 # PETIÇÃO ORIGINAL
 ${petition}
 
----
+═══════════════════════════════════════════════════════════════
 
-# CORREÇÕES OBRIGATÓRIAS A APLICAR
+# CORREÇÕES OBRIGATÓRIAS (TOTAL: ${totalCorrecoes})
 
-${correcoesList}
+${todasCorrecoes}
 
----
+═══════════════════════════════════════════════════════════════
 
-# INSTRUÇÕES CRÍTICAS
+# INSTRUÇÕES CRÍTICAS - LEIA COM ATENÇÃO
 
-⚠️ **IMPORTANTE:** Você DEVE fazer mudanças SUBSTANCIAIS na petição. NÃO seja conservador.
+⚠️ **IMPORTANTE:** Você DEVE fazer mudanças SUBSTANCIAIS. NÃO seja conservador.
 
-1. **CORRIJA CADA BRECHA LISTADA ACIMA:**
-   - Brechas probatórias → Adicione parágrafos mencionando os documentos anexados
-   - Brechas argumentativas → Reescreva os argumentos fracos com fundamentação robusta
-   - Brechas jurídicas → Adicione citações de leis, artigos e jurisprudências
+## COMO APLICAR CADA TIPO DE CORREÇÃO:
 
-2. **APLIQUE AS SUGESTÕES DE CADA BRECHA** (campo "O QUE FAZER" acima)
+### Para BRECHAS:
+- **Probatórias** → Adicione parágrafos citando documentos específicos anexos (ex: "conforme doc. 04, 05 e 07 anexos")
+- **Argumentativas** → Reescreva completamente argumentos fracos com fundamentação jurídica robusta e persuasiva
+- **Jurídicas** → Adicione citações completas de leis, artigos, incisos, súmulas e jurisprudências específicas
 
-3. **Mantenha a estrutura geral** (cabeçalho, seções I, II, III, pedidos)
+### Para PONTOS FRACOS:
+1. Localize a seção/parágrafo indicado
+2. Reescreva COMPLETAMENTE a argumentação problemática
+3. Adicione fundamentação legal sólida (leis + jurisprudências)
+4. Torne a redação mais clara, persuasiva e didática
+5. Expanda com exemplos concretos quando aplicável
 
-4. **Adicione conteúdo novo** onde necessário para corrigir as brechas
+### Para RECOMENDAÇÕES DO JUIZ:
+- **"Revisar seção X"** → Reescreva a seção INTEIRA com melhorias substanciais
+- **"Incluir referência ao Tema Y/Súmula Z"** → Adicione parágrafo específico citando o tema/súmula com ementa completa
+- **"Aprofundar argumento W"** → Expanda o argumento com mais detalhes, exemplos práticos e fundamentação teórica
+- **"Tornar mais didático"** → Reescreva de forma mais clara, com exemplos, analogias e explicações passo a passo
+- **"Incluir jurisprudência específica"** → Adicione jurisprudências citadas com número do processo e trecho relevante
 
-5. **Reescreva parágrafos inteiros** se a sugestão pedir
+## REGRAS GERAIS OBRIGATÓRIAS:
+1. ✅ Mantenha a estrutura geral (cabeçalho, seções, pedidos)
+2. ✅ Adicione conteúdo novo substancial onde necessário (mínimo 20% de expansão)
+3. ✅ Reescreva parágrafos inteiros quando indicado
+4. ✅ Cite leis, artigos, incisos, súmulas e jurisprudências específicas
+5. ✅ Use linguagem técnica mas persuasiva
+6. ❌ NÃO mencione que você está fazendo correções
+7. ❌ NÃO use expressões genéricas ("conforme documentos anexos") - seja específico
+8. ✅ Retorne a petição COMPLETA em markdown
 
-6. **NÃO mencione** que você está fazendo correções (escreva como se fosse a versão original)
+═══════════════════════════════════════════════════════════════
 
-7. **Retorne a petição COMPLETA corrigida** em markdown, sem comentários ou JSON
+# EXEMPLO DE CORREÇÃO REAL
 
----
+**RECOMENDAÇÃO DO JUIZ:**
+"Incluir mensagem direta ao Tema 89 da TNU sobre autonomia dos fatos geradores"
 
-# EXEMPLO DE CORREÇÃO
+**ANTES (texto original):**
+"A autora tem direito ao benefício mesmo tendo recebido salário-maternidade anteriormente."
 
-**Antes (com brecha):**
-"A autora preenche os requisitos."
+**DEPOIS (aplicando a recomendação):**
+"A autora faz jus ao benefício mesmo tendo recebido salário-maternidade anteriormente, nos termos do **Tema nº 89 da Turma Nacional de Uniformização (TNU)**, que pacificou definitivamente a questão da autonomia dos fatos geradores:
 
-**Depois (corrigido):**
-"A autora preenche os requisitos, conforme demonstrado pela Autodeclaração Rural (doc. AUTODECLARACAO.pdf), corroborada pelas Notas Fiscais de Venda de Produção Rural (doc. NOTAS_FISCAIS.pdf) e pelos comprovantes de compra de insumos agrícolas (doc. COMPROVANTES_INSUMOS.pdf), que atestam o labor rural contínuo no período de 19/02/2022 a 19/11/2022."
+> **EMENTA:** 'O fato de a segurada já ter recebido o benefício de salário-maternidade anteriormente não constitui óbice a uma nova concessão, se preenchidos os requisitos legais, referentes a um novo parto.' 
+> (TNU-PEDILEF 0506032-44.2012.4.05.8300, Rel. Juiz Federal FREDERICO KOEHLER)
 
-Agora, reescreva a petição aplicando TODAS as ${judgeAnalysis?.brechas?.length || 0} correções:`;
+Este precedente da TNU é de observância obrigatória por todos os Juizados Especiais Federais (art. 14, § 2º, da Lei nº 10.259/2001), deixando cristalino que **cada gestação gera um direito autônomo e independente** ao salário-maternidade, conforme art. 71 da Lei nº 8.213/91."
+
+═══════════════════════════════════════════════════════════════
+
+Agora, reescreva a petição aplicando TODAS as ${totalCorrecoes} correções:`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     console.log('[EDGE] LOVABLE_API_KEY exists:', !!LOVABLE_API_KEY);
@@ -94,9 +175,9 @@ Agora, reescreva a petição aplicando TODAS as ${judgeAnalysis?.brechas?.length
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash', // Modelo intermediário, muito melhor para reescrita
+          model: 'google/gemini-2.5-flash',
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.8, // 🆕 Aumentado para 0.8 - Mais criativo, menos conservador
+          temperature: 0.8,
         }),
         signal: controller.signal,
       });

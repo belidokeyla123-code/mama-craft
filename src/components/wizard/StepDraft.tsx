@@ -66,6 +66,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [judgeAnalysis, setJudgeAnalysis] = useState<JudgeAnalysis | null>(null);
   const [regionalAdaptation, setRegionalAdaptation] = useState<RegionalAdaptation | null>(null);
   const [analyzingJudge, setAnalyzingJudge] = useState(false);
+  const [analyzingRegional, setAnalyzingRegional] = useState(false);
   const [analyzingAppellate, setAnalyzingAppellate] = useState(false);
   const [appellateAnalysis, setAppellateAnalysis] = useState<any>(null);
   const [adaptingRegional, setAdaptingRegional] = useState(false);
@@ -179,6 +180,145 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       checkAndRegeneratePetition();
     }
   }, [data.caseId]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🔥 FUNÇÃO PARA REVALIDAR QUALITY REPORT APÓS CORREÇÕES
+  // ═══════════════════════════════════════════════════════════════
+  const revalidateQualityReport = async () => {
+    if (!petition || !data.caseId) return;
+    
+    console.log('[REVALIDATE-QR] Iniciando revalidação do Quality Report...');
+    
+    try {
+      // Buscar dados atualizados do caso
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', data.caseId)
+        .single();
+      
+      if (!caseData) {
+        console.error('[REVALIDATE-QR] Caso não encontrado');
+        return;
+      }
+      
+      // Buscar análise atualizada
+      const { data: analysisData } = await supabase
+        .from('case_analysis')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('analyzed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      // ═════════════════════════════════════════════════════
+      // 🔥 REVALIDAR CADA ASPECTO DO QUALITY REPORT
+      // ═════════════════════════════════════════════════════
+      
+      const valorCausa = analysisData?.valor_causa || caseData.valor_causa || 0;
+      const limiteJuizado = 1412 * 60; // 60 salários mínimos
+      const isJuizado = valorCausa <= limiteJuizado;
+      
+      // 1. Verificar endereçamento (subsecao está presente na petição?)
+      const subsecao = caseData.birth_city || '';
+      const uf = caseData.birth_state || '';
+      const enderecamentoOk = petition.toUpperCase().includes(subsecao.toUpperCase()) && 
+                              petition.toUpperCase().includes(uf.toUpperCase());
+      
+      // 2. Verificar jurisdição
+      const jurisdicaoOk = enderecamentoOk;
+      
+      // 3. Verificar campos obrigatórios
+      const camposObrigatorios = ['RG', 'CPF', 'endereço', 'cidade', 'estado'];
+      const camposFaltantes = camposObrigatorios.filter(campo => {
+        const regex = new RegExp(`\\[${campo}\\]`, 'gi');
+        return regex.test(petition);
+      });
+      const dadosCompletos = camposFaltantes.length === 0;
+      
+      // 4. Verificar valor da causa
+      const valorCausaValidado = valorCausa > 0 && petition.includes(valorCausa.toFixed(2));
+      
+      // 5. Determinar status geral
+      const issues: any[] = [];
+      
+      if (!enderecamentoOk) {
+        issues.push({
+          tipo: 'ENDEREÇAMENTO',
+          gravidade: 'MÉDIO',
+          problema: 'Endereçamento não encontrado na petição',
+          acao: 'Verificar qualificação inicial'
+        });
+      }
+      
+      if (!valorCausaValidado) {
+        issues.push({
+          tipo: 'VALOR_CAUSA',
+          gravidade: 'MÉDIO',
+          problema: 'Valor da causa ausente ou incorreto',
+          acao: 'Verificar cálculos'
+        });
+      }
+      
+      if (!dadosCompletos) {
+        issues.push({
+          tipo: 'DADOS_INCOMPLETOS',
+          gravidade: 'ALTO',
+          problema: `Campos faltantes: ${camposFaltantes.join(', ')}`,
+          acao: 'Preencher dados faltantes na aba Informações Básicas'
+        });
+      }
+      
+      const statusGeral = issues.length === 0 ? 'aprovado' : 
+                          issues.some(i => i.gravidade === 'CRÍTICO') ? 'requer_revisao' : 
+                          'aprovado_com_avisos';
+      
+      // ═════════════════════════════════════════════════════
+      // 🔥 ATUALIZAR QUALITY REPORT NO BANCO
+      // ═════════════════════════════════════════════════════
+      
+      const { error: updateError } = await supabase
+        .from('quality_reports')
+        .update({
+          status: statusGeral,
+          enderecamento_ok: enderecamentoOk,
+          dados_completos: dadosCompletos,
+          campos_faltantes: camposFaltantes,
+          valor_causa_validado: valorCausaValidado,
+          jurisdicao_ok: jurisdicaoOk,
+          competencia: isJuizado ? 'juizado' : 'vara',
+          issues: issues,
+          generated_at: new Date().toISOString()
+        })
+        .eq('case_id', data.caseId)
+        .eq('document_type', 'petition');
+      
+      if (updateError) {
+        console.error('[REVALIDATE-QR] Erro ao atualizar:', updateError);
+      } else {
+        console.log('[REVALIDATE-QR] ✅ Quality Report atualizado:', {
+          status: statusGeral,
+          enderecamento_ok: enderecamentoOk,
+          jurisdicao_ok: jurisdicaoOk,
+          valor_causa_validado: valorCausaValidado,
+          dados_completos: dadosCompletos
+        });
+        
+        // Recarregar o quality report na interface
+        await loadQualityReport();
+        
+        toast.success('✅ Controle de Qualidade atualizado!', {
+          description: statusGeral === 'aprovado' 
+            ? 'Todos os critérios foram validados com sucesso' 
+            : `${issues.length} ponto(s) de atenção identificado(s)`,
+          duration: 5000
+        });
+      }
+      
+    } catch (error) {
+      console.error('[REVALIDATE-QR] Erro na revalidação:', error);
+    }
+  };
 
   const loadQualityReport = async () => {
     if (!data.caseId) return;
@@ -1260,6 +1400,105 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     } finally {
       setApplyingJudgeCorrections(false);
     }
+    
+    // 🔥 REVALIDAR QUALITY REPORT APÓS APLICAR CORREÇÕES
+    await revalidateQualityReport();
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🔥 FUNÇÃO PARA CORRIGIR CONTRADIÇÕES DAS ABAS AUTOMATICAMENTE
+  // ═══════════════════════════════════════════════════════════════
+  const fixTabContradictions = async () => {
+    if (!petition || !judgeAnalysis?.validacao_abas) {
+      toast.error('Análise do Módulo Juiz não encontrada');
+      return;
+    }
+    
+    // Filtrar apenas abas com status diferente de "OK"
+    const abasComProblemas = Object.entries(judgeAnalysis.validacao_abas)
+      .filter(([_, info]: [string, any]) => info.status !== 'OK')
+      .map(([aba, info]: [string, any]) => ({
+        aba,
+        status: info.status,
+        problemas: info.problemas || []
+      }));
+    
+    if (abasComProblemas.length === 0) {
+      toast.success('✅ Nenhuma contradição encontrada!');
+      return;
+    }
+    
+    console.log('[FIX-TABS] Corrigindo contradições de', abasComProblemas.length, 'abas');
+    
+    setApplyingJudgeCorrections(true);
+    
+    try {
+      // Construir análise consolidada das abas problemáticas
+      const analysisConsolidada = {
+        brechas: [],
+        pontos_fracos: abasComProblemas.flatMap(aba => 
+          aba.problemas.map(problema => ({
+            descricao: `[ABA ${aba.aba.toUpperCase()}] ${problema}`,
+            secao: aba.aba,
+            recomendacao: `Corrigir a inconsistência relacionada a ${aba.aba}`
+          }))
+        ),
+        recomendacoes: abasComProblemas.map(aba => 
+          `Revisar e corrigir todos os problemas identificados na aba ${aba.aba.toUpperCase()}: ${aba.problemas.join('; ')}`
+        )
+      };
+      
+      console.log('[FIX-TABS] Enviando para correção:', analysisConsolidada);
+      
+      // Chamar edge function para aplicar correções
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: {
+          petition: petition,
+          judgeAnalysis: analysisConsolidada
+        }
+      });
+      
+      if (error) {
+        console.error('[FIX-TABS] Erro:', error);
+        throw error;
+      }
+      
+      if (!result?.petition_corrigida) {
+        throw new Error('Nenhuma petição corrigida retornada');
+      }
+      
+      console.log('[FIX-TABS] ✅ Contradições corrigidas');
+      console.log('[FIX-TABS] Length antes:', petition.length);
+      console.log('[FIX-TABS] Length depois:', result.petition_corrigida.length);
+      
+      // Atualizar estado
+      setPetition(result.petition_corrigida);
+      
+      // Salvar no banco
+      await supabase.from('drafts').insert([{
+        case_id: data.caseId,
+        markdown_content: result.petition_corrigida,
+        payload: { 
+          corrected_tabs: true,
+          tabs_corrigidas: abasComProblemas.map(a => a.aba),
+          timestamp: new Date().toISOString() 
+        } as any
+      }]);
+      
+      // Reanalisar com Módulo Juiz para atualizar validacao_abas
+      toast.info('🔄 Revalidando com Módulo Juiz...', { duration: 2000 });
+      await analyzeWithJudgeModule();
+      
+      toast.success(`✅ ${abasComProblemas.length} contradição(ões) corrigida(s)!`, {
+        duration: 5000
+      });
+      
+    } catch (error: any) {
+      console.error('[FIX-TABS] Erro ao corrigir:', error);
+      toast.error('Erro ao corrigir contradições: ' + (error.message || 'Erro desconhecido'));
+    } finally {
+      setApplyingJudgeCorrections(false);
+    }
   };
 
   // ════════════════════════════════════════════════════════════
@@ -1995,6 +2234,15 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           <FileText className="h-4 w-4" />
           Baixar Lista
         </Button>
+        <Button
+          onClick={revalidateQualityReport}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Revalidar Controle de Qualidade
+        </Button>
         {!templateFile ? (
           <div>
             <input
@@ -2102,6 +2350,29 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                   );
                 })}
               </div>
+              
+              {/* 🔥 BOTÃO PARA CORRIGIR CONTRADIÇÕES */}
+              {Object.values(judgeAnalysis.validacao_abas).some((info: any) => info.status !== 'OK') && (
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    onClick={fixTabContradictions}
+                    disabled={applyingJudgeCorrections}
+                    className="gap-2 bg-orange-600 hover:bg-orange-700"
+                  >
+                    {applyingJudgeCorrections ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Corrigindo...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Corrigir Todas as Contradições Automaticamente
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </Card>
           )}
         </Card>
