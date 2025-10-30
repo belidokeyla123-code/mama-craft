@@ -1670,34 +1670,109 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       return;
     }
     
-    console.log('[FIX-TABS] Corrigindo contradições de', abasComProblemas.length, 'abas');
+    console.log('[FIX-TABS] 🔍 Corrigindo contradições de', abasComProblemas.length, 'abas');
     
     setApplyingJudgeCorrections(true);
     
     try {
-      // Construir análise consolidada das abas problemáticas
-      const analysisConsolidada = {
-        brechas: [],
-        pontos_fracos: abasComProblemas.flatMap(aba => 
-          aba.problemas.map(problema => ({
-            descricao: `[ABA ${aba.aba.toUpperCase()}] ${problema}`,
+      // ═══ FASE 1: BUSCAR DOCUMENTOS DO BANCO ═══
+      console.log('[FIX-TABS] 📄 Buscando documentos do caso...');
+      const { data: documents, error: docsError } = await supabase
+        .from('documents')
+        .select('id, document_type, file_name, file_path')
+        .eq('case_id', data.caseId)
+        .order('uploaded_at', { ascending: true });
+      
+      if (docsError) {
+        console.error('[FIX-TABS] Erro ao buscar documentos:', docsError);
+      }
+      
+      // ═══ FASE 2: CRIAR MAPEAMENTO DETALHADO DOS DOCUMENTOS ═══
+      const documentosExtraidos = (documents || []).map((doc, index) => ({
+        numero: `Doc. ${String(index + 1).padStart(2, '0')}`,
+        tipo: doc.document_type,
+        nome: doc.file_name,
+        id: doc.id
+      }));
+      
+      console.log('[FIX-TABS] 📋 Documentos mapeados:', documentosExtraidos.length);
+      
+      // ═══ FASE 2: CRIAR INSTRUÇÕES ESPECÍFICAS E DETALHADAS ═══
+      const instrucoesPorProblema = abasComProblemas.flatMap(aba => 
+        aba.problemas.map(problema => {
+          // Identificar tipo de problema e criar instrução específica
+          let instrucaoEspecifica = problema;
+          
+          // Se o problema é sobre documentos, adicionar tabela completa
+          if (problema.toLowerCase().includes('documento') || 
+              problema.toLowerCase().includes('doc.') ||
+              problema.toLowerCase().includes('numeração')) {
+            
+            const tabelaDocumentos = documentosExtraidos.map(doc => 
+              `- ${doc.numero}: ${doc.nome} (Tipo: ${doc.tipo})`
+            ).join('\n');
+            
+            instrucaoEspecifica = `
+**PROBLEMA DETECTADO NA ABA ${aba.aba.toUpperCase()}:**
+${problema}
+
+**DOCUMENTOS CORRETOS (extraídos do sistema):**
+${tabelaDocumentos}
+
+**AÇÃO OBRIGATÓRIA:**
+1. Localize a seção "Das Provas" ou onde os documentos são listados
+2. Reescreva COMPLETAMENTE listando EXATAMENTE esses ${documentosExtraidos.length} documentos na ordem acima
+3. Certifique-se de que TODOS os documentos estão mencionados
+4. Use a numeração correta (Doc. 01, Doc. 02, etc.)
+5. NÃO invente documentos que não existem
+6. NÃO use números que não correspondem à lista acima
+7. Cite documentos específicos ao argumentar (ex: "conforme Doc. 03, 04 e 07 anexos")`;
+          }
+          
+          return {
+            descricao: instrucaoEspecifica,
             secao: aba.aba,
-            recomendacao: `Corrigir a inconsistência relacionada a ${aba.aba}`
-          }))
-        ),
+            gravidade: aba.status === 'CRÍTICO' ? 'alta' : 'media'
+          };
+        })
+      );
+      
+      // Construir análise consolidada com instruções detalhadas
+      const analysisConsolidada = {
+        brechas: instrucoesPorProblema
+          .filter(i => i.gravidade === 'alta')
+          .map(i => ({
+            tipo: 'probatoria',
+            descricao: i.descricao,
+            gravidade: 'alta',
+            localizacao: i.secao,
+            sugestao: 'Aplicar a correção detalhada acima'
+          })),
+        pontos_fracos: instrucoesPorProblema
+          .filter(i => i.gravidade === 'media')
+          .map(i => ({
+            descricao: i.descricao,
+            secao: i.secao,
+            recomendacao: 'Corrigir conforme instruções específicas'
+          })),
         recomendacoes: abasComProblemas.map(aba => 
-          `Revisar e corrigir todos os problemas identificados na aba ${aba.aba.toUpperCase()}: ${aba.problemas.join('; ')}`
+          `Revisar e corrigir todos os problemas identificados na aba ${aba.aba.toUpperCase()}`
         )
       };
       
-      console.log('[FIX-TABS] Enviando para correção:', analysisConsolidada);
+      console.log('[FIX-TABS] 📝 Instruções construídas:', {
+        brechas: analysisConsolidada.brechas.length,
+        pontosFracos: analysisConsolidada.pontos_fracos.length,
+        recomendacoes: analysisConsolidada.recomendacoes.length
+      });
       
-      // Chamar edge function para aplicar correções
+      // ═══ FASE 3: CHAMAR EDGE FUNCTION COM CONTEXTO COMPLETO ═══
       const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
         body: {
           petition: petition,
           judgeAnalysis: analysisConsolidada,
-          caseId: data.caseId
+          caseId: data.caseId,
+          contextDocuments: documentosExtraidos  // 🆕 NOVO!
         }
       });
       
@@ -1710,44 +1785,91 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         throw new Error('Nenhuma petição corrigida retornada');
       }
       
+      const lengthDiff = result.petition_corrigida.length - petition.length;
+      const percentChange = ((lengthDiff / petition.length) * 100).toFixed(1);
+      
       console.log('[FIX-TABS] ✅ Contradições corrigidas');
       console.log('[FIX-TABS] Length antes:', petition.length);
       console.log('[FIX-TABS] Length depois:', result.petition_corrigida.length);
+      console.log('[FIX-TABS] Diferença:', lengthDiff, `(${percentChange}%)`);
+      
+      // ═══ FASE 5: VALIDAÇÃO PÓS-CORREÇÃO ═══
+      const extractDocReferences = (text: string): string[] => {
+        const regex = /Doc\.\s*(\d{1,2})/gi;
+        const matches = text.matchAll(regex);
+        return Array.from(matches, m => `Doc. ${m[1].padStart(2, '0')}`);
+      };
+      
+      const docsMencionados = extractDocReferences(result.petition_corrigida);
+      const docsCorretos = documentosExtraidos.map(d => d.numero);
+      const docsIncorretos = docsMencionados.filter(ref => !docsCorretos.includes(ref));
+      
+      if (docsIncorretos.length > 0) {
+        console.warn('[FIX-TABS] ⚠️ Documentos incorretos ainda citados:', docsIncorretos);
+        toast.warning(`Correção aplicada mas ${docsIncorretos.length} referência(s) ainda incorreta(s)`, {
+          description: 'Pode ser necessária revisão manual'
+        });
+      }
       
       // Atualizar estado
       setPetition(result.petition_corrigida);
       
-      // Salvar no banco
+      // ═══ FASE 8: SALVAR HISTÓRICO DE CORREÇÃO ═══
+      await supabase.from('correction_history').insert({
+        case_id: data.caseId,
+        correction_type: 'cross_tab_alignment',
+        module: 'quality_control_all_tabs',
+        changes_summary: JSON.stringify({
+          abas_corrigidas: abasComProblemas.map(a => a.aba),
+          total_problemas: instrucoesPorProblema.length,
+          documentos_realinhados: documentosExtraidos.length,
+          mudanca_tamanho: lengthDiff
+        }),
+        before_content: petition.substring(0, 500),
+        after_content: result.petition_corrigida.substring(0, 500),
+        confidence_score: docsIncorretos.length === 0 ? 95 : 75,
+        auto_applied: true
+      });
+      
+      // Salvar nova versão no banco
       await supabase.from('drafts').insert([{
         case_id: data.caseId,
         markdown_content: result.petition_corrigida,
         payload: { 
           corrected_tabs: true,
           tabs_corrigidas: abasComProblemas.map(a => a.aba),
+          documentos_alinhados: documentosExtraidos.length,
           timestamp: new Date().toISOString() 
         } as any
       }]);
       
-      // Reanalisar de forma assíncrona (não bloquear)
-      toast.success(`✅ ${abasComProblemas.length} contradição(ões) corrigida(s)!`, {
-        description: 'Revalidação automática em andamento...',
-        duration: 5000
+      // ═══ FASE 7: FEEDBACK VISUAL DETALHADO ═══
+      toast.success('✅ Contradições corrigidas com sucesso!', {
+        description: `
+          • ${abasComProblemas.length} aba(s) corrigida(s)
+          • ${documentosExtraidos.length} documentos realinhados
+          • ${lengthDiff > 0 ? 'Conteúdo expandido' : 'Conteúdo otimizado'} (${percentChange}%)
+          ${docsIncorretos.length === 0 ? '• Validação 100% OK' : ''}
+        `,
+        duration: 7000
       });
 
-      // Reanalisar sem await (assíncrono)
+      // Reanalisar de forma assíncrona (não bloquear)
       setTimeout(async () => {
         try {
+          console.log('[FIX-TABS] 🔄 Iniciando reanálise...');
           await analyzeWithJudgeModule();
           toast.success('✅ Revalidação concluída!');
         } catch (error) {
           console.error('[FIX-TABS] Erro na reanálise:', error);
-          // Não mostrar erro ao usuário, apenas logar
         }
       }, 1000);
       
     } catch (error: any) {
-      console.error('[FIX-TABS] Erro ao corrigir:', error);
-      toast.error('Erro ao corrigir contradições: ' + (error.message || 'Erro desconhecido'));
+      console.error('[FIX-TABS] ❌ Erro ao corrigir:', error);
+      toast.error('Erro ao corrigir contradições', {
+        description: error.message || 'Erro desconhecido'
+      });
     } finally {
       setApplyingJudgeCorrections(false);
     }

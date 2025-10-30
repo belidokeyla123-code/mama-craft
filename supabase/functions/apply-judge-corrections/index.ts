@@ -15,16 +15,45 @@ serve(async (req) => {
 
   try {
     console.log('[EDGE] Parsing request body...');
-    const { petition, judgeAnalysis, caseId } = await req.json();
+    const { petition, judgeAnalysis, caseId, contextDocuments } = await req.json();
     console.log('[EDGE] Petition length:', petition?.length);
     console.log('[EDGE] JudgeAnalysis exists:', !!judgeAnalysis);
     console.log('[EDGE] JudgeAnalysis brechas:', judgeAnalysis?.brechas?.length || 0);
     console.log('[EDGE] Case ID:', caseId);
+    console.log('[EDGE] Context documents:', contextDocuments?.length || 0);
 
     // ═══════════════════════════════════════════════════════════════
-    // 🔥 BUSCAR DADOS DO CASO PARA CONTEXTO TEMPORAL
+    // 🔥 BUSCAR DADOS DO CASO PARA CONTEXTO TEMPORAL E DOCUMENTOS
     // ═══════════════════════════════════════════════════════════════
     let contextoTemporal = '';
+    let documentosContexto = '';
+    
+    // ═══ FASE 4: CRIAR CONTEXTO DE DOCUMENTOS ═══
+    if (contextDocuments && contextDocuments.length > 0) {
+      documentosContexto = `
+
+═══════════════════════════════════════════════════════════════
+# 📄 DOCUMENTOS ANEXADOS REAIS (CONTEXTO OBRIGATÓRIO)
+
+A seguir está a lista COMPLETA e DEFINITIVA de documentos que estão anexados ao processo.
+Use EXATAMENTE esta lista ao referenciar documentos na petição.
+
+${contextDocuments.map((doc: any) => 
+  `${doc.numero}: ${doc.nome} (Tipo: ${doc.tipo})`
+).join('\n')}
+
+⚠️ REGRA ABSOLUTA: 
+- NÃO cite documentos que não estão nesta lista
+- NÃO invente números de documentos  
+- Use EXATAMENTE a numeração acima
+- Se a petição mencionar documentos que não existem, REMOVA essas referências
+- Se a petição não mencionar documentos que existem, ADICIONE essas referências
+- Ao argumentar, cite documentos específicos (ex: "conforme Doc. 03, 04 e 07 anexos")
+
+═══════════════════════════════════════════════════════════════
+`;
+      console.log('[EDGE] Contexto de documentos adicionado:', contextDocuments.length, 'documentos');
+    }
     
     if (caseId) {
       try {
@@ -146,6 +175,7 @@ ${texto}
 
     const prompt = `Você é um advogado previdenciarista SÊNIOR. Sua tarefa é REESCREVER a petição aplicando TODAS as ${totalCorrecoes} correções abaixo.
 ${contextoTemporal}
+${documentosContexto}
 
 # PETIÇÃO ORIGINAL
 ${petition}

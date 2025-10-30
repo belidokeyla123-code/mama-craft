@@ -30,6 +30,11 @@ serve(async (req) => {
       hasManualBenefits: !!caseInfo?.manual_benefits,
       manualBenefitsCount: caseInfo?.manual_benefits?.length || 0
     });
+    
+    // ═══ FASE 6: CRIAR LISTA DETALHADA DE DOCUMENTOS PARA O JUIZ ═══
+    const documentosInfo = documents?.map((doc: any, i: number) => 
+      `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name} (${doc.document_type})`
+    ).join('\n') || 'Nenhum documento anexado';
 
     // Validação básica
     if (!petition || typeof petition !== 'string' || petition.trim().length === 0) {
@@ -56,11 +61,16 @@ Se houver salário-maternidade anterior informado manualmente:
 → Se NÃO fundamentou, crie brecha tipo "argumentativa" com sugestão para adicionar Art. 71, Lei 8.213/91 e TNU-PEDILEF 0506032-44.2012.4.05.8300
 
 **DOCUMENTOS ANEXADOS (${documents?.length || 0}):**
-${documents?.map((d: any) => `
-- Tipo: ${d.document_type}
-- Nome: ${d.file_name}
-- Dados extraídos: ${JSON.stringify(d.extractions, null, 2)}
-`).join('\n') || 'Nenhum documento anexado'}
+${documentosInfo}
+
+⚠️ REGRA CRÍTICA PARA VALIDAÇÃO DE DOCUMENTOS:
+Ao avaliar a aba VALIDACAO e seção "Das Provas" da petição:
+1. Verifique se a petição cita EXATAMENTE esses documentos com a numeração correta
+2. Se houver divergência, especifique:
+   - Quais documentos estão citados incorretamente ou com numeração errada
+   - Qual deveria ser a citação correta
+   - Quais documentos existem mas não estão citados na petição
+3. Se a petição mencionar "Doc. XX" que não existe na lista acima, isso é um erro CRÍTICO
 
 **ANÁLISE JURÍDICA PRÉVIA:**
 ${analysis ? JSON.stringify(analysis, null, 2) : 'Não realizada'}
