@@ -1106,7 +1106,9 @@ export type Database = {
           created_at: string | null
           dados_completos: boolean | null
           document_type: string
+          documentos_validados: boolean | null
           enderecamento_ok: boolean | null
+          erros_portugues: Json | null
           fonte: string | null
           generated_at: string | null
           id: string
@@ -1114,6 +1116,8 @@ export type Database = {
           jurisdicao_confianca: string | null
           jurisdicao_ok: boolean | null
           jurisdicao_validada: Json | null
+          portugues_ok: boolean | null
+          problemas_documentos: Json | null
           status: string
           valor_causa_referencia: number | null
           valor_causa_validado: boolean | null
@@ -1125,7 +1129,9 @@ export type Database = {
           created_at?: string | null
           dados_completos?: boolean | null
           document_type: string
+          documentos_validados?: boolean | null
           enderecamento_ok?: boolean | null
+          erros_portugues?: Json | null
           fonte?: string | null
           generated_at?: string | null
           id?: string
@@ -1133,6 +1139,8 @@ export type Database = {
           jurisdicao_confianca?: string | null
           jurisdicao_ok?: boolean | null
           jurisdicao_validada?: Json | null
+          portugues_ok?: boolean | null
+          problemas_documentos?: Json | null
           status: string
           valor_causa_referencia?: number | null
           valor_causa_validado?: boolean | null
@@ -1144,7 +1152,9 @@ export type Database = {
           created_at?: string | null
           dados_completos?: boolean | null
           document_type?: string
+          documentos_validados?: boolean | null
           enderecamento_ok?: boolean | null
+          erros_portugues?: Json | null
           fonte?: string | null
           generated_at?: string | null
           id?: string
@@ -1152,6 +1162,8 @@ export type Database = {
           jurisdicao_confianca?: string | null
           jurisdicao_ok?: boolean | null
           jurisdicao_validada?: Json | null
+          portugues_ok?: boolean | null
+          problemas_documentos?: Json | null
           status?: string
           valor_causa_referencia?: number | null
           valor_causa_validado?: boolean | null

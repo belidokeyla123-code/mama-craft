@@ -42,118 +42,85 @@ serve(async (req) => {
       throw new Error('Petição não fornecida ou inválida');
     }
 
-    const prompt = `Você é um JUIZ FEDERAL experiente com VISÃO 360° do processo. 
+    const prompt = `Você é um JUIZ FEDERAL fazendo CONTROLE DE QUALIDADE FINAL.
 
-📁 DADOS COMPLETOS DO CASO:
+⚠️ IMPORTANTE: A petição JÁ passou por análise preliminar automática que corrigiu:
+✅ Endereçamento e jurisdição
+✅ Valor da causa (com salário mínimo correto)
+✅ Dados completos (sem placeholders)
+✅ Português e sintaxe (concordância, pontuação, coesão)
+✅ Documentos citados (numeração e validação)
 
+📁 DADOS DO CASO:
 **INFORMAÇÕES BÁSICAS:**
 ${JSON.stringify(caseInfo, null, 2)}
 
-**BENEFÍCIOS ANTERIORES (Manual):**
-${caseInfo?.manual_benefits && caseInfo.manual_benefits.length > 0 ?
-  caseInfo.manual_benefits.map((b: any) => `- ${b.tipo}: ${b.inicio} a ${b.fim}`).join('\n') :
-  'Nenhum informado'}
+**DOCUMENTOS (${documents?.length || 0}):**
+${documents?.map((doc: any, i: number) => 
+  `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name} (${doc.document_type})`
+).join('\n') || 'Nenhum documento anexado'}
 
-⚠️ REGRA CRÍTICA: 
-Se houver salário-maternidade anterior informado manualmente:
-→ NÃO liste como "brecha" ou "ponto fraco"
-→ VERIFIQUE se a petição fundamentou corretamente que é direito POR CADA GESTAÇÃO
-→ Se NÃO fundamentou, crie brecha tipo "argumentativa" com sugestão para adicionar Art. 71, Lei 8.213/91 e TNU-PEDILEF 0506032-44.2012.4.05.8300
-
-**DOCUMENTOS ANEXADOS (${documents?.length || 0}):**
-${documentosInfo}
-
-⚠️ REGRA CRÍTICA PARA VALIDAÇÃO DE DOCUMENTOS:
-Ao avaliar a aba VALIDACAO e seção "Das Provas" da petição:
-1. Verifique se a petição cita EXATAMENTE esses documentos com a numeração correta
-2. Se houver divergência, especifique:
-   - Quais documentos estão citados incorretamente ou com numeração errada
-   - Qual deveria ser a citação correta
-   - Quais documentos existem mas não estão citados na petição
-3. Se a petição mencionar "Doc. XX" que não existe na lista acima, isso é um erro CRÍTICO
-
-**ANÁLISE JURÍDICA PRÉVIA:**
+**ANÁLISE JURÍDICA:**
 ${analysis ? JSON.stringify(analysis, null, 2) : 'Não realizada'}
 
-**JURISPRUDÊNCIAS SELECIONADAS:**
+**JURISPRUDÊNCIAS:**
 ${jurisprudence?.results ? JSON.stringify(jurisprudence.results, null, 2) : 'Nenhuma selecionada'}
 
 **TESE JURÍDICA:**
 ${tese?.teses ? JSON.stringify(tese.teses, null, 2) : 'Não elaborada'}
 
-**PETIÇÃO INICIAL:**
+**PETIÇÃO:**
 ${petition}
 
 ---
 
-⚠️ TAREFA: ANÁLISE DE QUALIDADE COMPLETA - RECHECKAGEM RÁPIDA E CRÍTICA
+⚖️ TAREFA: CONTROLE DE QUALIDADE GERAL
 
-**REGRAS OBRIGATÓRIAS:**
+Foque APENAS em:
 
-1. **NÃO sugira que faltam documentos se eles EXISTEM nos dados acima!**
-   - Exemplo: Se há procuração listada, NÃO diga que falta procuração!
-   
-2. **Verifique se os dados extraídos dos documentos estão NA PETIÇÃO:**
-   - Endereço da procuração está na qualificação da autora?
-   - RG e CPF dos documentos estão corretos na petição?
-   - Datas dos documentos batem com os fatos narrados?
+1. **COERÊNCIA ARGUMENTATIVA**
+   - A tese faz sentido lógico?
+   - Os argumentos se sustentam mutuamente?
+   - Há contradições na narrativa?
 
-3. **Verifique COERÊNCIA entre as seções:**
-   - A análise jurídica está refletida na fundamentação?
-   - As jurisprudências selecionadas foram citadas?
-   - A tese jurídica está incorporada na argumentação?
+2. **FUNDAMENTAÇÃO JURÍDICA**
+   - Leis e artigos citados são adequados?
+   - Jurisprudências selecionadas fortalecem o caso?
+   - Há gaps na fundamentação legal?
 
-4. **Identifique brechas REAIS:**
-   - Argumentos fracos ou contraditórios
-   - Fundamentos legais ausentes
-   - Falhas na concatenação lógica
-   - Pedidos mal formulados
+3. **FORÇA PERSUASIVA**
+   - A petição convence um juiz neutro?
+   - Há brechas críticas que o réu pode explorar?
+   - Os pedidos estão bem fundamentados?
 
-**RETORNE JSON:**
+🚫 NÃO ANALISE (já corrigido):
+- Português/sintaxe
+- Documentos citados
+- Endereçamento/jurisdição
+- Dados completos
+
+RETORNE JSON:
 {
-  "brechas": [
+  "status_geral": "APROVADO" | "REVISAR" | "REFAZER",
+  "brechas_criticas": [
     {
-      "tipo": "probatoria" | "argumentativa" | "juridica",
-      "descricao": "Descrição ESPECÍFICA da brecha",
-      "gravidade": "alta" | "media" | "baixa",
-      "localizacao": "Em qual parte da petição",
-      "sugestao": "Como corrigir (seja PRÁTICO e ESPECÍFICO)",
-      "documento_necessario": "Nome do documento que falta (SOMENTE se realmente faltar)"
+      "tipo": "argumentativa" | "juridica",
+      "descricao": "Descrição específica e objetiva",
+      "gravidade": "alta" | "media",
+      "sugestao": "Como corrigir (seja PRÁTICO e DIRETO)"
     }
   ],
-  "pontos_fortes": ["Máximo 5 pontos"],
-  "pontos_fracos": ["Máximo 5 pontos"],
-  "risco_improcedencia": 20,
-  "recomendacoes": ["Máximo 3 recomendações PRÁTICAS"],
-  "validacao_abas": {
-    "validacao": {
-      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
-      "problemas": ["Problema específico 1", "Problema específico 2"]
-    },
-    "analise": {
-      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
-      "problemas": ["Ex: Carência não foi calculada corretamente", "RMI diverge dos dados"]
-    },
-    "jurisprudencia": {
-      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
-      "problemas": ["Ex: Jurisprudências genéricas", "Faltam casos específicos do TRF"]
-    },
-    "teses": {
-      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
-      "problemas": ["Ex: Teses não conectadas às jurisprudências", "Argumentação fraca"]
-    },
-    "peticao": {
-      "status": "OK" | "ATENÇÃO" | "CRÍTICO",
-      "problemas": ["Ex: Dados das abas não incorporados", "Jurisprudências não citadas"]
-    }
-  }
+  "pontos_fortes": ["Máximo 3 pontos fortes"],
+  "pontos_fracos": ["Máximo 3 pontos fracos"],
+  "risco_improcedencia": 15,
+  "recomendacao_final": "Breve recomendação geral em 1-2 frases"
 }
 
-**IMPORTANTE:**
-- Seja RÁPIDO mas PRECISO
-- NÃO invente problemas que não existem
-- Foque em melhorias ACIONÁVEIS
-- Considere que o caso JÁ foi analisado pela IA antes`;
+DIRETRIZES:
+- Seja RÁPIDO e OBJETIVO (não repita análises já feitas)
+- Foque apenas em QUALIDADE ARGUMENTATIVA e JURÍDICA
+- NÃO crie brechas sobre português ou documentos
+- Se tudo estiver OK, retorne brechas_criticas vazio`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

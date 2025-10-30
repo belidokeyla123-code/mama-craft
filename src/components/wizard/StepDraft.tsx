@@ -2770,26 +2770,12 @@ ${tabelaDocumentos}
               </div>
               
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Dados Completos</span>
-                {qualityReport.dados_completos ? (
-                  <Badge variant="default" className="bg-green-600">✅ Todos preenchidos</Badge>
-                ) : (
-                  <Badge variant="secondary">⚠️ {qualityReport.campos_faltantes?.length || 0} campos faltando</Badge>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Valor da Causa e Competência</span>
+                <span className="font-medium">Valor da Causa</span>
                 {qualityReport.valor_causa_validado ? (
                   <div className="flex flex-col items-end gap-1">
                     <Badge variant="default" className="bg-green-600">
                       ✅ R$ {qualityReport.valor_causa}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {qualityReport.competencia === 'juizado' 
-                        ? '📋 Juizado Especial Federal (≤ 60 SM)'
-                        : '⚖️ Vara Federal (> 60 SM)'}
-                    </span>
                   </div>
                 ) : (
                   <Badge variant="destructive">❌ Valor incorreto</Badge>
@@ -2811,7 +2797,43 @@ ${tabelaDocumentos}
               </div>
               
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Confiança da Validação Online</span>
+                <span className="font-medium">Dados Completos</span>
+                {qualityReport.dados_completos ? (
+                  <Badge variant="default" className="bg-green-600">✅ Todos preenchidos</Badge>
+                ) : (
+                  <Badge variant="secondary">⚠️ {qualityReport.campos_faltantes?.length || 0} campos faltando</Badge>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Português e Sintaxe</span>
+                {qualityReport.portugues_ok ? (
+                  <Badge variant="default" className="bg-green-600">✅ Corrigido</Badge>
+                ) : (
+                  <Badge variant="secondary">⏳ Em análise</Badge>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Documentos Validados</span>
+                {qualityReport.documentos_validados ? (
+                  <Badge variant="default" className="bg-green-600">✅ Validados</Badge>
+                ) : (
+                  <Badge variant="secondary">⏳ Em análise</Badge>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Competência</span>
+                <span className="text-xs text-muted-foreground">
+                  {qualityReport.competencia === 'juizado' 
+                    ? '📋 Juizado Especial Federal (≤ 60 SM)'
+                    : '⚖️ Vara Federal (> 60 SM)'}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <span className="font-medium">Confiança da Validação</span>
                 <Badge variant={
                   qualityReport.jurisdicao_confianca === 'alta' ? 'default' :
                   qualityReport.jurisdicao_confianca === 'media' ? 'secondary' :
