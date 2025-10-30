@@ -79,6 +79,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [hasCache, setHasCache] = useState(false);
   const [applyingJudgeCorrections, setApplyingJudgeCorrections] = useState(false);
   const [applyingRegionalAdaptations, setApplyingRegionalAdaptations] = useState(false);
+  const [correctionAttempts, setCorrectionAttempts] = useState(0);
+  const MAX_CORRECTION_ATTEMPTS = 2;
   const [applyingIndividualSuggestion, setApplyingIndividualSuggestion] = useState<number | null>(null);
   const [applyingIndividualAdaptation, setApplyingIndividualAdaptation] = useState<number | null>(null);
   const [applyingIndividualAppellateAdaptation, setApplyingIndividualAppellateAdaptation] = useState<number | null>(null);
