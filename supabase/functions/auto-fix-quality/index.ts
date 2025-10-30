@@ -46,7 +46,7 @@ serve(async (req) => {
       throw new Error('Petição não encontrada');
     }
 
-    const corrections: any[] = [];
+    let corrections: any[] = [];
 
     // ═══════════════════════════════════════════════════════════════
     // CORREÇÃO 1: ENDEREÇAMENTO (se incorreto)
@@ -66,11 +66,31 @@ serve(async (req) => {
         const subsecao = jurisdictionData.subsecao;
         const uf = jurisdictionData.uf || caseData.birth_state;
 
-        // Substituir endereçamento incorreto na petição
-        const petitionCorrigida = petition.replace(
-          /EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL.*?\n/i,
-          `EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DO JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}\n`
-        );
+        console.log('[AUTO-FIX] 🎯 Jurisdição correta:', { subsecao, uf });
+        console.log('[AUTO-FIX] 📝 Procurando padrões de endereçamento na petição...');
+
+        // REGEX ROBUSTA: Captura QUALQUER variação de JEF + Cidade + UF
+        const enderecamentoRegex = /EXCELENTÍSSIMO\s+SENHOR\s+DOUTOR\s+JUIZ\s+FEDERAL\s+DO\s+JUIZADO\s+ESPECIAL\s+FEDERAL\s+DE\s+([A-ZÀ-Ú\s\-]+?)\s*\/\s*([A-Z]{2})/gi;
+        
+        let petitionCorrigida = petition;
+        let foundMatch = false;
+        
+        // Substituir TODAS as ocorrências de endereçamento incorreto
+        petitionCorrigida = petitionCorrigida.replace(enderecamentoRegex, (_match: string, cidade: string, estadoAtual: string) => {
+          foundMatch = true;
+          console.log('[AUTO-FIX] 🔍 Encontrado:', { cidade: cidade.trim(), estadoAtual });
+          
+          // Substituir por endereçamento correto
+          const novoEnderecamento = `EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DO JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}`;
+          console.log('[AUTO-FIX] ✅ Substituindo por:', novoEnderecamento);
+          
+          return novoEnderecamento;
+        });
+
+        if (!foundMatch) {
+          console.log('[AUTO-FIX] ⚠️ Nenhum endereçamento encontrado na petição, inserindo no início...');
+          petitionCorrigida = `EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DO JUIZADO ESPECIAL FEDERAL DE ${subsecao.toUpperCase()}/${uf}\n\n` + petitionCorrigida;
+        }
 
         corrections.push({
           module: 'enderecamento',
@@ -85,7 +105,19 @@ serve(async (req) => {
         await supabase.from('drafts').insert({
           case_id: caseId,
           markdown_content: petitionCorrigida,
-          payload: { auto_fixed_enderecamento: true }
+          payload: { auto_fixed_enderecamento: true, subsecao, uf }
+        });
+        
+        // Registrar em correction_history
+        await supabase.from('correction_history').insert({
+          case_id: caseId,
+          correction_type: 'enderecamento',
+          module: 'quality_report',
+          before_content: petition.substring(0, 500),
+          after_content: petitionCorrigida.substring(0, 500),
+          changes_summary: { subsecao, uf, foundMatch },
+          auto_applied: true,
+          confidence_score: 95
         });
       }
     }
@@ -127,6 +159,18 @@ serve(async (req) => {
         after: String(valorCausaCorreto),
         confidence: 100
       });
+      
+      // Registrar em correction_history
+      await supabase.from('correction_history').insert({
+        case_id: caseId,
+        correction_type: 'valor_causa',
+        module: 'quality_report',
+        before_content: String(qualityReport.valor_causa_referencia),
+        after_content: String(valorCausaCorreto),
+        changes_summary: { fatoGeradorYear, salarioMinimoCorreto, valorCausaCorreto },
+        auto_applied: true,
+        confidence_score: 100
+      });
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -141,6 +185,16 @@ serve(async (req) => {
         issue: 'Jurisdição validada',
         action: 'Jurisdição corrigida via validação online',
         confidence: qualityReport.jurisdicao_confianca === 'alta' ? 95 : 80
+      });
+      
+      // Registrar em correction_history
+      await supabase.from('correction_history').insert({
+        case_id: caseId,
+        correction_type: 'jurisdicao',
+        module: 'quality_report',
+        changes_summary: { status: 'validated' },
+        auto_applied: true,
+        confidence_score: qualityReport.jurisdicao_confianca === 'alta' ? 95 : 80
       });
     }
 
@@ -185,6 +239,16 @@ serve(async (req) => {
         before: 'Placeholders vazios',
         after: 'Dados preenchidos',
         confidence: 85
+      });
+      
+      // Registrar em correction_history
+      await supabase.from('correction_history').insert({
+        case_id: caseId,
+        correction_type: 'dados_completos',
+        module: 'quality_report',
+        changes_summary: { camposFaltantes },
+        auto_applied: true,
+        confidence_score: 85
       });
     }
 

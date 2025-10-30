@@ -195,7 +195,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const revalidateQualityReport = async () => {
     if (!petition || !data.caseId) return;
     
-    console.log('[REVALIDATE-QR] Iniciando revalidação do Quality Report...');
+    console.log('[REVALIDATE-QR] 🔍 Iniciando validação e correção automática...');
+    toast.info('🔍 Validando qualidade da petição...');
     
     try {
       // Buscar dados atualizados do caso
@@ -218,6 +219,16 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         .order('analyzed_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      // Buscar Quality Report existente para pegar jurisdição validada
+      const { data: existingQR } = await supabase
+        .from('quality_reports')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .eq('document_type', 'petition')
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       
       // ═════════════════════════════════════════════════════
       // 🔥 REVALIDAR CADA ASPECTO DO QUALITY REPORT
@@ -227,13 +238,22 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       const limiteJuizado = 1412 * 60; // 60 salários mínimos
       const isJuizado = valorCausa <= limiteJuizado;
       
-      // 1. Verificar endereçamento (subsecao está presente na petição?)
-      const subsecao = caseData.birth_city || '';
-      const uf = caseData.birth_state || '';
-      const enderecamentoOk = petition.toUpperCase().includes(subsecao.toUpperCase()) && 
-                              petition.toUpperCase().includes(uf.toUpperCase());
+      // 1. Verificar endereçamento usando jurisdição VALIDADA (não birth_city)
+      const jurisdicaoValidada = existingQR?.jurisdicao_validada as { subsecao?: string; uf?: string } | null;
+      const subsecao = jurisdicaoValidada?.subsecao || caseData.birth_city || '';
+      const uf = jurisdicaoValidada?.uf || caseData.birth_state || '';
       
-      // 2. Verificar jurisdição
+      console.log('[REVALIDATE-QR] 🔍 Verificando endereçamento:', { subsecao, uf });
+      
+      // Verificar se petição contém TANTO a subseção QUANTO a UF correta
+      const subsecaoRegex = new RegExp(subsecao.replace(/[-\s]/g, '[-\\s]*'), 'i');
+      const ufPattern = `/${uf}`;
+      const subsecaoPresente = subsecaoRegex.test(petition);
+      const ufPresente = petition.toUpperCase().includes(ufPattern.toUpperCase());
+      
+      const enderecamentoOk = subsecaoPresente && ufPresente;
+      
+      // 2. Verificar jurisdição (DEVE ter subsecao E uf corretos)
       const jurisdicaoOk = enderecamentoOk;
       
       // 3. Verificar campos obrigatórios
@@ -331,15 +351,63 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           dados_completos: dadosCompletos
         });
         
-        // Recarregar o quality report na interface
-        await loadQualityReport();
-        
-        toast.success('✅ Controle de Qualidade atualizado!', {
-          description: statusGeral === 'aprovado' 
-            ? 'Todos os critérios foram validados com sucesso' 
-            : `${issues.length} ponto(s) de atenção identificado(s)`,
-          duration: 5000
-        });
+        // 🤖 SE DETECTOU PROBLEMAS, CORRIGIR AUTOMATICAMENTE
+        if (!enderecamentoOk || !jurisdicaoOk || !valorCausaValidado || !dadosCompletos) {
+          console.log('[REVALIDATE-QR] 🤖 Detectados problemas, iniciando correção automática...');
+          toast.info('🤖 Corrigindo automaticamente os problemas detectados...');
+          
+          try {
+            const { data: autoFixData, error: autoFixError } = await supabase.functions.invoke('auto-fix-quality', {
+              body: {
+                caseId: data.caseId,
+                qualityReport: {
+                  enderecamento_ok: enderecamentoOk,
+                  jurisdicao_ok: jurisdicaoOk,
+                  valor_causa_validado: valorCausaValidado,
+                  dados_completos: dadosCompletos,
+                  campos_faltantes: camposFaltantes,
+                  valor_causa_referencia: valorCausa,
+                  status: statusGeral,
+                  issues
+                }
+              }
+            });
+            
+            if (autoFixError) throw autoFixError;
+            
+            if (autoFixData?.success) {
+              const corrections = autoFixData.corrections_applied || [];
+              
+              console.log('[REVALIDATE-QR] ✅ Correções aplicadas:', corrections);
+              
+              // Mostrar toast com resumo das correções
+              const correctionsText = corrections.map((c: any) => c.module).join(', ');
+              toast.success(`✅ ${corrections.length} correção(ões) aplicada(s)`, {
+                description: `Corrigido: ${correctionsText}`,
+                duration: 6000
+              });
+              
+              // Recarregar quality report
+              await loadQualityReport();
+              
+            } else {
+              toast.warning('⚠️ Algumas correções não puderam ser aplicadas automaticamente');
+            }
+            
+          } catch (autoFixError: any) {
+            console.error('[REVALIDATE-QR] Erro na correção automática:', autoFixError);
+            toast.error('Erro ao aplicar correções automáticas: ' + (autoFixError.message || 'Erro desconhecido'));
+          }
+          
+        } else {
+          // Tudo OK, apenas recarregar
+          await loadQualityReport();
+          
+          toast.success('✅ Controle de Qualidade validado!', {
+            description: 'Todos os critérios foram validados com sucesso',
+            duration: 5000
+          });
+        }
       }
       
     } catch (error) {
@@ -2439,7 +2507,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           className="gap-2"
         >
           <RefreshCw className="h-4 w-4" />
-          Revalidar Controle de Qualidade
+          🔧 Validar e Corrigir
         </Button>
         <Button
           onClick={recalculateValorCausa}

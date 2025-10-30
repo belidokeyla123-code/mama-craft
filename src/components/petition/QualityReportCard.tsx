@@ -131,7 +131,7 @@ export const QualityReportCard = ({
             disabled={loading}
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Revalidar
+            🔧 Validar e Corrigir
           </Button>
           
           <Button
