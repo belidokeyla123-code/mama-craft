@@ -27,6 +27,26 @@ serve(async (req) => {
       .select('*, extractions(*)')
       .eq('case_id', caseId);
 
+    // ✅ BUSCAR DOCUMENTOS DO CASO E MONTAR LISTA FORMATADA
+    const { data: caseDocuments } = await supabase
+      .from('documents')
+      .select('file_name, document_type, parent_document_id')
+      .eq('case_id', caseId)
+      .order('uploaded_at', { ascending: true });
+
+    // Filtrar apenas documentos principais (sem páginas de PDF)
+    const mainDocuments = caseDocuments?.filter(doc => !doc.parent_document_id) || [];
+
+    // Montar lista formatada para a IA
+    const documentosInfo = mainDocuments.length > 0 
+      ? mainDocuments.map((doc: any, i: number) => 
+          `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name} (tipo: ${doc.document_type})`
+        ).join('\n')
+      : 'Nenhum documento anexado ao processo';
+
+    console.log('[PETITION] 📄 Documentos reais encontrados:', mainDocuments.length);
+    console.log('[PETITION] 📋 Lista de documentos:\n', documentosInfo);
+
     // Buscar procuração especificamente e extrair TODOS os dados
     const procuracao = documents?.find(d => d.document_type === 'procuracao');
     const procuracaoData = procuracao?.extractions?.[0]?.entities || {};
@@ -348,7 +368,20 @@ Fundamente juridicamente com:
 
 **VII. DAS PROVAS**
 
-Liste os ${documents?.length || 0} documentos anexados.
+🚨 ATENÇÃO CRÍTICA: DOCUMENTOS REAIS ANEXADOS AO PROCESSO:
+
+${documentosInfo}
+
+🚨 INSTRUÇÕES OBRIGATÓRIAS:
+1. Use EXATAMENTE os documentos listados acima
+2. NÃO invente documentos que não estão na lista
+3. Numere como "Doc. 01", "Doc. 02", etc (conforme a lista)
+4. Cite o tipo correto de cada documento
+5. Se não houver documentos anexados, informe: "A requerente anexa os seguintes documentos, a serem juntados em momento oportuno"
+
+REDIJA:
+Para cada documento da lista acima, escreva uma frase explicando sua relevância para o caso.
+Exemplo: "Doc. 01 - Certidão de Nascimento (nome_arquivo.pdf): comprova a qualidade de segurada especial rural da requerente"
 
 ═══════════════════════════════════════════════════════════════
 
@@ -416,7 +449,10 @@ ${JSON.stringify(analysis || {}, null, 2)}
 - Valor da Causa: R$ ${analysis?.valor_causa || 'a calcular'}
 - Carência: ${analysis?.carencia ? JSON.stringify(analysis.carencia) : 'a analisar'}
 
-**DOCUMENTOS:** ${documents?.length || 0} documento(s) anexados
+**DOCUMENTOS REAIS DO CASO:**
+${documentosInfo}
+
+Total: ${mainDocuments.length} documento(s) anexado(s)
 
 ═══════════════════════════════════════════════════════════════
 
@@ -437,6 +473,19 @@ ${JSON.stringify(analysis || {}, null, 2)}
 ✅ Numere os tópicos corretamente (I, II, III, etc.)
 
 🚨 **SE VOCÊ DEIXAR QUALQUER CAMPO VAZIO OU COM PLACEHOLDER, A PETIÇÃO SERÁ REJEITADA!**
+
+🚨🚨🚨 VALIDAÇÃO CRÍTICA DE DOCUMENTOS 🚨🚨🚨
+
+✅ Na seção "DAS PROVAS", você DEVE:
+- Citar APENAS documentos da lista fornecida
+- Usar numeração EXATA (Doc. 01, Doc. 02, etc)
+- NÃO inventar "RG e CPF", "Comprovante de Residência" se não estiverem na lista
+- Se a lista estiver vazia, escreva: "A requerente juntará os documentos necessários em momento oportuno"
+
+❌ NUNCA faça isso:
+- Inventar documentos que não existem
+- Citar "Certidão de Nascimento" se não estiver na lista
+- Usar numeração genérica tipo "Doc. 01 a 10"
 
 Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.`;
     
@@ -648,6 +697,26 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
         console.error('❌ Campos obrigatórios faltantes:', missingFields);
       } else {
         console.log('✅ Petição validada com sucesso');
+      }
+
+      // ✅ VALIDAÇÃO FINAL: Verificar se a IA respeitou os documentos
+      console.log('[PETITION] 🔍 Validando citações de documentos...');
+
+      const secaoProvas = petitionText.match(/(?:DAS PROVAS|DOS DOCUMENTOS)([\s\S]*?)(?=\n\n[A-Z]{2,}|$)/i);
+
+      if (secaoProvas && mainDocuments.length > 0) {
+        const docsNaPetition = secaoProvas[0];
+        mainDocuments.forEach((doc: any, i: number) => {
+          const docRef = `Doc. ${String(i + 1).padStart(2, '0')}`;
+          if (!docsNaPetition.includes(docRef)) {
+            console.warn(`⚠️ [PETITION] Documento ${docRef} não foi citado na seção 'Das Provas'`);
+            qualityIssues.push({
+              tipo: 'DOCUMENTO_NAO_CITADO',
+              gravidade: 'MÉDIO',
+              problema: `Documento ${docRef} (${doc.file_name}) não foi citado na petição`
+            });
+          }
+        });
       }
 
       // Salvar relatório de qualidade
