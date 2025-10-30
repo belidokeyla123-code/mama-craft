@@ -321,9 +321,25 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   };
 
   const analyzeWithJudgeModule = async (isRevalidation = false) => {
-    if (!petition) {
+    // 🔍 Buscar a última draft do banco (versão mais recente salva)
+    const { data: latestDraft } = await supabase
+      .from('drafts')
+      .select('markdown_content')
+      .eq('case_id', data.caseId)
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    const petitionToAnalyze = latestDraft?.markdown_content || petition;
+    
+    if (!petitionToAnalyze) {
       toast.error("Gere a petição primeiro");
       return;
+    }
+
+    // Sincronizar estado local com versão do banco se diferente
+    if (latestDraft?.markdown_content && latestDraft.markdown_content !== petition) {
+      setPetition(latestDraft.markdown_content);
     }
 
     if (isRevalidation) {
@@ -370,10 +386,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         .eq('case_id', data.caseId)
         .maybeSingle();
 
-      // 6. Chamar edge function com TODOS os dados
+      // 6. Chamar edge function com TODOS os dados (usando versão do banco)
       const { data: result, error } = await supabase.functions.invoke('analyze-petition-judge-view', {
         body: {
-          petition,
+          petition: petitionToAnalyze,
           caseInfo,
           documents: documents || [],
           analysis: analysis || null,
