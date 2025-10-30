@@ -698,5 +698,54 @@ function buildPromptForDocType(docType: string, fileName: string): string {
 - motherName: Nome da mãe (filiação)`;
   }
   
+  if (docType === 'historico_escolar') {
+    return basePrompt + `📚 HISTÓRICO ESCOLAR - EXTRAIR:
+
+**INSTRUÇÕES:**
+Extraia o histórico completo de frequência escolar.
+
+**RETORNAR JSON:**
+{
+  "school_history": [
+    {
+      "institution": "Nome da escola",
+      "year": "Ano letivo",
+      "grade": "Série/Ano",
+      "period": "Período (ex: 2010 a 2011)",
+      "location": "Município/UF"
+    }
+  ]
+}
+
+**IMPORTANTE:** O campo principal deve ser "school_history" como array de períodos escolares.`;
+  }
+  
+  if (docType === 'declaracao_saude_ubs') {
+    return basePrompt + `🏥 DECLARAÇÃO DE SAÚDE UBS - EXTRAIR:
+
+**INSTRUÇÕES:**
+Extraia as informações da declaração de atendimento na UBS/Posto de Saúde.
+
+**RETORNAR JSON:**
+{
+  "health_declaration_ubs": {
+    "patientName": "Nome completo do paciente",
+    "patientCpf": "CPF sem formatação",
+    "patientRg": "RG com órgão expedidor",
+    "declarationDate": "Data da declaração (YYYY-MM-DD)",
+    "healthUnit": "Nome da UBS/Posto de Saúde",
+    "address": "Endereço da UBS",
+    "attendancePeriod": {
+      "start": "Data início atendimento (YYYY-MM-DD)",
+      "end": "Data fim atendimento (YYYY-MM-DD)"
+    },
+    "content": "Conteúdo completo da declaração",
+    "issuedBy": "Nome de quem emitiu/assinou"
+  }
+}
+
+**IMPORTANTE:** O campo principal deve ser "health_declaration_ubs" contendo todos os dados.`;
+  }
+  
   return basePrompt + `Extraia TODAS as informações visíveis deste documento.`;
 }

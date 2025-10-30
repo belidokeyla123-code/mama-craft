@@ -39,17 +39,25 @@ export const DocumentUploadInline = ({
   const saveExtractedData = async (extracted: any, docType: string, caseId: string) => {
     try {
       if (docType === 'historico_escolar') {
+        // ✅ Normalizar formato de resposta
+        const schoolData = extracted.school_history || extracted.extractedData?.school_history || [];
+        
         await supabase.from('cases').update({
-          school_history: extracted.school_history || []
+          school_history: Array.isArray(schoolData) ? schoolData : []
         }).eq('id', caseId);
-        console.log('[EXTRACT] ✅ Histórico escolar salvo');
+        
+        console.log('[EXTRACT] ✅ Histórico escolar salvo:', schoolData);
       }
       
       if (docType === 'declaracao_saude_ubs') {
+        // ✅ A IA pode retornar em diferentes formatos, normalizar:
+        const healthData = extracted.health_declaration_ubs || extracted.extractedData || extracted;
+        
         await supabase.from('cases').update({
-          health_declaration_ubs: extracted.health_declaration_ubs || {}
+          health_declaration_ubs: healthData
         }).eq('id', caseId);
-        console.log('[EXTRACT] ✅ Declaração de saúde salva');
+        
+        console.log('[EXTRACT] ✅ Declaração de saúde salva:', healthData);
       }
       
       if (docType === 'documento_terra') {

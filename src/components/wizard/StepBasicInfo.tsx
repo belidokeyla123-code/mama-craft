@@ -1228,17 +1228,46 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               </Badge>
             )}
           </div>
-          {data.schoolHistory && data.schoolHistory.length > 0 && (
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => reanalyzeSingleDocument('historico_escolar')}
-              disabled={isReanalyzing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
-              Reanalisar
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {data.schoolHistory && data.schoolHistory.length > 0 && (
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => reanalyzeSingleDocument('historico_escolar')}
+                disabled={isReanalyzing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                Reanalisar Documento
+              </Button>
+            )}
+            
+            {/* ✅ Botão para buscar documento existente e analisar */}
+            {(!data.schoolHistory || data.schoolHistory.length === 0) && (
+              <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={async () => {
+                  const { data: docs } = await supabase
+                    .from('documents')
+                    .select('id')
+                    .eq('case_id', data.caseId)
+                    .eq('document_type', 'historico_escolar' as any)
+                    .order('uploaded_at', { ascending: false })
+                    .limit(1);
+                  
+                  if (docs && docs.length > 0) {
+                    await reanalyzeSingleDocument('historico_escolar');
+                  } else {
+                    toast.info('Nenhum histórico escolar encontrado. Faça o upload primeiro.');
+                  }
+                }}
+                disabled={isReanalyzing}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Analisar Documento Existente
+              </Button>
+            )}
+          </div>
         </div>
         
         {data.caseId && (
@@ -1329,17 +1358,46 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
               </Badge>
             )}
           </div>
-          {data.healthDeclarationUbs && Object.keys(data.healthDeclarationUbs).length > 0 && (
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => reanalyzeSingleDocument('declaracao_saude_ubs')}
-              disabled={isReanalyzing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
-              Reanalisar
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {data.healthDeclarationUbs && Object.keys(data.healthDeclarationUbs).length > 0 && (
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => reanalyzeSingleDocument('declaracao_saude_ubs')}
+                disabled={isReanalyzing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                Reanalisar Documento
+              </Button>
+            )}
+            
+            {/* ✅ Botão para buscar documento existente e analisar */}
+            {(!data.healthDeclarationUbs || Object.keys(data.healthDeclarationUbs).length === 0) && (
+              <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={async () => {
+                  const { data: docs } = await supabase
+                    .from('documents')
+                    .select('id')
+                    .eq('case_id', data.caseId)
+                    .eq('document_type', 'declaracao_saude_ubs' as any)
+                    .order('uploaded_at', { ascending: false })
+                    .limit(1);
+                  
+                  if (docs && docs.length > 0) {
+                    await reanalyzeSingleDocument('declaracao_saude_ubs');
+                  } else {
+                    toast.info('Nenhum documento de declaração de saúde encontrado. Faça o upload primeiro.');
+                  }
+                }}
+                disabled={isReanalyzing}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Analisar Documento Existente
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="space-y-4">
