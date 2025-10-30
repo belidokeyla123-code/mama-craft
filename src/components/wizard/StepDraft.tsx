@@ -590,61 +590,57 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         });
         
         // 🤖 SE DETECTOU PROBLEMAS, CORRIGIR AUTOMATICAMENTE
-        if (!enderecamentoOk || !jurisdicaoOk || !valorCausaValidado || !dadosCompletos) {
-          console.log('[REVALIDATE-QR] 🤖 Detectados problemas, iniciando correção automática...');
-          toast.info('🤖 Corrigindo automaticamente os problemas detectados...');
-          
-          try {
-            const { data: autoFixData, error: autoFixError } = await supabase.functions.invoke('auto-fix-quality', {
-              body: {
-                caseId: data.caseId,
-                qualityReport: {
-                  enderecamento_ok: enderecamentoOk,
-                  jurisdicao_ok: jurisdicaoOk,
-                  valor_causa_validado: valorCausaValidado,
-                  dados_completos: dadosCompletos,
-                  campos_faltantes: camposFaltantes,
-                  valor_causa_referencia: valorCausa,
-                  status: statusGeral,
-                  issues
-                }
+        // 🤖 SEMPRE CORRIGIR AUTOMATICAMENTE (não apenas se detectar problemas básicos)
+        console.log('[REVALIDATE-QR] 🤖 Iniciando correção automática...');
+        toast.info('🤖 Analisando português e documentos...');
+
+        try {
+          const { data: autoFixData, error: autoFixError } = await supabase.functions.invoke('auto-fix-quality', {
+            body: {
+              caseId: data.caseId,
+              qualityReport: {
+                enderecamento_ok: enderecamentoOk,
+                jurisdicao_ok: jurisdicaoOk,
+                valor_causa_validado: valorCausaValidado,
+                dados_completos: dadosCompletos,
+                campos_faltantes: camposFaltantes,
+                valor_causa_referencia: valorCausa,
+                status: statusGeral,
+                issues
               }
-            });
+            }
+          });
+          
+          if (autoFixError) throw autoFixError;
+          
+          if (autoFixData?.success) {
+            const corrections = autoFixData.corrections_applied || [];
             
-            if (autoFixError) throw autoFixError;
+            console.log('[REVALIDATE-QR] ✅ Correções aplicadas:', corrections);
             
-            if (autoFixData?.success) {
-              const corrections = autoFixData.corrections_applied || [];
-              
-              console.log('[REVALIDATE-QR] ✅ Correções aplicadas:', corrections);
-              
-              // Mostrar toast com resumo das correções
+            // Mostrar toast com resumo
+            if (corrections.length > 0) {
               const correctionsText = corrections.map((c: any) => c.module).join(', ');
               toast.success(`✅ ${corrections.length} correção(ões) aplicada(s)`, {
                 description: `Corrigido: ${correctionsText}`,
                 duration: 6000
               });
-              
-              // Recarregar quality report
-              await loadQualityReport();
-              
             } else {
-              toast.warning('⚠️ Algumas correções não puderam ser aplicadas automaticamente');
+              toast.success('✅ Análise completa! Nenhum problema detectado.', {
+                duration: 5000
+              });
             }
             
-          } catch (autoFixError: any) {
-            console.error('[REVALIDATE-QR] Erro na correção automática:', autoFixError);
-            toast.error('Erro ao aplicar correções automáticas: ' + (autoFixError.message || 'Erro desconhecido'));
+            // Recarregar quality report
+            await loadQualityReport();
+            
+          } else {
+            toast.warning('⚠️ Algumas correções não puderam ser aplicadas automaticamente');
           }
           
-        } else {
-          // Tudo OK, apenas recarregar
-          await loadQualityReport();
-          
-          toast.success('✅ Controle de Qualidade validado!', {
-            description: 'Todos os critérios foram validados com sucesso',
-            duration: 5000
-          });
+        } catch (autoFixError: any) {
+          console.error('[REVALIDATE-QR] Erro na correção automática:', autoFixError);
+          toast.error('Erro ao aplicar correções automáticas: ' + (autoFixError.message || 'Erro desconhecido'));
         }
       }
       
@@ -2638,16 +2634,29 @@ ${tabelaDocumentos}
                 )}
               </div>
               
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Valor da Causa</span>
-                {qualityReport.valor_causa_validado ? (
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge variant="default" className="bg-green-600">
-                      ✅ R$ {qualityReport.valor_causa}
-                    </Badge>
+              <div className="flex flex-col gap-2 p-3 bg-muted rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Valor da Causa Validado</span>
+                  {qualityReport.valor_causa_validado ? (
+                    <Badge variant="default" className="bg-green-600">✅ Validado</Badge>
+                  ) : (
+                    <Badge variant="secondary">⚠️ Revisar</Badge>
+                  )}
+                </div>
+                
+                {/* ✅ MOSTRAR CÁLCULO DETALHADO */}
+                {qualityReport.valor_causa_validado && qualityReport.valor_causa_referencia && (
+                  <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 mt-1">
+                    <p>
+                      <strong>Competência:</strong> {qualityReport.competencia === 'juizado' ? 'Juizado Especial Federal' : 'Vara Federal'}
+                    </p>
+                    <p>
+                      <strong>Cálculo:</strong> 60 salários × R$ {(qualityReport.valor_causa_referencia / 60).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = 
+                      <span className="font-bold text-green-600 ml-1">
+                        R$ {qualityReport.valor_causa_referencia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </p>
                   </div>
-                ) : (
-                  <Badge variant="destructive">❌ Valor incorreto</Badge>
                 )}
               </div>
 
@@ -2656,9 +2665,11 @@ ${tabelaDocumentos}
                 {qualityReport.jurisdicao_ok ? (
                   <div className="flex flex-col items-end gap-1">
                     <Badge variant="default" className="bg-green-600">✅ Correta</Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {qualityReport.subsecao}/{qualityReport.uf} - {qualityReport.trf}
-                    </span>
+                    {qualityReport.jurisdicao_validada && (
+                      <span className="text-xs text-muted-foreground">
+                        {qualityReport.jurisdicao_validada.subsecao}/{qualityReport.jurisdicao_validada.uf} - {qualityReport.jurisdicao_validada.trf}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <Badge variant="destructive">❌ Incorreta</Badge>
