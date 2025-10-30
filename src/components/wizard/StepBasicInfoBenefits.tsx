@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import { CaseData } from "@/pages/NewCase";
 
@@ -20,6 +21,7 @@ export const StepBasicInfoBenefits = ({ data, updateData }: StepBasicInfoBenefit
     tipo: string;
     numero_beneficio?: string;
   }>>(data.manualBenefits || []);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const addManualBenefit = () => {
     const newBenefit = {
@@ -31,12 +33,16 @@ export const StepBasicInfoBenefits = ({ data, updateData }: StepBasicInfoBenefit
     const updated = [...manualBenefits, newBenefit];
     setManualBenefits(updated);
     updateData({ manualBenefits: updated });
+    setHasUnsavedChanges(true);
+    setTimeout(() => setHasUnsavedChanges(false), 2500);
   };
 
   const removeManualBenefit = (index: number) => {
     const updated = manualBenefits.filter((_, i) => i !== index);
     setManualBenefits(updated);
     updateData({ manualBenefits: updated });
+    setHasUnsavedChanges(true);
+    setTimeout(() => setHasUnsavedChanges(false), 2500);
   };
 
   const updateManualBenefit = (index: number, field: string, value: string) => {
@@ -44,13 +50,22 @@ export const StepBasicInfoBenefits = ({ data, updateData }: StepBasicInfoBenefit
     updated[index] = { ...updated[index], [field]: value };
     setManualBenefits(updated);
     updateData({ manualBenefits: updated });
+    setHasUnsavedChanges(true);
+    setTimeout(() => setHasUnsavedChanges(false), 2500);
   };
 
   return (
     <div className="mt-6 border-t pt-4">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <Label className="text-sm font-semibold">Benefícios Recebidos (Adicionar Manualmente)</Label>
+          <Label className="text-sm font-semibold flex items-center gap-2">
+            Benefícios Recebidos (Adicionar Manualmente)
+            {hasUnsavedChanges && (
+              <Badge variant="outline" className="animate-pulse">
+                Salvando...
+              </Badge>
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground mt-1">
             Adicione benefícios que não foram detectados automaticamente no CNIS
           </p>

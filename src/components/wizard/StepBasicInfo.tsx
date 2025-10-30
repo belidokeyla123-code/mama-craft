@@ -151,6 +151,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     data.profile, data.eventType, data.hasRa, data.raProtocol,
     data.landOwnerName, data.landOwnerCpf, data.landOwnershipType,
     data.ruralPeriods, data.urbanPeriods, data.salarioMinimoRef,
+    data.manualBenefits,
   ]);
 
   // ✅ CORREÇÃO #3: Carregar benefícios anteriores
