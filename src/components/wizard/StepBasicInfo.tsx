@@ -1,5 +1,14 @@
-import { Sparkles, AlertTriangle, CheckCircle2, Calendar, FileText, User, Baby, Heart, MapPin, Tractor, Building, Home, PlusCircle, Trash2, Save, RefreshCw, AlertCircle, Stethoscope } from "lucide-react";
-import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText, Loader2, Brain } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText, Loader2, Brain, Baby, Heart, Tractor, Building, Home, PlusCircle, Save, Stethoscope } from "lucide-react";
 import { CaseData, RuralPeriod, UrbanPeriod } from "@/pages/NewCase";
 import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMinimo";
 import { useEffect, useState } from "react";
@@ -442,7 +451,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         .from('documents')
         .select('id')
         .eq('case_id', data.caseId)
-        .eq('document_type', docType)
+        .eq('document_type', docType as any)
         .order('uploaded_at', { ascending: false })
         .limit(1);
       
