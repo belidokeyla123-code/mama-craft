@@ -321,7 +321,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   };
 
   const analyzeWithJudgeModule = async (isRevalidation = false) => {
-    // 🔍 Buscar a última draft do banco (FORÇAR FRESH)
+    // 🔍 Buscar a última draft do banco (GARANTIR FRESH - Invalidar Cache)
+    const timestamp = Date.now();
     const { data: latestDraft, error: fetchError } = await supabase
       .from('drafts')
       .select('markdown_content, id, generated_at')
@@ -333,7 +334,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     console.log('[JUDGE] 🔍 Draft buscada:', {
       id: latestDraft?.id,
       timestamp: latestDraft?.generated_at,
-      length: latestDraft?.markdown_content?.length
+      length: latestDraft?.markdown_content?.length,
+      stateLength: petition.length,
+      match: latestDraft?.markdown_content?.length === petition.length,
+      invalidationTimestamp: timestamp
     });
 
     if (fetchError) {
@@ -862,8 +866,18 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         if (error) throw error;
         
         if (result?.petition_corrigida) {
-          console.log('[CORRECTIONS] Petition length DEPOIS do lote:', result.petition_corrigida.length);
-          currentPetition = result.petition_corrigida; // Atualizar para próximo lote
+          const lengthDiff = result.petition_corrigida.length - currentPetition.length;
+          const percentChange = Math.abs((lengthDiff / currentPetition.length) * 100);
+          
+          console.log(`[CORRECTIONS] Lote ${batchNum} - Mudança: ${lengthDiff} chars (${percentChange.toFixed(1)}%)`);
+          
+          // 🆕 Se mudança for muito pequena, alertar
+          if (Math.abs(lengthDiff) < 50) {
+            console.warn(`[CORRECTIONS] ⚠️ Lote ${batchNum}: Mudança muito pequena (${lengthDiff} chars)`);
+            toast.warning(`⚠️ Lote ${batchNum}: Correção foi muito conservadora`, { duration: 3000 });
+          }
+          
+          currentPetition = result.petition_corrigida;
           setPetition(currentPetition);
         }
       }
@@ -929,10 +943,26 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         }
       }, 300);
       
-      // ✅ SEMPRE RE-ANALISAR (delay aumentado para garantir propagação)
+      // ✅ SEMPRE RE-ANALISAR (com re-fetch forçado)
       setTimeout(() => {
         toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
-        setTimeout(() => analyzeWithJudgeModule(true), 2500); // 2.5s em vez de 1.5s
+        
+        // 🆕 FORÇAR RE-FETCH da petition antes de analisar
+        supabase
+          .from('drafts')
+          .select('markdown_content')
+          .eq('case_id', data.caseId)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+          .then(({ data: refetchedDraft }) => {
+            if (refetchedDraft?.markdown_content) {
+              console.log('[CORRECTIONS] 🔄 Re-fetched petition length:', refetchedDraft.markdown_content.length);
+              setPetition(refetchedDraft.markdown_content); // Atualizar state
+            }
+            
+            setTimeout(() => analyzeWithJudgeModule(true), 1000); // Aguardar state update
+          });
       }, 2000);
       
     } catch (error: any) {

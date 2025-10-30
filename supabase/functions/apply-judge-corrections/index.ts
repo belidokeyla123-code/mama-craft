@@ -96,7 +96,7 @@ Agora, reescreva a petição aplicando TODAS as ${judgeAnalysis?.brechas?.length
         body: JSON.stringify({
           model: 'google/gemini-2.5-flash', // Modelo intermediário, muito melhor para reescrita
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7, // Aumentar criatividade para ser menos conservador
+          temperature: 0.8, // 🆕 Aumentado para 0.8 - Mais criativo, menos conservador
         }),
         signal: controller.signal,
       });
