@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+import { buildPromptForDocType } from './prompts.ts';
 
 // ============================================================
 // SISTEMA DE NOMENCLATURA INTELIGENTE
@@ -15,7 +16,7 @@ function sanitizeName(name: string | undefined): string {
     .replace(/[^a-zA-Z0-9\s]/g, '_')
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
+    .replace(/^[_]|_$/g, '')
     .substring(0, 50);
 }
 
@@ -50,1316 +51,296 @@ function generateIntelligentFileName(docType: string, extractedData: any, origin
       const cpf = d.granterCpf ? `_${d.granterCpf.substring(0, 11)}` : '';
       return `Procuracao_${sanitizeName(granterName)}${cpf}_${timestamp}`;
     },
-    processo_administrativo: (d) => `Processo_INSS_${d.raProtocol ? d.raProtocol.replace(/[^0-9]/g, '') : timestamp}`,
-    certidao_casamento: (d) => `Certidao_Casamento_${sanitizeName(d.spouseName)}_${formatDateForFileName(d.marriageDate) || timestamp}`,
-    cnis: (d) => `CNIS_${d.nit ? d.nit.replace(/[^0-9]/g, '') : 'Cliente'}_${timestamp}`,
-    autodeclaracao_rural: () => `Autodeclaracao_Rural_${timestamp}`,
-    documento_terra: (d) => `Documento_Terra_${sanitizeName(d.landOwnerName)}_${timestamp}`,
-    comprovante_residencia: (d) => `Comprovante_Residencia_${sanitizeName(d.holderName)}_${formatDateForFileName(d.referenceDate) || timestamp}`,
-    historico_escolar: (d) => `Historico_Escolar_${sanitizeName(d.studentName)}_${d.period || timestamp}`,
-    declaracao_saude_ubs: (d) => `Declaracao_Saude_${sanitizeName(d.patientName)}_${formatDateForFileName(d.declarationDate) || timestamp}`,
+    cnis: (d) => {
+      const nit = d.nit ? `_${d.nit.replace(/[^0-9]/g, '')}` : '';
+      return `CNIS${nit}_${timestamp}`;
+    },
+    autodeclaracao_rural: (d) => {
+      const name = sanitizeName(d.fullName || d.declarantName || 'Declarante');
+      return `Autodeclaracao_Rural_${name}_${timestamp}`;
+    },
+    documento_terra: (d) => {
+      const owner = sanitizeName(d.landOwnerName || 'Proprietario');
+      const docType = d.documentType || 'Terra';
+      return `${docType}_${owner}_${timestamp}`;
+    },
+    processo_administrativo: (d) => {
+      const protocol = d.raProtocol ? `_${d.raProtocol.replace(/[^0-9]/g, '')}` : '';
+      return `Processo_Administrativo${protocol}_${timestamp}`;
+    },
+    comprovante_residencia: (d) => {
+      const name = sanitizeName(d.holderName || 'Titular');
+      return `Comprovante_Residencia_${name}_${timestamp}`;
+    },
+    historico_escolar: (d) => {
+      const name = sanitizeName(d.studentName || 'Aluno');
+      return `Historico_Escolar_${name}_${timestamp}`;
+    },
+    declaracao_saude_ubs: (d) => {
+      const name = sanitizeName(d.patientName || 'Paciente');
+      return `Declaracao_Saude_${name}_${timestamp}`;
+    },
   };
   
-  const generateName = templates[docType];
-  if (!generateName) return originalFileName;
+  const generator = templates[docType];
+  if (!generator) return `${docType}_${timestamp}`;
   
   try {
-    return `${generateName(extractedData)}.${originalExt}`;
+    const fileName = generator(extractedData);
+    return `${fileName}.${originalExt}`;
   } catch (error) {
-    console.error('Erro ao gerar nome:', error);
-    return originalFileName;
+    console.error(`Erro ao gerar nome para ${docType}:`, error);
+    return `${docType}_${timestamp}.${originalExt}`;
   }
 }
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// Schema dinâmico por tipo de documento
-function getSchemaForDocType(docType: string) {
-  const schemas: Record<string, any> = {
-    certidao_nascimento: {
-      type: 'object',
-      properties: {
-        childName: { type: 'string', description: 'Nome completo da criança (no topo da certidão)' },
-        childBirthDate: { type: 'string', description: 'Data de nascimento da criança (formato YYYY-MM-DD)' },
-        motherName: { type: 'string', description: 'Nome completo da mãe (seção FILIAÇÃO MATERNA)' },
-        motherCpf: { type: 'string', description: 'CPF da mãe (apenas números, sem pontos/traços)' },
-        fatherName: { type: 'string', description: 'Nome completo do pai (seção FILIAÇÃO PATERNA)' },
-        fatherCpf: { type: 'string', description: 'CPF do pai (apenas números, sem pontos/traços)' },
-        registryNumber: { type: 'string', description: 'Número da matrícula/registro' },
-        registryDate: { type: 'string', description: 'Data do registro (formato YYYY-MM-DD)' },
-        birthCity: { type: 'string', description: 'Cidade onde nasceu' }
-      },
-      required: ['childName', 'childBirthDate', 'motherName']
-    },
-    processo_administrativo: {
-      type: 'object',
-      properties: {
-        raProtocol: { type: 'string', description: 'Número do protocolo/NB do processo administrativo' },
-        raRequestDate: { type: 'string', description: 'Data do requerimento administrativo (formato YYYY-MM-DD)' },
-        raDenialDate: { type: 'string', description: 'Data do indeferimento (formato YYYY-MM-DD)' },
-        raDenialReason: { type: 'string', description: 'Motivo completo e literal do indeferimento' },
-        benefitType: { type: 'string', description: 'Tipo do benefício solicitado (ex: Salário-Maternidade)' }
-      },
-      required: ['raProtocol']
-    },
-    autodeclaracao_rural: {
-      type: 'object',
-      properties: {
-        ruralPeriods: {
-          type: 'array',
-          description: 'Períodos de trabalho rural',
-          items: {
-            type: 'object',
-            properties: {
-              startDate: { type: 'string', description: 'Data início (YYYY-MM-DD)' },
-              endDate: { type: 'string', description: 'Data fim (YYYY-MM-DD)' },
-              location: { type: 'string', description: 'Local/município' },
-              activities: { type: 'string', description: 'Atividades exercidas' },
-              withWhom: { type: 'string', description: 'Com quem trabalhou' }
-            }
-          }
-        },
-        familyMembersDetailed: {
-          type: 'array',
-          description: 'Membros do grupo familiar',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              cpf: { type: 'string' },
-              birthDate: { type: 'string' },
-              relationship: { type: 'string' }
-            }
-          }
-        },
-        landOwnerName: { type: 'string', description: 'Nome do proprietário da terra' },
-        landOwnerCpf: { type: 'string', description: 'CPF do proprietário (apenas números)' }
-      }
-    },
-    documento_terra: {
-      type: 'object',
-      properties: {
-        landOwnerName: { type: 'string', description: 'Nome completo do proprietário da terra' },
-        landOwnerCpf: { type: 'string', description: 'CPF do proprietário (apenas números)' },
-        landOwnerRg: { type: 'string', description: 'RG completo com órgão expedidor' },
-        landArea: { type: 'string', description: 'Área total do imóvel em hectares' },
-        landLocation: { type: 'string', description: 'Localização/endereço do imóvel' },
-        registryNumber: { type: 'string', description: 'Número da matrícula/registro' }
-      },
-      required: ['landOwnerName']
-    },
-    identificacao: {
-      type: 'object',
-      properties: {
-        fullName: { type: 'string', description: 'Nome completo da pessoa' },
-        cpf: { type: 'string', description: 'CPF (apenas números, sem pontos/traços)' },
-        rg: { type: 'string', description: 'RG completo com órgão expedidor' },
-        birthDate: { type: 'string', description: 'Data de nascimento (formato YYYY-MM-DD)' },
-        motherName: { type: 'string', description: 'Nome completo da mãe (filiação)' },
-        fatherName: { type: 'string', description: 'Nome completo do pai (filiação)' }
-      },
-      required: ['fullName']
-    },
-    certidao_casamento: {
-      type: 'object',
-      properties: {
-        spouseName: { type: 'string', description: 'Nome completo do cônjuge' },
-        spouseCpf: { type: 'string', description: 'CPF do cônjuge (apenas números)' },
-        marriageDate: { type: 'string', description: 'Data do casamento (formato YYYY-MM-DD)' },
-        marriageLocation: { type: 'string', description: 'Local/cartório do casamento' },
-        propertyRegime: { type: 'string', description: 'Regime de bens' },
-        authorMaritalStatus: { type: 'string', description: 'Estado civil (casada/casado)' }
-      },
-      required: ['spouseName', 'marriageDate']
-    },
-    cnis: {
-      type: 'object',
-      properties: {
-        nit: { type: 'string', description: 'Número de Identificação do Trabalhador (NIT)' },
-        currentSalary: { type: 'number', description: 'Salário/remuneração atual ou mais recente (valor numérico)' },
-        lastEmploymentDate: { type: 'string', description: 'Data do último vínculo empregatício (YYYY-MM-DD)' },
-        hasUrbanEmployment: { type: 'boolean', description: 'Possui vínculos urbanos ativos ou recentes?' },
-        previousBenefits: {
-          type: 'array',
-          description: 'Benefícios anteriores identificados',
-          items: {
-            type: 'object',
-            properties: {
-              nb: { type: 'string', description: 'Número do benefício' },
-              benefitType: { type: 'string', description: 'Tipo (ex: Salário-Maternidade)' },
-              startDate: { type: 'string', description: 'Data início (YYYY-MM-DD)' },
-              endDate: { type: 'string', description: 'Data fim (YYYY-MM-DD)' },
-              status: { type: 'string', description: 'Status: ATIVO, CESSADO, INDEFERIDO' }
-            }
-          }
-        },
-        hasMaternityBenefitSameEvent: { type: 'boolean', description: 'Há auxílio-maternidade concedido para o mesmo evento?' }
-      }
-    },
-    cartao_vacina: {
-      type: 'object',
-      properties: {
-        childName: { type: 'string', description: 'Nome completo da criança' },
-        childBirthDate: { type: 'string', description: 'Data de nascimento (YYYY-MM-DD)' },
-        birthCity: { type: 'string', description: 'Cidade onde nasceu' },
-        birthState: { type: 'string', description: 'Estado onde nasceu (sigla, ex: MG)' },
-        vaccinations: {
-          type: 'array',
-          description: 'Histórico de vacinas',
-          items: {
-            type: 'object',
-            properties: {
-              vaccine: { type: 'string' },
-              date: { type: 'string' },
-              dose: { type: 'string' }
-            }
-          }
-        }
-      },
-      required: ['childName', 'childBirthDate']
-    },
-    comprovante_residencia: {
-      type: 'object',
-      properties: {
-        holderName: { type: 'string', description: 'Nome do titular da conta' },
-        address: { type: 'string', description: 'Endereço completo' },
-        city: { type: 'string', description: 'Cidade' },
-        state: { type: 'string', description: 'Estado (UF)' },
-        zipCode: { type: 'string', description: 'CEP' },
-        referenceDate: { type: 'string', description: 'Data de referência do comprovante (YYYY-MM-DD)' }
-      }
-    },
-    historico_escolar: {
-      type: 'object',
-      properties: {
-        studentName: { type: 'string', description: 'Nome completo do aluno' },
-        schoolName: { type: 'string', description: 'Nome da instituição de ensino' },
-        period: { type: 'string', description: 'Período/ano letivo' },
-        grades: { type: 'string', description: 'Série/ano cursado' }
-      }
-    },
-    declaracao_saude_ubs: {
-      type: 'object',
-      properties: {
-        patientName: { type: 'string', description: 'Nome do paciente' },
-        healthUnit: { type: 'string', description: 'Nome da UBS/Posto de Saúde' },
-        declarationDate: { type: 'string', description: 'Data da declaração (YYYY-MM-DD)' },
-        content: { type: 'string', description: 'Conteúdo da declaração' }
-      }
-    },
-    procuracao: {
-      type: 'object',
-      properties: {
-        granterName: { 
-          type: 'string', 
-          description: '🚨 CRÍTICO: Nome COMPLETO do OUTORGANTE (pessoa que ASSINA e DÁ os poderes). É o CLIENTE, não o advogado!' 
-        },
-        granterCpf: { 
-          type: 'string', 
-          description: 'CPF do OUTORGANTE/cliente (11 dígitos sem formatação)' 
-        },
-        attorneyName: { 
-          type: 'string', 
-          description: 'Nome do OUTORGADO/PROCURADOR (advogado que RECEBE os poderes)' 
-        },
-        attorneyCpf: { type: 'string', description: 'CPF do outorgado/advogado' },
-        oabNumber: { type: 'string', description: 'Número da OAB do advogado' },
-        powers: { type: 'string', description: 'Poderes outorgados' },
-        signatureDate: { type: 'string', description: 'Data da assinatura (YYYY-MM-DD)' }
-      },
-      required: ['granterName', 'attorneyName']
-    }
-  };
-
-  return schemas[docType] || {
-    type: 'object',
-    description: 'Dados extraídos do documento',
-    additionalProperties: true
-  };
 }
 
-
 serve(async (req) => {
+  // Handle CORS requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { documentId, caseId, forceDocType } = await req.json();
-    console.log(`[ANALYZE-SINGLE] 📄 Analisando documento ${documentId} do caso ${caseId}`);
-    if (forceDocType) {
-      console.log(`[ANALYZE-SINGLE] 🔧 Tipo forçado: ${forceDocType}`);
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    )
+
+    const { data: user } = await supabaseClient.auth.getUser()
+    if (!user) throw new Error('Could not get user')
+
+    const requestBody = await req.json();
+    const documentId = requestBody.documentId;
+    const caseId = requestBody.caseId;
+    const forceReprocess = requestBody.forceReprocess === true;
+
+    if (!documentId || !caseId) {
+      return new Response(JSON.stringify({ error: "Missing documentId or caseId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // 1. Buscar documento
-    const { data: doc, error: docError } = await supabase
+    // ==================================================================
+    // 1. Buscar dados do documento
+    // ==================================================================
+    console.log(`[DOC ${documentId}] Iniciando análise...`);
+    const { data: documentData, error: documentError } = await supabaseClient
       .from('documents')
       .select('*')
       .eq('id', documentId)
       .single();
 
-    if (docError || !doc) {
-      throw new Error(`Documento não encontrado: ${docError?.message}`);
+    if (documentError) {
+      console.error(`[DOC ${documentId}] Erro ao buscar dados do documento:`, documentError);
+      throw new Error(documentError.message);
     }
 
-    console.log(`[ANALYZE-SINGLE] 📂 Documento: ${doc.file_name} (${doc.document_type})`);
+    if (!documentData) {
+      console.error(`[DOC ${documentId}] Documento não encontrado.`);
+      throw new Error("Document not found");
+    }
 
-    // 2. Baixar arquivo do Storage
-    const { data: fileData, error: downloadError } = await supabase.storage
+    const filePath = documentData.file_path;
+    const originalFileName = documentData.file_name;
+    const currentType = documentData.document_type;
+
+    console.log(`[DOC ${documentId}] Tipo atual: ${currentType}`);
+
+    // ==================================================================
+    // 2. Verificar se já existe análise e se deve reprocessar
+    // ==================================================================
+    const { data: existingAnalysis, error: existingAnalysisError } = await supabaseClient
+      .from('document_analysis')
+      .select('*')
+      .eq('document_id', documentId)
+      .single();
+
+    if (existingAnalysisError && existingAnalysisError.code !== 'PGRST116') {
+      console.error(`[DOC ${documentId}] Erro ao verificar análise existente:`, existingAnalysisError);
+      throw new Error(existingAnalysisError.message);
+    }
+
+    if (existingAnalysis && !forceReprocess) {
+      console.log(`[DOC ${documentId}] Análise já existe. Ignorando.`);
+      return new Response(
+        JSON.stringify({ 
+          message: "Análise já existente", 
+          documentId, 
+          newFileName: documentData.file_name 
+        }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ==================================================================
+    // 3. Baixar o arquivo do storage
+    // ==================================================================
+    console.log(`[DOC ${documentId}] Baixando arquivo do storage: ${filePath}`);
+    const { data: fileData, error: storageError } = await supabaseClient.storage
       .from('case-documents')
-      .download(doc.file_path);
+      .download(filePath);
 
-    if (downloadError || !fileData) {
-      throw new Error(`Erro ao baixar: ${downloadError?.message}`);
+    if (storageError) {
+      console.error(`[DOC ${documentId}] Erro ao baixar arquivo do storage:`, storageError);
+      throw new Error(storageError.message);
     }
 
-    const arrayBuffer = await fileData.arrayBuffer();
-    const mimeType = doc.mime_type || '';
-    const isPdf = mimeType === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
-    
-    // 3. DETECTAR PDFs antigos (já no storage) - ignorar graciosamente
-    if (isPdf) {
-      console.log(`[ANALYZE-SINGLE] ⚠️ PDF detectado no storage - pulando análise (PDFs devem ser convertidos no cliente)`);
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          documentId,
-          docType: 'outro',
-          extracted: {},
-          confidence: 'low',
-          skipped: true,
-          message: 'PDF não processado - faça re-upload para converter em imagens',
-          debug: {
-            modelUsed: 'none',
-            processingType: 'skipped_pdf'
-          }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    // Converter imagem para base64
-    const base64 = base64Encode(arrayBuffer);
-    const base64Image = `data:${mimeType};base64,${base64}`;
-    console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida para análise (${(base64.length / 1024).toFixed(1)} KB)`);
-
-    // 4. Classificar tipo (se ainda não classificado OU se forceDocType foi passado)
-    let docType = forceDocType || doc.document_type;
-    
-    if (!forceDocType && (docType === 'OUTROS' || docType === 'outro')) {
-      docType = classifyDocument(doc.file_name);
-      console.log(`[ANALYZE-SINGLE] 🏷️ Tipo detectado por filename: ${docType}`);
-      
-      // 🔥 FALLBACK VISUAL: Se filename deu tipo específico mas pode ser ambíguo, usar IA para confirmar
-      // Especialmente para nomes truncados como CERT~1.PDF que podem ser vários tipos
-      const isAmbiguousName = /^[A-Z0-9~]{1,8}\.(pdf|png|jpg)/i.test(doc.file_name);
-      
-      if (!forceDocType && (isAmbiguousName || docType === 'outro')) {
-        console.log(`[ANALYZE-SINGLE] 🤖 Classificação visual iniciando (nome ambíguo: ${isAmbiguousName})...`);
-        
-        const classifyResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${lovableApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-lite',
-            max_completion_tokens: 100,
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'text', text: 'Qual o tipo deste documento? Responda APENAS com UMA das opções: certidao_nascimento, identificacao, comprovante_residencia, processo_administrativo, autodeclaracao_rural, documento_terra, procuracao, cnis, historico_escolar, declaracao_saude_ubs, outro' },
-                { type: 'image_url', image_url: { url: base64Image } }
-              ]
-            }]
-          })
-        });
-        
-        if (classifyResponse.ok) {
-          const classifyResult = await classifyResponse.json();
-          const visualType = classifyResult.choices?.[0]?.message?.content?.trim().toLowerCase();
-          if (visualType && visualType !== 'outro') {
-            docType = visualType;
-            console.log(`[ANALYZE-SINGLE] 👁️ Tipo detectado VISUALMENTE: ${docType} (sobrescreveu classificação por nome)`);
-          }
-        }
-      }
-      
-      // Atualizar tipo no banco
-      await supabase
-        .from('documents')
-        .update({ document_type: docType })
-        .eq('id', documentId);
-    } else {
-      console.log(`[ANALYZE-SINGLE] 🏷️ Tipo já classificado: ${docType}`);
+    if (!fileData) {
+      console.error(`[DOC ${documentId}] Arquivo não encontrado no storage.`);
+      throw new Error("File not found in storage");
     }
 
-    // 5. Montar prompt JURÍDICO específico com conhecimento de especialista
-    const prompt = buildPromptForDocType(docType, doc.file_name);
+    const fileBase64 = base64Encode(await fileData.arrayBuffer());
+    console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64.`);
 
-    // 6. Chamar IA com imagem para OCR + ANÁLISE JURÍDICA
-    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA com conhecimento jurídico especializado...`);
-    
-    // ✅ EXTRAÇÃO UNIVERSAL: Sempre buscar campos básicos em QUALQUER documento
-    const universalExtractionGuide = `
-
-📋 **EXTRAÇÃO UNIVERSAL** (aplicável a TODOS os tipos de documento):
-
-Além das informações específicas deste tipo de documento, SEMPRE extraia (se visíveis):
-
-1. **Dados da Autora/Requerente:**
-   - Nome completo
-   - CPF (11 dígitos sem pontuação)
-   - RG (número e órgão emissor)
-   - Data de nascimento (formato YYYY-MM-DD)
-   - Endereço completo (rua, número, bairro, cidade, UF, CEP)
-   - Telefone fixo
-   - Celular/WhatsApp
-   - Estado civil
-
-2. **Dados do Cônjuge (se mencionado):**
-   - Nome completo
-   - CPF
-   - Data de casamento (formato YYYY-MM-DD)
-
-3. **Dados de Filhos/Dependentes (se mencionados):**
-   - Nome completo do filho(a)
-   - Data de nascimento (formato YYYY-MM-DD)
-   - CPF (se aplicável)
-
-**IMPORTANTE:** Retorne esses campos no objeto \`universalData\` separado dos dados específicos do documento.
-`;
-    
-    // ⏱️ FASE 4: Timeout de 10 segundos para evitar travamentos
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    let aiResponse;
-    try {
-      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${lovableApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash-lite', // ⚡ FASE 1: Modelo 3x mais rápido
-          messages: [
+    // ==================================================================
+    // 4. Chamar a API da OpenAI para análise
+    // ==================================================================
+    console.log(`[DOC ${documentId}] Chamando API da OpenAI...`);
+    const prompt = buildPromptForDocType(currentType, ESPECIALISTA_MATERNIDADE_PROMPT);
+    const openAiRequestBody = {
+      model: "gpt-4-vision-preview",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
             {
-              role: 'system',
-              content: ESPECIALISTA_MATERNIDADE_PROMPT + `
-
-📋 **EXTRAÇÃO DE DOCUMENTOS PREVIDENCIÁRIOS**
-
-Você é especialista em análise de documentos previdenciários brasileiros com foco em:
-• Processos INSS (indeferimentos, concessões)
-• Certidões (nascimento, casamento)
-• Identificação (RG, CPF)
-• Documentos rurais (autodeclarações, ITR, terra)
-• Declarações de saúde/escolares
-
-🎯 **REGRAS DE EXTRAÇÃO:**
-
-1. **Datas:** formato DD/MM/AAAA → YYYY-MM-DD
-2. **CPF:** 11 dígitos, remover pontos/traços
-3. **Protocolo/NB:** geralmente 10+ dígitos
-4. **PROCESSO INSS:** extraia protocolo, datas (requerimento e indeferimento), motivo LITERAL completo
-5. **CERTIDÃO NASCIMENTO:** nome da criança ≠ nome da mãe (são pessoas diferentes)
-6. **DOCUMENTOS TERRA/RURAL:** nome proprietário, CPF, área, períodos, atividades
-
-⚠️ **CRÍTICO:**
-- Extraia TODAS as informações visíveis com precisão máxima
-- SE não estiver visível: omita o campo (NUNCA retorne "Não identificado")
-- SEMPRE use a função extract_document_data fornecida`
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${fileBase64}`,
+                detail: "high",
+              },
             },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `${prompt}
-
-📋 **DADOS UNIVERSAIS** (extrair de TODOS os documentos, se visíveis):
-
-• Nome completo da autora/autor
-• CPF (11 dígitos, sem pontos/traços)
-• RG, Data de nascimento (YYYY-MM-DD)
-• Endereço completo, Telefone/WhatsApp, Estado civil
-• Cônjuge: nome e CPF
-• Filho(a): nome e data de nascimento
-
-Retorne no objeto \`universalData\` separado.
-
-🔍 Use OCR para ler TODAS as informações visíveis. Omita campos não visíveis.`
-                },
-                {
-                  type: 'image_url',
-                  image_url: { url: base64Image }
-                }
-              ]
-            }
           ],
-          tools: [{
-            type: 'function',
-            function: {
-              name: 'extract_document_data',
-              description: 'Extrair dados estruturados do documento',
-              parameters: {
-                type: 'object',
-                properties: {
-                  documentType: { type: 'string', description: 'Tipo do documento' },
-                  extractionConfidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                  extractedData: getSchemaForDocType(docType),
-                  universalData: {
-                    type: 'object',
-                    description: 'Dados universais extraídos de qualquer documento',
-                    properties: {
-                      authorName: { type: 'string' },
-                      authorCpf: { type: 'string' },
-                      authorRg: { type: 'string' },
-                      authorBirthDate: { type: 'string' },
-                      authorAddress: { type: 'string' },
-                      authorPhone: { type: 'string' },
-                      authorWhatsapp: { type: 'string' },
-                      authorMaritalStatus: { type: 'string' },
-                      spouseName: { type: 'string' },
-                      spouseCpf: { type: 'string' },
-                      marriageDate: { type: 'string' },
-                      childName: { type: 'string' },
-                      childBirthDate: { type: 'string' },
-                      childCpf: { type: 'string' }
-                    }
-                  }
-                },
-                required: ['documentType', 'extractionConfidence', 'extractedData']
-              }
-            }
-          }],
-          tool_choice: { type: 'function', function: { name: 'extract_document_data' } }
-        })
-      });
-    } catch (timeoutError: any) {
-      clearTimeout(timeoutId);
-      if (timeoutError.name === 'AbortError') {
-        console.error('[ANALYZE-SINGLE] ⏱️ Timeout de 10s excedido');
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Análise excedeu tempo limite de 10 segundos',
-            documentId,
-            docType: docType || 'outro'
-          }),
-          { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      throw timeoutError;
+        },
+      ],
+      max_tokens: 1024,
+    };
+
+    const openAiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+      },
+      body: JSON.stringify(openAiRequestBody),
+    });
+
+    if (!openAiResponse.ok) {
+      console.error(`[DOC ${documentId}] Erro na resposta da OpenAI:`, openAiResponse.status, openAiResponse.statusText, await openAiResponse.text());
+      throw new Error(`OpenAI API error: ${openAiResponse.statusText}`);
     }
 
-    clearTimeout(timeoutId);
+    const aiData = await openAiResponse.json();
+    const analysisResult = JSON.parse(aiData.choices[0].message.content);
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      throw new Error(`IA falhou: ${aiResponse.status} - ${errorText}`);
-    }
+    console.log(`[DOC ${documentId}] Resposta da OpenAI recebida e parseada.`);
 
-    const aiResult = await aiResponse.json();
-    console.log(`[ANALYZE-SINGLE] ✅ IA respondeu`);
-    console.log(`[ANALYZE-SINGLE] 🔍 Resposta completa da IA:`, JSON.stringify(aiResult, null, 2));
-
-    // 7. Extrair dados da resposta com parsing defensivo
-    const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall?.function?.arguments) {
-      console.warn(`[ANALYZE-SINGLE] ⚠️ IA não retornou tool calls (imagem pode estar ilegível). Resposta:`, JSON.stringify(aiResult.choices?.[0]?.message, null, 2));
-      
-      // ✅ Retornar resultado vazio ao invés de dar erro 500
-      // Isso permite continuar o fluxo mesmo quando a imagem não é processável
-      return new Response(
-        JSON.stringify({
-          success: true,
-          documentId,
-          docType: docType || 'outro',
-          extracted: {},
-          confidence: 'low',
-          validationWarnings: ['⚠️ Não foi possível extrair dados deste documento - imagem pode estar ilegível ou de baixa qualidade'],
-          isValid: true,
-          debug: {
-            modelUsed: 'google/gemini-2.5-flash-lite',
-            processingType: 'failed_extraction',
-            aiMessage: aiResult.choices?.[0]?.message?.content || 'No content'
-          }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    let extracted;
-    try {
-      // Tentar parsear JSON diretamente
-      const rawJson = toolCall.function.arguments;
-      console.log(`[ANALYZE-SINGLE] 🔍 JSON bruto (primeiros 200 chars):`, rawJson.substring(0, 200));
-      
-      // Sanitizar: remover texto após fechamento do JSON principal
-      let cleanJson = rawJson.trim();
-      const lastBrace = cleanJson.lastIndexOf('}');
-      if (lastBrace !== -1 && lastBrace < cleanJson.length - 1) {
-        console.log(`[ANALYZE-SINGLE] ⚠️ JSON tinha texto extra após }, removendo...`);
-        cleanJson = cleanJson.substring(0, lastBrace + 1);
-      }
-      
-      extracted = JSON.parse(cleanJson);
-      console.log(`[ANALYZE-SINGLE] 📋 Dados extraídos:`, JSON.stringify(extracted, null, 2));
-      console.log(`[ANALYZE-SINGLE] 🔍 childName:`, extracted.extractedData?.childName);
-      console.log(`[ANALYZE-SINGLE] 🔍 motherName:`, extracted.extractedData?.motherName);
-      console.log(`[ANALYZE-SINGLE] 🔍 motherCpf:`, extracted.extractedData?.motherCpf);
-      console.log(`[ANALYZE-SINGLE] 🔍 fatherCpf:`, extracted.extractedData?.fatherCpf);
-    } catch (parseError: any) {
-      console.error(`[ANALYZE-SINGLE] ❌ Erro ao parsear JSON:`, parseError.message);
-      console.error(`[ANALYZE-SINGLE] 📄 JSON completo que falhou:`, toolCall.function.arguments);
-      throw new Error(`Falha ao parsear resposta da IA: ${parseError.message}`);
-    }
-
-    // 8. Salvar extração individual (sem campo confidence que não existe)
-    const { error: saveError } = await supabase
-      .from('extractions')
+    // ==================================================================
+    // 5. Salvar os resultados da análise no banco de dados
+    // ==================================================================
+    console.log(`[DOC ${documentId}] Salvando resultados da análise no banco de dados...`);
+    const { error: upsertError } = await supabaseClient
+      .from('document_analysis')
       .upsert({
-        case_id: caseId,
         document_id: documentId,
-        entities: extracted.extractedData || {},
-        extracted_at: new Date().toISOString()
-      });
+        case_id: caseId,
+        analysis_result: analysisResult,
+        model_version: 'gpt-4-vision-preview',
+      }, { onConflict: 'document_id' });
 
-    if (saveError) {
-      console.error('[ANALYZE-SINGLE] ⚠️ Erro ao salvar:', saveError);
-    }
-
-    // 🆕 RENOMEAÇÃO AUTOMÁTICA DE ARQUIVO
-    if (extracted.extractedData && docType !== 'outro') {
-      try {
-        const newFileName = generateIntelligentFileName(docType, extracted.extractedData, doc.file_name);
-        
-        if (newFileName !== doc.file_name) {
-          const { error: renameError } = await supabase
-            .from('documents')
-            .update({ file_name: newFileName })
-            .eq('id', documentId);
-          
-          if (renameError) {
-            console.error('[ANALYZE-SINGLE] ⚠️ Erro ao renomear:', renameError);
-          } else {
-            console.log(`[ANALYZE-SINGLE] 📝 Arquivo renomeado: ${doc.file_name} → ${newFileName}`);
-            // Adicionar ao resultado para feedback no frontend
-            extracted.newFileName = newFileName;
-          }
-        }
-      } catch (error) {
-        console.error('[ANALYZE-SINGLE] ⚠️ Erro ao gerar nome:', error);
-        // Não falhar se renomeação falhar
-      }
+    if (upsertError) {
+      console.error(`[DOC ${documentId}] Erro ao salvar análise no banco de dados:`, upsertError);
+      throw new Error(upsertError.message);
     }
 
-    // 9. SALVAR DADOS GENÉRICOS DE IDENTIFICAÇÃO (qualquer documento) + UNIVERSAIS
-    if (extracted.extractedData) {
-      const genericUpdates: any = {};
-      
-      // ✅ DADOS UNIVERSAIS (se presentes na resposta da IA)
-      if (extracted.universalData) {
-        const ud = extracted.universalData;
-        
-        // Helper: validar formato de data
-        const isValidDate = (dateStr: any): boolean => {
-          if (!dateStr || typeof dateStr !== 'string') return false;
-          return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
-                 !/não|indefinido|identificado|extrair|disponível/i.test(dateStr);
-        };
-        
-        if (ud.authorName) genericUpdates.author_name = ud.authorName;
-        if (ud.authorCpf) genericUpdates.author_cpf = ud.authorCpf.replace(/\D/g, '');
-        if (ud.authorRg) genericUpdates.author_rg = ud.authorRg;
-        if (isValidDate(ud.authorBirthDate)) genericUpdates.author_birth_date = ud.authorBirthDate;
-        if (ud.authorAddress) genericUpdates.author_address = ud.authorAddress;
-        if (ud.authorPhone) genericUpdates.author_phone = ud.authorPhone;
-        if (ud.authorWhatsapp) genericUpdates.author_whatsapp = ud.authorWhatsapp;
-        if (ud.authorMaritalStatus) genericUpdates.author_marital_status = ud.authorMaritalStatus;
-        if (ud.spouseName) genericUpdates.spouse_name = ud.spouseName;
-        if (ud.spouseCpf) genericUpdates.spouse_cpf = ud.spouseCpf.replace(/\D/g, '');
-        if (isValidDate(ud.marriageDate)) genericUpdates.marriage_date = ud.marriageDate;
-        if (ud.childName) genericUpdates.child_name = ud.childName;
-        if (isValidDate(ud.childBirthDate)) genericUpdates.child_birth_date = ud.childBirthDate;
-        if (ud.childCpf) genericUpdates.child_cpf = ud.childCpf.replace(/\D/g, '');
-        
-        console.log(`[ANALYZE-SINGLE] 🌍 Dados universais extraídos:`, Object.keys(genericUpdates));
-      }
-      
-      // CPF do autor (se disponível e válido nos dados específicos do documento)
-      if (extracted.extractedData.cpf && /^\d{11}$/.test(extracted.extractedData.cpf)) {
-        genericUpdates.author_cpf = extracted.extractedData.cpf;
-        console.log(`[ANALYZE-SINGLE] ✅ CPF extraído: ${extracted.extractedData.cpf}`);
-      }
-      
-      // RG do autor (se disponível nos dados específicos)
-      if (extracted.extractedData.rg) {
-        genericUpdates.author_rg = extracted.extractedData.rg;
-        console.log(`[ANALYZE-SINGLE] ✅ RG extraído: ${extracted.extractedData.rg}`);
-      }
-      
-      // Nome completo (se não for texto explicativo)
-      if (extracted.extractedData.fullName && !/não disponível|informação não encontrada/i.test(extracted.extractedData.fullName)) {
-        genericUpdates.author_name = extracted.extractedData.fullName;
-        console.log(`[ANALYZE-SINGLE] ✅ Nome completo extraído: ${extracted.extractedData.fullName}`);
-      }
-      
-      // Data de nascimento (se válida)
-      if (extracted.extractedData.birthDate && /^\d{4}-\d{2}-\d{2}$/.test(extracted.extractedData.birthDate)) {
-        genericUpdates.author_birth_date = extracted.extractedData.birthDate;
-        console.log(`[ANALYZE-SINGLE] ✅ Data de nascimento extraída: ${extracted.extractedData.birthDate}`);
-      }
-      
-      // Salvar dados genéricos se houver
-      if (Object.keys(genericUpdates).length > 0) {
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(genericUpdates)
-          .eq('id', caseId);
-        
-        if (updateError) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar dados genéricos:`, updateError);
-        } else {
-          console.log(`[ANALYZE-SINGLE] ✅ Dados genéricos salvos:`, genericUpdates);
-        }
-      }
-    }
+    console.log(`[DOC ${documentId}] Análise salva no banco de dados.`);
 
-    // 10. Atualizar campos do caso conforme tipo de documento específico
-    if ((docType === 'certidao_nascimento' || docType === 'cartao_vacina') && extracted.extractedData) {
-      const updates: any = {};
-      
-      // Helper: validar se é uma data válida no formato YYYY-MM-DD
-      const isValidDate = (dateStr: string | undefined | null): boolean => {
-        if (!dateStr || typeof dateStr !== 'string') return false;
-        // Regex para YYYY-MM-DD
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!dateRegex.test(dateStr)) return false;
-        // Verificar se é uma data real
-        const date = new Date(dateStr);
-        return date instanceof Date && !isNaN(date.getTime());
-      };
-      
-      // Helper: validar se é texto explicativo (não é um valor extraído)
-      const isExplanationText = (value: string | undefined | null): boolean => {
-        if (!value || typeof value !== 'string') return false;
-        // Se contém frases explicativas, não é um valor válido
-        const explanationPhrases = [
-          'não é possível',
-          'não foi possível',
-          'não consta',
-          'não está',
-          'não é uma certidão',
-          'documento não contém',
-          'informação não disponível'
-        ];
-        const lowerValue = value.toLowerCase();
-        return explanationPhrases.some(phrase => lowerValue.includes(phrase));
-      };
-      
-      // Extrair childName (validar se não é texto explicativo)
-      if (extracted.extractedData.childName && !isExplanationText(extracted.extractedData.childName)) {
-        updates.child_name = extracted.extractedData.childName;
-        console.log(`[ANALYZE-SINGLE] ✅ childName: ${extracted.extractedData.childName}`);
-      }
-      
-      // Extrair childBirthDate (validar formato de data)
-      if (extracted.extractedData.childBirthDate && isValidDate(extracted.extractedData.childBirthDate)) {
-        updates.child_birth_date = extracted.extractedData.childBirthDate;
-        console.log(`[ANALYZE-SINGLE] ✅ childBirthDate: ${extracted.extractedData.childBirthDate}`);
-      } else if (extracted.extractedData.childBirthDate) {
-        console.log(`[ANALYZE-SINGLE] ⚠️ childBirthDate inválida (ignorada): ${extracted.extractedData.childBirthDate.substring(0, 100)}`);
-      }
-      
-      // Extrair motherName (validar se não é texto explicativo)
-      if (extracted.extractedData.motherName && !isExplanationText(extracted.extractedData.motherName)) {
-        updates.author_name = extracted.extractedData.motherName;
-        console.log(`[ANALYZE-SINGLE] ✅ motherName: ${extracted.extractedData.motherName}`);
-      }
-      
-      // Extrair motherCpf (validar formato numérico)
-      if (extracted.extractedData.motherCpf && /^\d{11}$/.test(extracted.extractedData.motherCpf)) {
-        updates.mother_cpf = extracted.extractedData.motherCpf;
-        console.log(`[ANALYZE-SINGLE] ✅ motherCpf: ${extracted.extractedData.motherCpf}`);
-      }
-      
-      // Extrair fatherName (validar se não é texto explicativo)
-      if (extracted.extractedData.fatherName && !isExplanationText(extracted.extractedData.fatherName)) {
-        updates.father_name = extracted.extractedData.fatherName;
-      }
-      
-      // Extrair fatherCpf (validar formato numérico)
-      if (extracted.extractedData.fatherCpf && /^\d{11}$/.test(extracted.extractedData.fatherCpf)) {
-        updates.father_cpf = extracted.extractedData.fatherCpf;
-        console.log(`[ANALYZE-SINGLE] ✅ fatherCpf: ${extracted.extractedData.fatherCpf}`);
-      }
-      
-      // Extrair birthCity e birthState (cartão de vacina)
-      if (extracted.extractedData.birthCity && !isExplanationText(extracted.extractedData.birthCity)) {
-        updates.birth_city = extracted.extractedData.birthCity;
-        console.log(`[ANALYZE-SINGLE] ✅ birthCity: ${extracted.extractedData.birthCity}`);
-      }
-      if (extracted.extractedData.birthState && !isExplanationText(extracted.extractedData.birthState)) {
-        updates.birth_state = extracted.extractedData.birthState;
-        console.log(`[ANALYZE-SINGLE] ✅ birthState: ${extracted.extractedData.birthState}`);
-      }
-
-      if (Object.keys(updates).length > 0) {
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(updates)
-          .eq('id', caseId);
-        
-        if (updateError) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar caso:`, updateError);
-        } else {
-          console.log(`[ANALYZE-SINGLE] 📝 Caso atualizado:`, updates);
-        }
-      }
-    }
-    
-    // 11. Salvar dados de documento_terra
-    if (docType === 'documento_terra' && extracted.extractedData) {
-      const landUpdates: any = {};
-      
-      if (extracted.extractedData.landOwnerName) landUpdates.land_owner_name = extracted.extractedData.landOwnerName;
-      if (extracted.extractedData.landOwnerCpf) landUpdates.land_owner_cpf = extracted.extractedData.landOwnerCpf;
-      if (extracted.extractedData.landOwnerRg) landUpdates.land_owner_rg = extracted.extractedData.landOwnerRg;
-      if (extracted.extractedData.landArea) landUpdates.land_area = extracted.extractedData.landArea;
-      if (extracted.extractedData.landTotalArea) landUpdates.land_total_area = extracted.extractedData.landTotalArea;
-      if (extracted.extractedData.landExploitedArea) landUpdates.land_exploited_area = extracted.extractedData.landExploitedArea;
-      if (extracted.extractedData.landPropertyName) landUpdates.land_property_name = extracted.extractedData.landPropertyName;
-      if (extracted.extractedData.landMunicipality) landUpdates.land_municipality = extracted.extractedData.landMunicipality;
-      if (extracted.extractedData.landITR) landUpdates.land_itr = extracted.extractedData.landITR;
-      if (extracted.extractedData.landCessionType) landUpdates.land_cession_type = extracted.extractedData.landCessionType;
-      if (extracted.extractedData.landOwnershipType) landUpdates.land_ownership_type = extracted.extractedData.landOwnershipType;
-      
-      if (Object.keys(landUpdates).length > 0) {
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(landUpdates)
-          .eq('id', caseId);
-        
-        if (updateError) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar dados da terra:`, updateError);
-        } else {
-          console.log(`[ANALYZE-SINGLE] ✅ Dados da terra salvos:`, landUpdates);
-        }
-      }
-    }
-    
-    // 12. Salvar dados de autodeclaracao_rural
-    if (docType === 'autodeclaracao_rural' && extracted.extractedData) {
-      const ruralUpdates: any = {};
-      
-      // ✅ CORREÇÃO #3: Validar rural_periods antes de salvar
-      if (extracted.extractedData.rural_periods) {
-        const validPeriods = extracted.extractedData.rural_periods.filter((p: any) => {
-          const hasStart = p.startDate && /^\d{4}-\d{2}-\d{2}$/.test(p.startDate);
-          const hasEnd = p.endDate && /^\d{4}-\d{2}-\d{2}$/.test(p.endDate);
-          const hasLocation = p.location || p.municipality;
-          
-          if (!hasStart || !hasEnd || !hasLocation) {
-            console.warn(`[ANALYZE-SINGLE] ⚠️ Período rural inválido descartado:`, p);
-            console.warn(`  - startDate válido: ${hasStart}`);
-            console.warn(`  - endDate válido: ${hasEnd}`);
-            console.warn(`  - localização: ${hasLocation}`);
-            return false;
-          }
-          return true;
-        });
-        
-        if (validPeriods.length === 0) {
-          console.error(`[ANALYZE-SINGLE] ❌ NENHUM período rural válido extraído!`);
-          console.error(`[ANALYZE-SINGLE] 📄 Arquivo: ${doc.file_name}`);
-          console.error(`[ANALYZE-SINGLE] 🔍 Períodos originais:`, extracted.extractedData.rural_periods);
-        } else {
-          ruralUpdates.rural_periods = validPeriods;
-          if (validPeriods.length !== extracted.extractedData.rural_periods.length) {
-            console.warn(`[ANALYZE-SINGLE] ⚠️ ${extracted.extractedData.rural_periods.length - validPeriods.length} período(s) descartado(s) por dados incompletos`);
-          }
-        }
-      }
-      
-      if (extracted.extractedData.family_members) ruralUpdates.family_members = extracted.extractedData.family_members;
-      if (extracted.extractedData.landOwnerName) ruralUpdates.land_owner_name = extracted.extractedData.landOwnerName;
-      if (extracted.extractedData.landOwnerCpf) ruralUpdates.land_owner_cpf = extracted.extractedData.landOwnerCpf;
-      if (extracted.extractedData.landOwnerRg) ruralUpdates.land_owner_rg = extracted.extractedData.landOwnerRg;
-      
-      if (Object.keys(ruralUpdates).length > 0) {
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(ruralUpdates)
-          .eq('id', caseId);
-        
-        if (updateError) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar autodeclaração rural:`, updateError);
-        } else {
-          console.log(`[ANALYZE-SINGLE] ✅ Autodeclaração rural salva:`, ruralUpdates);
-        }
-      }
-    }
-
-    // 13a. Salvar dados de procuração
-    if (docType === 'procuracao' && extracted.extractedData) {
-      const procuracaoUpdates: any = {};
-      
-      // A outorgante (granterName) É a autora do processo
-      if (extracted.extractedData.granterName) {
-        procuracaoUpdates.author_name = extracted.extractedData.granterName;
-      }
-      
-      if (extracted.extractedData.granterCpf) {
-        procuracaoUpdates.author_cpf = extracted.extractedData.granterCpf.replace(/\D/g, '');
-      }
-      
-      if (extracted.extractedData.granterAddress) {
-        procuracaoUpdates.author_address = extracted.extractedData.granterAddress;
-      }
-      
-      // Salvar dados do universalData (extraídos pela IA de qualquer documento)
-      if (extracted.universalData?.authorRg) {
-        procuracaoUpdates.author_rg = extracted.universalData.authorRg;
-      }
-      
-      if (extracted.universalData?.authorAddress && !procuracaoUpdates.author_address) {
-        procuracaoUpdates.author_address = extracted.universalData.authorAddress;
-      }
-      
-      if (extracted.universalData?.authorMaritalStatus) {
-        procuracaoUpdates.author_marital_status = extracted.universalData.authorMaritalStatus;
-      }
-      
-      if (Object.keys(procuracaoUpdates).length > 0) {
-        console.log('[ANALYZE-SINGLE] 📝 Salvando dados da procuração:', procuracaoUpdates);
-        
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(procuracaoUpdates)
-          .eq('id', caseId);
-        
-        if (updateError) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao salvar procuração:`, updateError);
-        } else {
-          console.log(`[ANALYZE-SINGLE] ✅ Procuração salva com sucesso`);
-        }
-      }
-    }
-
-    // 13b. Salvar dados de identificação (RG/CPF)
-    if (docType === 'identificacao' && extracted.extractedData) {
-      const idUpdates: any = {};
-      
-      // Helper para validar datas
-      const isValidDate = (dateStr: any): boolean => {
-        if (!dateStr || typeof dateStr !== 'string') return false;
-        return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
-               !/não|indefinido|identificado|extrair|disponível/i.test(dateStr);
-      };
-      
-      if (extracted.extractedData.fullName) {
-        idUpdates.author_name = extracted.extractedData.fullName;
-      }
-      
-      if (extracted.extractedData.cpf && /^\d{11}$/.test(extracted.extractedData.cpf)) {
-        idUpdates.author_cpf = extracted.extractedData.cpf;
-      }
-      
-      if (extracted.extractedData.rg) {
-        idUpdates.author_rg = extracted.extractedData.rg;
-      }
-      
-      if (isValidDate(extracted.extractedData.birthDate)) {
-        idUpdates.author_birth_date = extracted.extractedData.birthDate;
-      }
-      
-      // ✅ CORRIGIDO: Nome da mãe não é CPF
-      if (extracted.extractedData.motherName) {
-        idUpdates.mother_name = extracted.extractedData.motherName;
-      }
-      
-      if (extracted.extractedData.motherCpf && /^\d{11}$/.test(extracted.extractedData.motherCpf)) {
-        idUpdates.mother_cpf = extracted.extractedData.motherCpf;
-      }
-      
-      // Salvar dados do universalData (extraídos pela IA de qualquer documento)
-      if (extracted.universalData?.authorAddress) {
-        idUpdates.author_address = extracted.universalData.authorAddress;
-      }
-      
-      if (extracted.universalData?.authorMaritalStatus) {
-        idUpdates.author_marital_status = extracted.universalData.authorMaritalStatus;
-      }
-      
-      if (extracted.universalData?.authorPhone) {
-        idUpdates.author_phone = extracted.universalData.authorPhone;
-      }
-      
-      if (Object.keys(idUpdates).length > 0) {
-        console.log('[ANALYZE-SINGLE] 📝 Salvando dados de identificação:', idUpdates);
-        
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(idUpdates)
-          .eq('id', caseId);
-        
-        if (updateError) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao salvar identificação:`, updateError);
-        } else {
-          console.log(`[ANALYZE-SINGLE] ✅ Identificação salva com sucesso`);
-        }
-      }
-    }
-
-    // 13c. Salvar dados de processo administrativo
-    if (docType === 'processo_administrativo' && extracted.extractedData) {
-      const raUpdates: any = {};
-      
-      // Helper para validar datas
-      const isValidDate = (dateStr: any): boolean => {
-        if (!dateStr || typeof dateStr !== 'string') return false;
-        return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && 
-               !/não|indefinido|identificado|extrair|disponível|aplicável/i.test(dateStr);
-      };
-      
-      if (extracted.extractedData.raProtocol && extracted.extractedData.raProtocol !== 'Não aplicável') {
-        raUpdates.ra_protocol = extracted.extractedData.raProtocol;
-      }
-      
-      if (isValidDate(extracted.extractedData.raRequestDate)) {
-        raUpdates.ra_request_date = extracted.extractedData.raRequestDate;
-      }
-      
-      if (isValidDate(extracted.extractedData.raDenialDate)) {
-        raUpdates.ra_denial_date = extracted.extractedData.raDenialDate;
-      }
-      
-      if (extracted.extractedData.raDenialReason && extracted.extractedData.raDenialReason !== 'Não aplicável') {
-        raUpdates.ra_denial_reason = extracted.extractedData.raDenialReason;
-      }
-      
-      if (extracted.extractedData.benefitType && extracted.extractedData.benefitType !== 'Não aplicável') {
-        raUpdates.benefit_type = extracted.extractedData.benefitType;
-      }
-      
-      if (Object.keys(raUpdates).length > 0) {
-        console.log('[ANALYZE-SINGLE] 📝 Salvando dados do processo administrativo:', raUpdates);
-        
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(raUpdates)
-          .eq('id', caseId);
-        
-        if (updateError) {
-          console.error(`[ANALYZE-SINGLE] ❌ Erro ao salvar processo administrativo:`, updateError);
-        } else {
-          console.log(`[ANALYZE-SINGLE] ✅ Processo administrativo salvo com sucesso`);
-        }
-      }
-    }
-
-    // 13. Salvar dados de historico_escolar
-    if (docType === 'historico_escolar' && extracted.extractedData?.school_history) {
-      const { error: updateError } = await supabase
-        .from('cases')
-        .update({ school_history: extracted.extractedData.school_history })
-        .eq('id', caseId);
-      
-      if (updateError) {
-        console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar histórico escolar:`, updateError);
-      } else {
-        console.log(`[ANALYZE-SINGLE] ✅ Histórico escolar salvo:`, extracted.extractedData.school_history);
-      }
-    }
-    
-    // 14. Salvar dados de declaracao_saude_ubs
-    if (docType === 'declaracao_saude_ubs' && extracted.extractedData?.health_declaration_ubs) {
-      const { error: updateError } = await supabase
-        .from('cases')
-        .update({ health_declaration_ubs: extracted.extractedData.health_declaration_ubs })
-        .eq('id', caseId);
-      
-      if (updateError) {
-        console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar declaração de saúde:`, updateError);
-      } else {
-        console.log(`[ANALYZE-SINGLE] ✅ Declaração de saúde salva:`, extracted.extractedData.health_declaration_ubs);
-      }
-    }
-
-    console.log('[ANALYZE-SINGLE] ✅ Documento processado com sucesso');
-    
-    // ✅ FASE 1: VALIDAÇÃO PÓS-EXTRAÇÃO
-    const validation = validateExtractedData(extracted.extractedData, docType);
-    
-    if (validation.warnings.length > 0) {
-      console.log('[ANALYZE-SINGLE] ⚠️ Avisos de validação:', validation.warnings);
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        documentId,
-        docType,
-        extracted: extracted.extractedData,
-        confidence: extracted.extractionConfidence,
-        validationWarnings: validation.warnings,
-        isValid: validation.valid,
-        debug: {
-          modelUsed: 'google/gemini-2.5-flash',
-          processingType: 'visual_ocr'
-        }
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // ==================================================================
+    // 6. Sistema de Nomenclatura Inteligente
+    // ==================================================================
+    console.log(`[DOC ${documentId}] Gerando novo nome de arquivo...`);
+    const newFileName = generateIntelligentFileName(
+      currentType,
+      analysisResult,
+      originalFileName
     );
+
+    if (!newFileName) {
+      console.warn(`[DOC ${documentId}] Não foi possível gerar um novo nome de arquivo. Mantendo o original.`);
+    }
+
+    // ==================================================================
+    // 7. Renomear o arquivo no storage (se o nome for diferente)
+    // ==================================================================
+    let newFilePath = filePath;
+    if (newFileName && newFileName !== originalFileName) {
+      console.log(`[DOC ${documentId}] Renomeando arquivo no storage para: ${newFileName}`);
+      const newPath = filePath.substring(0, filePath.lastIndexOf('/') + 1) + newFileName;
+
+      const { data: moveData, error: moveError } = await supabaseClient.storage
+        .from('case-documents')
+        .move(filePath, newPath);
+
+      if (moveError) {
+        console.error(`[DOC ${documentId}] Erro ao renomear arquivo no storage:`, moveError);
+        throw new Error(moveError.message);
+      }
+
+      newFilePath = newPath;
+      console.log(`[DOC ${documentId}] Arquivo renomeado no storage para: ${newPath}`);
+    }
+
+    // ==================================================================
+    // 8. Atualizar o nome do arquivo no banco de dados (se renomeado)
+    // ==================================================================
+    if (newFileName && newFileName !== originalFileName) {
+      console.log(`[DOC ${documentId}] Atualizando nome do arquivo no banco de dados para: ${newFileName}`);
+      const { error: updateError } = await supabaseClient
+        .from('documents')
+        .update({ file_name: newFileName, file_path: newFilePath })
+        .eq('id', documentId);
+
+      if (updateError) {
+        console.error(`[DOC ${documentId}] Erro ao atualizar nome do arquivo no banco de dados:`, updateError);
+        throw new Error(updateError.message);
+      }
+
+      console.log(`[DOC ${documentId}] Nome do arquivo atualizado no banco de dados.`);
+    }
+
+    // ==================================================================
+    // 9. Responder com sucesso
+    // ==================================================================
+    console.log(`[DOC ${documentId}] Análise concluída com sucesso.`);
+    return new Response(
+      JSON.stringify({ 
+        message: "Análise concluída com sucesso", 
+        documentId, 
+        newFileName 
+      }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
 
   } catch (error: any) {
-    console.error('[ANALYZE-SINGLE] ❌ Erro:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Erro durante a execução da função:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
-
-// ✅ FASE 1: FUNÇÃO DE VALIDAÇÃO PÓS-EXTRAÇÃO COM CONHECIMENTO JURÍDICO
-function validateExtractedData(extracted: any, docType: string): { valid: boolean; warnings: string[] } {
-  const warnings: string[] = [];
-  
-  // Validar certidão de nascimento
-  if (docType === 'certidao_nascimento') {
-    if (extracted.childName === extracted.motherName) {
-      warnings.push('⚠️ Nome da criança igual ao da mãe - provavelmente erro de extração');
-    }
-    
-    if (extracted.childBirthDate && new Date(extracted.childBirthDate) > new Date()) {
-      warnings.push('❌ Data de nascimento da criança no futuro - erro crítico');
-    }
-    
-    if (!extracted.motherName || !extracted.childName) {
-      warnings.push('❌ Dados críticos faltando (mãe ou criança)');
-    }
-  }
-  
-  // Validar CPF
-  if (extracted.motherCpf && extracted.motherCpf.replace(/\D/g, '').length !== 11) {
-    warnings.push('⚠️ CPF da mãe inválido (não tem 11 dígitos)');
-  }
-  
-  // Validar propriedade rural
-  if (docType === 'documento_terra') {
-    if (!extracted.landOwnerName) {
-      warnings.push('❌ Nome do proprietário não encontrado');
-    }
-    if (!extracted.landOwnerCpf) {
-      warnings.push('⚠️ CPF do proprietário não encontrado - verifique manualmente');
-    }
-  }
-  
-  return {
-    valid: warnings.filter(w => w.startsWith('❌')).length === 0,
-    warnings
-  };
-}
-
-// Classificar tipo de documento baseado no nome
-function classifyDocument(fileName: string): string {
-  const lower = fileName.toLowerCase();
-  
-  // 🔥 PRIORIDADE ALTA: Detectar nomes truncados DOS 8.3 (cert~1, certid~1, etc)
-  if (/(cert|certid|nasc|nascimento|dn)/i.test(lower)) return 'certidao_nascimento';
-  if (/(procura[cç][aã]o|poder|outorga)/i.test(lower)) return 'procuracao';
-  if (/(rg|identidade|cnh|carteira)/i.test(lower)) return 'identificacao';
-  if (/(cpf)/i.test(lower)) return 'identificacao';
-  if (/(comprovante.*resid|endere[cç]o|conta.*luz|agua|telefone)/i.test(lower)) return 'comprovante_residencia';
-  if (/(autodeclara[cç][aã]o|declara[cç][aã]o.*rural)/i.test(lower)) return 'autodeclaracao_rural';
-  if (/(documento.*terra|posse|propriedade|matricula|escritura|contrato.*compra)/i.test(lower)) return 'documento_terra';
-  if (/(cnis|cadastro.*informa[cç])/i.test(lower)) return 'cnis';
-  if (/(processo|indeferi|indeferimento|requerimento|beneficio|despacho|decisao)/i.test(lower)) return 'processo_administrativo';
-  if (/(hist[oó]rico.*escolar|declara[cç][aã]o.*escola)/i.test(lower)) return 'historico_escolar';
-  if (/(declara[cç][aã]o.*sa[uú]de|ubs|posto.*sa[uú]de)/i.test(lower)) return 'declaracao_saude_ubs';
-  
-  return 'outro';
-}
-
-// Montar prompt específico por tipo
-function buildPromptForDocType(docType: string, fileName: string): string {
-  const basePrompt = `Documento: ${fileName}\nTipo: ${docType}\n\n`;
-  
-  if (docType === 'certidao_nascimento') {
-    return basePrompt + `🚨 CERTIDÃO DE NASCIMENTO - ATENÇÃO MÁXIMA!
-
-**EXTRAIR (não confundir):**
-1. childName: Nome da CRIANÇA (topo do documento)
-2. childBirthDate: Data nascimento (formato YYYY-MM-DD)
-3. motherName: Nome da MÃE (seção "FILIAÇÃO MATERNA" - DIFERENTE da criança!)
-4. motherCpf: CPF da MÃE (apenas números, sem pontos/traços - procurar na seção da mãe)
-5. fatherName: Nome do PAI (seção "FILIAÇÃO PATERNA")
-6. fatherCpf: CPF do PAI (apenas números, sem pontos/traços - procurar na seção do pai)
-
-**REGRAS CRÍTICAS:**
-- childName ≠ motherName (não confundir!)
-- CPFs devem estar no formato numérico puro (ex: "12345678900")
-- Se CPF não estiver visível, deixar em branco (não inventar)`;
-  }
-  
-  if (docType === 'processo_administrativo') {
-    return basePrompt + `🚨 PROCESSO INSS - EXTRAIR:
-- raProtocol: Número do protocolo/NB
-- raRequestDate: Data do requerimento (YYYY-MM-DD)
-- raDenialDate: Data do indeferimento (YYYY-MM-DD)
-- raDenialReason: Motivo completo (copiar literal)`;
-  }
-  
-  if (docType === 'autodeclaracao_rural') {
-    return basePrompt + `🌾 AUTODECLARAÇÃO RURAL - INSTRUÇÕES CRÍTICAS
-
-⚠️ **ATENÇÃO: CAMPOS OBRIGATÓRIOS**
-
-O campo "rural_periods" é OBRIGATÓRIO e DEVE conter:
-
-✅ **startDate** (YYYY-MM-DD) - OBRIGATÓRIO - Data de INÍCIO do trabalho rural
-✅ **endDate** (YYYY-MM-DD) - OBRIGATÓRIO - Data de FIM (ou data atual se ainda trabalha)
-✅ **location** OU **municipality** - OBRIGATÓRIO - Cidade/município onde trabalhou
-
-⚠️ **REGRAS CRÍTICAS:**
-
-1. Se NÃO conseguir extrair **startDate**, **NÃO** adicione o período!
-2. Se NÃO conseguir extrair **endDate**, **NÃO** adicione o período!
-3. Se NÃO conseguir extrair **location/municipality**, **NÃO** adicione o período!
-4. Se o documento estiver ilegível, retorne: { "rural_periods": [] }
-5. Se as datas estiverem parcialmente visíveis, tente inferir (ex: "...2019" → usar "2019-01-01")
-
-**ESTRUTURA ESPERADA:**
-{
-  "rural_periods": [
-    {
-      "startDate": "YYYY-MM-DD",  ← OBRIGATÓRIO
-      "endDate": "YYYY-MM-DD",    ← OBRIGATÓRIO
-      "location": "Município - UF", ← OBRIGATÓRIO
-      "municipality": "Nome do município",
-      "activities": "Plantio de café, milho, criação de gado"
-    }
-  ],
-  "landOwnerName": "Nome completo do proprietário",
-  "landOwnerCpf": "00000000000",
-  "familyMembers": [...]
-}
-
-🔍 **EXEMPLO VÁLIDO:**
-{
-  "rural_periods": [{
-    "startDate": "2015-03-10",
-    "endDate": "2023-12-25",
-    "location": "Zona Rural, Porto Velho - RO",
-    "municipality": "Porto Velho",
-    "activities": "Plantio de café, cacau, criação de porcos"
-  }]
-}
-
-❌ **EXEMPLO INVÁLIDO (será rejeitado):**
-{
-  "rural_periods": [{
-    "activities": "trabalho rural"  ← FALTAM DATAS E LOCALIZAÇÃO!
-  }]
-}`;
-  }
-  
-  if (docType === 'documento_terra') {
-    return basePrompt + `🏡 DOCUMENTO DA TERRA - EXTRAIR:
-
-**INSTRUÇÕES:**
-Extraia todas as informações do documento de propriedade rural (ITR, matrícula, escritura, comodato, etc).
-
-**RETORNAR JSON:**
-{
-  "landOwnerName": "Nome completo do proprietário",
-  "landOwnerCpf": "CPF do proprietário (apenas números)",
-  "landOwnerRg": "RG com órgão expedidor",
-  "landArea": "Área total em hectares (número)",
-  "landTotalArea": "Área total (número)",
-  "landExploitedArea": "Área explorada (número)",
-  "landPropertyName": "Nome da propriedade/sítio/fazenda",
-  "landMunicipality": "Município - UF",
-  "landITR": "Número do ITR se houver",
-  "landCessionType": "Tipo de cessão (próprio, arrendado, comodato, parceria, etc)",
-  "landOwnershipType": "Tipo de posse (proprietário, posseiro, etc)"
-}
-
-**IMPORTANTE:** Extraia TODOS os campos disponíveis no documento.`;
-  }
-  
-  if (docType === 'identificacao') {
-    return basePrompt + `🪪 DOCUMENTO DE IDENTIFICAÇÃO - EXTRAIR:
-- fullName: Nome completo
-- cpf: CPF (apenas números)
-- rg: RG com órgão expedidor
-- birthDate: Data nascimento (YYYY-MM-DD)
-- motherName: Nome da mãe (filiação)`;
-  }
-  
-  if (docType === 'historico_escolar') {
-    return basePrompt + `📚 HISTÓRICO ESCOLAR - EXTRAIR:
-
-**INSTRUÇÕES:**
-Extraia o histórico completo de frequência escolar.
-
-**RETORNAR JSON:**
-{
-  "school_history": [
-    {
-      "institution": "Nome da escola",
-      "year": "Ano letivo",
-      "grade": "Série/Ano",
-      "period": "Período (ex: 2010 a 2011)",
-      "location": "Município/UF"
-    }
-  ]
-}
-
-**IMPORTANTE:** O campo principal deve ser "school_history" como array de períodos escolares.`;
-  }
-  
-  if (docType === 'declaracao_saude_ubs') {
-    return basePrompt + `🏥 DECLARAÇÃO DE SAÚDE UBS - EXTRAIR:
-
-**INSTRUÇÕES:**
-Extraia as informações da declaração de atendimento na UBS/Posto de Saúde.
-
-**RETORNAR JSON:**
-{
-  "health_declaration_ubs": {
-    "patientName": "Nome completo do paciente",
-    "patientCpf": "CPF sem formatação",
-    "patientRg": "RG com órgão expedidor",
-    "declarationDate": "Data da declaração (YYYY-MM-DD)",
-    "healthUnit": "Nome da UBS/Posto de Saúde",
-    "address": "Endereço da UBS",
-    "attendancePeriod": {
-      "start": "Data início atendimento (YYYY-MM-DD)",
-      "end": "Data fim atendimento (YYYY-MM-DD)"
-    },
-    "content": "Conteúdo completo da declaração",
-    "issuedBy": "Nome de quem emitiu/assinou"
-  }
-}
-
-**IMPORTANTE:** O campo principal deve ser "health_declaration_ubs" contendo todos os dados.`;
-  }
-  
-  return basePrompt + `Extraia TODAS as informações visíveis deste documento.`;
-}

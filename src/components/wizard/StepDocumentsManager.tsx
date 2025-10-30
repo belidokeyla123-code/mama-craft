@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
 import { getDocTypeDisplayInfo } from "@/lib/documentNaming";
@@ -659,6 +659,35 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                   </>
                 )}
               </Button>
+
+              <Button
+                onClick={async () => {
+                  const { data, error } = await supabase.functions.invoke('cleanup-case-documents', {
+                    body: { caseId }
+                  });
+                  
+                  if (!error && data?.success) {
+                    toast({
+                      title: "✅ Limpeza concluída",
+                      description: `${data.cleaned} duplicatas removidas, ${data.reprocessing} reprocessando`
+                    });
+                    await loadDocuments();
+                  } else {
+                    toast({
+                      title: "❌ Erro na limpeza",
+                      description: error?.message || "Tente novamente",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                variant="outline"
+                className="gap-2"
+                title="Remove duplicatas e documentos não processados"
+              >
+                <Trash2 className="h-4 w-4" />
+                Limpar Duplicatas
+              </Button>
+
               <Button
                 onClick={handleUploadClick}
                 disabled={isUploading}
@@ -810,7 +839,42 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
-                      )}
+                       )}
+                      
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={async () => {
+                          const { data, error } = await supabase.functions.invoke(
+                            'analyze-single-document',
+                            {
+                              body: {
+                                documentId: doc.id,
+                                caseId,
+                                forceReprocess: true
+                              }
+                            }
+                          );
+                          
+                          if (!error && data?.success) {
+                            toast({
+                              title: "✅ Documento reprocessado",
+                              description: data.newFileName || "Análise atualizada"
+                            });
+                            await loadDocuments();
+                          } else {
+                            toast({
+                              title: "❌ Erro ao reprocessar",
+                              description: error?.message || "Tente novamente",
+                              variant: "destructive"
+                            });
+                          }
+                        }}
+                        title="Reprocessar este documento com IA"
+                        className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
                       
                       <Button
                         variant="ghost"

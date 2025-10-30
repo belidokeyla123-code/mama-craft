@@ -2,6 +2,7 @@ import { CaseData } from "@/pages/NewCase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, TrendingUp, TrendingDown, DollarSign, Scale, Clock, FileQuestion, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -616,53 +617,73 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                   </div>
                 )}
 
-                {/* ✅ Filtrar benefícios anteriores: Só exibir se tiver NB ou tipo válido */}
-                {analysis.cnis_analysis.beneficios_anteriores && 
-                 analysis.cnis_analysis.beneficios_anteriores
-                   .filter((ben: any) => {
-                     // Lista de tipos válidos de benefícios
-                     const validTypes = [
-                       'salário-maternidade', 'salario-maternidade',
-                       'auxílio-doença', 'auxilio-doenca',
-                       'aposentadoria', 'pensão por morte', 'pensao por morte',
-                       'auxílio-acidente', 'auxilio-acidente'
-                     ];
-                     // Só exibir se tem NB (Número de Benefício) OU é tipo válido
-                     const hasNB = ben.nb && ben.nb.trim() !== '';
-                     const isValidType = ben.tipo && validTypes.some(t => 
-                       ben.tipo.toLowerCase().includes(t.toLowerCase())
-                     );
-                     return hasNB || isValidType;
-                   })
-                   .length > 0 && (
-                  <div>
-                    <p className="font-medium mb-2">Benefícios Anteriores</p>
-                    <ul className="list-disc list-inside space-y-1 text-sm">
-                      {analysis.cnis_analysis.beneficios_anteriores
-                        .filter((ben: any) => {
-                          const validTypes = [
-                            'salário-maternidade', 'salario-maternidade',
-                            'auxílio-doença', 'auxilio-doenca',
-                            'aposentadoria', 'pensão por morte', 'pensao por morte',
-                            'auxílio-acidente', 'auxilio-acidente'
-                          ];
-                          const hasNB = ben.nb && ben.nb.trim() !== '';
-                          const isValidType = ben.tipo && validTypes.some(t => 
-                            ben.tipo.toLowerCase().includes(t.toLowerCase())
-                          );
-                          return hasNB || isValidType;
-                        })
-                        .map((ben: any, index: number) => (
-                          <li key={index}>
-                            {ben.tipo}
-                            {ben.nb && ` - NB ${ben.nb}`}
-                            {ben.inicio && ben.fim && ` (${ben.inicio} a ${ben.fim})`}
-                            {ben.data && ` - ${ben.data}`}
-                          </li>
-                        ))}
-                    </ul>
+            {analysis.cnis_analysis.beneficios_anteriores && 
+             analysis.cnis_analysis.beneficios_anteriores
+               .filter((ben: any) => {
+                 // ✅ FILTRO RIGOROSO: Ambos os critérios devem ser atendidos
+                 
+                 // 1. NB válido (formato XXX.XXX.XXX-X)
+                 const nbRegex = /^\d{3}\.\d{3}\.\d{3}-\d$/;
+                 const hasValidNB = ben.nb && 
+                   ben.nb.trim() !== '' && 
+                   nbRegex.test(ben.nb);
+                 
+                 if (!hasValidNB) {
+                   console.log(`[BENEFITS] ❌ Rejeitado (NB inválido): ${JSON.stringify(ben)}`);
+                   return false;
+                 }
+                 
+                 // 2. Tipo válido de benefício previdenciário
+                 const validTypes = [
+                   'salário-maternidade', 'salario-maternidade', 'salário maternidade',
+                   'auxílio-doença', 'auxilio-doenca', 'auxilio doenca',
+                   'aposentadoria',
+                   'pensão por morte', 'pensao por morte',
+                   'auxílio-acidente', 'auxilio-acidente'
+                 ];
+                 
+                 const isValidType = ben.tipo && validTypes.some(t => 
+                   ben.tipo.toLowerCase().includes(t.toLowerCase())
+                 );
+                 
+                 if (!isValidType) {
+                   console.log(`[BENEFITS] ❌ Rejeitado (tipo inválido): ${ben.tipo}`);
+                   return false;
+                 }
+                 
+                 console.log(`[BENEFITS] ✅ Benefício válido: NB ${ben.nb}, tipo ${ben.tipo}`);
+                 return true;
+               })
+               .length > 0 && (
+              <div className="mb-4">
+                <Label className="text-sm font-semibold">Benefícios Anteriores</Label>
+                {analysis.cnis_analysis.beneficios_anteriores
+                  .filter((ben: any) => {
+                    const nbRegex = /^\d{3}\.\d{3}\.\d{3}-\d$/;
+                    const hasValidNB = ben.nb && ben.nb.trim() !== '' && nbRegex.test(ben.nb);
+                    const validTypes = [
+                      'salário-maternidade', 'salario-maternidade', 'salário maternidade',
+                      'auxílio-doença', 'auxilio-doenca', 'auxilio doenca',
+                      'aposentadoria',
+                      'pensão por morte', 'pensao por morte',
+                      'auxílio-acidente', 'auxilio-acidente'
+                    ];
+                    const isValidType = ben.tipo && validTypes.some(t => 
+                      ben.tipo.toLowerCase().includes(t.toLowerCase())
+                    );
+                    return hasValidNB && isValidType;
+                  })
+                  .map((ben: any, idx: number) => (
+                  <div key={idx} className="text-sm text-muted-foreground mb-2 p-3 bg-muted/30 rounded-md">
+                    <div className="font-medium text-foreground">NB: {ben.nb}</div>
+                    <div>Tipo: {ben.tipo}</div>
+                    {ben.inicio && <div>Início: {new Date(ben.inicio).toLocaleDateString('pt-BR')}</div>}
+                    {ben.fim && <div>Fim: {new Date(ben.fim).toLocaleDateString('pt-BR')}</div>}
+                    {ben.status && <div>Status: {ben.status}</div>}
                   </div>
-                )}
+                ))}
+              </div>
+            )}
               </div>
             </Card>
           )}

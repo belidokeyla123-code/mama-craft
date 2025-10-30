@@ -268,6 +268,47 @@ Considere:
       const aiData = await aiResponse.json();
       const analysisResult = JSON.parse(aiData.choices[0].message.content);
 
+      // ✅ PÓS-PROCESSAMENTO: Filtrar benefícios anteriores rigorosamente
+      if (analysisResult.cnis_analysis?.beneficios_anteriores) {
+        console.log('[ANALYZE] 🔍 Filtrando benefícios anteriores...');
+        
+        const validBenefits = analysisResult.cnis_analysis.beneficios_anteriores.filter((ben: any) => {
+          // ✅ Verificar NB válido (formato XXX.XXX.XXX-X)
+          const hasValidNB = ben.nb && 
+            ben.nb.trim() !== '' && 
+            /^\d{3}\.\d{3}\.\d{3}-\d$/.test(ben.nb);
+          
+          if (!hasValidNB) {
+            console.log(`[ANALYZE] ❌ Benefício rejeitado (sem NB válido): ${JSON.stringify(ben)}`);
+            return false;
+          }
+          
+          // ✅ Verificar tipo válido
+          const validTypes = [
+            'salário-maternidade', 'salario-maternidade', 'salário maternidade',
+            'auxílio-doença', 'auxilio-doenca', 'auxilio doenca',
+            'aposentadoria',
+            'pensão por morte', 'pensao por morte',
+            'auxílio-acidente', 'auxilio-acidente'
+          ];
+          
+          const isValidType = ben.tipo && validTypes.some(t => 
+            ben.tipo.toLowerCase().includes(t.toLowerCase())
+          );
+          
+          if (!isValidType) {
+            console.log(`[ANALYZE] ❌ Benefício rejeitado (tipo inválido): ${ben.tipo}`);
+            return false;
+          }
+          
+          console.log(`[ANALYZE] ✅ Benefício válido: NB ${ben.nb}, tipo ${ben.tipo}`);
+          return true;
+        });
+        
+        analysisResult.cnis_analysis.beneficios_anteriores = validBenefits;
+        console.log(`[ANALYZE] 📊 Benefícios válidos: ${validBenefits.length} de ${(analysisResult.cnis_analysis.beneficios_anteriores as any[]).length || 0} originais`);
+      }
+
       // Atualizar RMI e valor_causa no caso
       if (analysisResult.rmi?.valor_final) {
         await supabase
