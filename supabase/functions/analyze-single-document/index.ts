@@ -490,8 +490,27 @@ Retorne esses campos no objeto \`universalData\` separado.
     // 7. Extrair dados da resposta com parsing defensivo
     const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall?.function?.arguments) {
-      console.error(`[ANALYZE-SINGLE] ❌ IA não retornou tool calls. Resposta:`, JSON.stringify(aiResult.choices?.[0]?.message, null, 2));
-      throw new Error('IA não retornou dados estruturados');
+      console.warn(`[ANALYZE-SINGLE] ⚠️ IA não retornou tool calls (imagem pode estar ilegível). Resposta:`, JSON.stringify(aiResult.choices?.[0]?.message, null, 2));
+      
+      // ✅ Retornar resultado vazio ao invés de dar erro 500
+      // Isso permite continuar o fluxo mesmo quando a imagem não é processável
+      return new Response(
+        JSON.stringify({
+          success: true,
+          documentId,
+          docType: docType || 'outro',
+          extracted: {},
+          confidence: 'low',
+          validationWarnings: ['⚠️ Não foi possível extrair dados deste documento - imagem pode estar ilegível ou de baixa qualidade'],
+          isValid: true,
+          debug: {
+            modelUsed: 'google/gemini-2.5-flash',
+            processingType: 'failed_extraction',
+            aiMessage: aiResult.choices?.[0]?.message?.content || 'No content'
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     let extracted;
