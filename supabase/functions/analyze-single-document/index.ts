@@ -406,7 +406,14 @@ Você é um especialista altamente experiente em análise de documentos previden
             content: [
               {
                 type: 'text',
-                text: `${prompt}\n\n📋 **EXTRAÇÃO UNIVERSAL** (aplicável a TODOS os tipos de documento):\n\nAlém das informações específicas, SEMPRE extraia (se visíveis):\n- Nome completo da autora\n- CPF (11 dígitos)\n- RG\n- Data de nascimento (YYYY-MM-DD)\n- Endereço completo\n- Telefone/WhatsApp\n- Estado civil\n- Nome do cônjuge e CPF (se mencionado)\n- Nome do filho(a) e data de nascimento (se mencionado)\n\nRetorne esses campos no objeto \`universalData\` separado.\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Esta é uma IMAGEM de documento\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD (exemplo: "2022-11-19")\n- Para CPF, extraia apenas números (sem pontos/traços)\n- **IMPORTANTE:** Se uma informação NÃO estiver visível no documento, deixe o campo VAZIO ou omita-o completamente\n- **NUNCA** retorne mensagens explicativas como valor de um campo (exemplo: "Não é possível extrair...")\n- **NUNCA** retorne texto descritivo no lugar de valores estruturados\n- Se o documento não corresponder ao tipo esperado, ajuste o documentType e extraia apenas o que é visível\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
+                text: `${prompt}
+
+📋 **EXTRAÇÃO ADICIONAL:**
+Se visível neste documento, extraia também:
+- Nome completo, CPF, RG, data de nascimento, endereço, telefone
+- Nome de cônjuge/filho(a) e respectivas datas
+
+Retorne no campo \`universalData\`. Se não encontrar, deixe vazio.`
               },
               {
                 type: 'image_url',
@@ -747,6 +754,123 @@ Você é um especialista altamente experiente em análise de documentos previden
           console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar autodeclaração rural:`, updateError);
         } else {
           console.log(`[ANALYZE-SINGLE] ✅ Autodeclaração rural salva:`, ruralUpdates);
+        }
+      }
+    }
+
+    // 13a. Salvar dados de procuração
+    if (docType === 'procuracao' && extracted.extractedData) {
+      const procuracaoUpdates: any = {};
+      
+      // A outorgante (granterName) É a autora do processo
+      if (extracted.extractedData.granterName) {
+        procuracaoUpdates.author_name = extracted.extractedData.granterName;
+      }
+      
+      if (extracted.extractedData.granterCpf) {
+        procuracaoUpdates.author_cpf = extracted.extractedData.granterCpf.replace(/\D/g, '');
+      }
+      
+      if (extracted.extractedData.granterAddress) {
+        procuracaoUpdates.author_address = extracted.extractedData.granterAddress;
+      }
+      
+      if (extracted.extractedData.signatureDate) {
+        procuracaoUpdates.procuracao_date = extracted.extractedData.signatureDate;
+      }
+      
+      if (Object.keys(procuracaoUpdates).length > 0) {
+        console.log('[ANALYZE-SINGLE] 📝 Salvando dados da procuração:', procuracaoUpdates);
+        
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update(procuracaoUpdates)
+          .eq('id', caseId);
+        
+        if (updateError) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao salvar procuração:`, updateError);
+        } else {
+          console.log(`[ANALYZE-SINGLE] ✅ Procuração salva com sucesso`);
+        }
+      }
+    }
+
+    // 13b. Salvar dados de identificação (RG/CPF)
+    if (docType === 'identificacao' && extracted.extractedData) {
+      const idUpdates: any = {};
+      
+      if (extracted.extractedData.fullName) {
+        idUpdates.author_name = extracted.extractedData.fullName;
+      }
+      
+      if (extracted.extractedData.cpf && /^\d{11}$/.test(extracted.extractedData.cpf)) {
+        idUpdates.author_cpf = extracted.extractedData.cpf;
+      }
+      
+      if (extracted.extractedData.rg) {
+        idUpdates.author_rg = extracted.extractedData.rg;
+      }
+      
+      if (extracted.extractedData.birthDate && /^\d{4}-\d{2}-\d{2}$/.test(extracted.extractedData.birthDate)) {
+        idUpdates.author_birth_date = extracted.extractedData.birthDate;
+      }
+      
+      if (extracted.extractedData.motherName) {
+        idUpdates.mother_cpf = extracted.extractedData.motherName;
+      }
+      
+      if (Object.keys(idUpdates).length > 0) {
+        console.log('[ANALYZE-SINGLE] 📝 Salvando dados de identificação:', idUpdates);
+        
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update(idUpdates)
+          .eq('id', caseId);
+        
+        if (updateError) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao salvar identificação:`, updateError);
+        } else {
+          console.log(`[ANALYZE-SINGLE] ✅ Identificação salva com sucesso`);
+        }
+      }
+    }
+
+    // 13c. Salvar dados de processo administrativo
+    if (docType === 'processo_administrativo' && extracted.extractedData) {
+      const raUpdates: any = {};
+      
+      if (extracted.extractedData.raProtocol && extracted.extractedData.raProtocol !== 'Não aplicável') {
+        raUpdates.ra_protocol = extracted.extractedData.raProtocol;
+      }
+      
+      if (extracted.extractedData.raRequestDate && extracted.extractedData.raRequestDate !== 'Não aplicável') {
+        raUpdates.ra_request_date = extracted.extractedData.raRequestDate;
+      }
+      
+      if (extracted.extractedData.raDenialDate && extracted.extractedData.raDenialDate !== 'Não aplicável') {
+        raUpdates.ra_denial_date = extracted.extractedData.raDenialDate;
+      }
+      
+      if (extracted.extractedData.raDenialReason && extracted.extractedData.raDenialReason !== 'Não aplicável') {
+        raUpdates.ra_denial_reason = extracted.extractedData.raDenialReason;
+      }
+      
+      if (extracted.extractedData.benefitType && extracted.extractedData.benefitType !== 'Não aplicável') {
+        raUpdates.benefit_type = extracted.extractedData.benefitType;
+      }
+      
+      if (Object.keys(raUpdates).length > 0) {
+        console.log('[ANALYZE-SINGLE] 📝 Salvando dados do processo administrativo:', raUpdates);
+        
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update(raUpdates)
+          .eq('id', caseId);
+        
+        if (updateError) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao salvar processo administrativo:`, updateError);
+        } else {
+          console.log(`[ANALYZE-SINGLE] ✅ Processo administrativo salvo com sucesso`);
         }
       }
     }

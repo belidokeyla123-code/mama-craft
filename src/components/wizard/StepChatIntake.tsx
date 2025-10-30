@@ -1363,25 +1363,90 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
       {/* ✅ FASE 4: Painel de Status Visual */}
       {data.caseId && (
-        <Alert>
-          <CheckCircle className="h-4 w-4" />
-          <AlertDescription>
-            <div className="flex flex-wrap gap-2 text-sm">
-              <span className={data.childName ? 'text-green-600' : 'text-red-600'}>
-                👶 Criança: {data.childName ? '✅' : '❌'}
-              </span>
-              <span className={data.authorName && data.authorName !== 'Processando...' ? 'text-green-600' : 'text-red-600'}>
-                👤 Mãe: {data.authorName && data.authorName !== 'Processando...' ? '✅' : '❌'}
-              </span>
-              <span className={data.authorCpf && data.authorCpf !== '00000000000' ? 'text-green-600' : 'text-red-600'}>
-                🪪 CPF: {data.authorCpf && data.authorCpf !== '00000000000' ? '✅' : '❌'}
-              </span>
-              <span className={data.raProtocol ? 'text-green-600' : 'text-muted-foreground'}>
-                📋 RA: {data.raProtocol ? '✅' : '⚪'}
-              </span>
-            </div>
-          </AlertDescription>
-        </Alert>
+        <>
+          <Alert>
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="flex flex-wrap gap-2 text-sm">
+                <span className={data.childName ? 'text-green-600' : 'text-red-600'}>
+                  👶 Criança: {data.childName ? '✅' : '❌'}
+                </span>
+                <span className={data.authorName && data.authorName !== 'Processando...' ? 'text-green-600' : 'text-red-600'}>
+                  👤 Mãe: {data.authorName && data.authorName !== 'Processando...' ? '✅' : '❌'}
+                </span>
+                <span className={data.authorCpf && data.authorCpf !== '00000000000' ? 'text-green-600' : 'text-red-600'}>
+                  🪪 CPF: {data.authorCpf && data.authorCpf !== '00000000000' ? '✅' : '❌'}
+                </span>
+                <span className={data.raProtocol ? 'text-green-600' : 'text-muted-foreground'}>
+                  📋 RA: {data.raProtocol ? '✅' : '⚪'}
+                </span>
+              </div>
+            </AlertDescription>
+          </Alert>
+
+          <Button
+            onClick={async () => {
+              if (!data.caseId) return;
+              
+              // Buscar documentos importantes que precisam reprocessamento
+              const { data: docs } = await supabase
+                .from('documents')
+                .select('id, file_name, document_type')
+                .eq('case_id', data.caseId)
+                .in('document_type', ['procuracao', 'identificacao', 'processo_administrativo']);
+              
+              if (!docs || docs.length === 0) {
+                toast({
+                  title: "Nenhum documento encontrado",
+                  description: "Envie procuração, RG e processo administrativo primeiro",
+                  variant: "destructive",
+                });
+                return;
+              }
+              
+              setMessages(prev => [...prev, {
+                role: "assistant",
+                content: `🔄 Reprocessando ${docs.length} documento(s): ${docs.map(d => d.file_name).join(', ')}`
+              }]);
+              
+              setIsProcessing(true);
+              
+              // Reprocessar cada documento
+              for (const doc of docs) {
+                const { error } = await supabase.functions.invoke('analyze-single-document', {
+                  body: {
+                    caseId: data.caseId,
+                    documentId: doc.id,
+                    forceDocType: doc.document_type
+                  }
+                });
+                
+                if (error) {
+                  console.error(`Erro ao reprocessar ${doc.file_name}:`, error);
+                }
+              }
+              
+              setIsProcessing(false);
+              
+              // Aguardar 2s e forçar refresh
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('case-updated', { 
+                  detail: { caseId: data.caseId, source: 'reprocess-important-docs' } 
+                }));
+                
+                setMessages(prev => [...prev, {
+                  role: "assistant",
+                  content: `✅ Documentos reprocessados! Verifique a aba "Informações Básicas"`
+                }]);
+              }, 2000);
+            }}
+            variant="outline"
+            className="w-full"
+            disabled={isProcessing}
+          >
+            🔄 Reprocessar Procuração, RG e Processo Administrativo
+          </Button>
+        </>
       )}
 
       {/* ✅ CORREÇÃO #2: Alerta de PDFs não processados */}
