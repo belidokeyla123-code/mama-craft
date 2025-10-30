@@ -111,12 +111,31 @@ export async function callLovableAI(
 /**
  * Parse JSON response with error handling
  */
+/**
+ * Safely parse a JSON response from AI, with fallback
+ * Handles markdown code blocks, Portuguese text prefixes, and malformed JSON
+ */
 export function parseJSONResponse<T>(content: string, fallback?: T): T {
   try {
-    return JSON.parse(content);
+    // 1. Remover markdown code blocks (```json ... ``` ou ``` ... ```)
+    let cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    
+    // 2. Remover texto em português comum antes do JSON
+    cleaned = cleaned.replace(/^(Aqui está|Aqui estão|Segue|Conforme solicitado|Análise do documento)[^{]*/i, '');
+    
+    // 3. Tentar encontrar o primeiro { e o último }
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+    }
+    
+    // 4. Tentar parsear
+    return JSON.parse(cleaned);
   } catch (error) {
     console.error('[AI] JSON parse error:', error);
-    console.error('[AI] Content:', content.substring(0, 200));
+    console.error('[AI] Content (first 500 chars):', content.substring(0, 500));
     
     if (fallback !== undefined) {
       return fallback;
