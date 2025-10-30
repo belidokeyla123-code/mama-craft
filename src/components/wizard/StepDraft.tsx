@@ -1647,23 +1647,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             </Button>
           </>
         )}
-        <Button 
-          onClick={handleProtocolar}
-          disabled={!petition || isProtocoling}
-          className="gap-2 bg-success hover:bg-success/90"
-        >
-          {isProtocoling ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Protocolando...
-            </>
-          ) : (
-            <>
-              <CheckCheck className="h-4 w-4" />
-              Protocolar Ação
-            </>
-          )}
-        </Button>
       </div>
 
       {/* Petição Gerada */}
@@ -2260,6 +2243,24 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           <Button size="lg" onClick={handleSaveFinal} disabled={!petition} className="gap-2">
             <CheckCheck className="h-5 w-5" />
             Salvar Versão Final
+          </Button>
+          <Button 
+            size="lg" 
+            onClick={handleProtocolar}
+            disabled={!petition || isProtocoling}
+            className="gap-2 bg-success hover:bg-success/90"
+          >
+            {isProtocoling ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Protocolando...
+              </>
+            ) : (
+              <>
+                <CheckCheck className="h-5 w-5" />
+                Protocolar Ação
+              </>
+            )}
           </Button>
           <Button 
             size="lg" 
