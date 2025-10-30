@@ -13,7 +13,25 @@ serve(async (req) => {
   }
 
   try {
-    const { caseId } = await req.json();
+    let requestBody;
+    try {
+      const text = await req.text();
+      if (!text || text.trim() === '') {
+        throw new Error('Request body is empty');
+      }
+      requestBody = JSON.parse(text);
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return new Response(JSON.stringify({ 
+        error: 'Invalid request body. Expected JSON with caseId.',
+        code: 'INVALID_REQUEST'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { caseId } = requestBody;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -222,7 +240,18 @@ Use "medium" para documentos complementares.`;
         throw new Error(`AI API error: ${aiResponse.status}`);
       }
 
-      const aiData = await aiResponse.json();
+      let aiData;
+      try {
+        const responseText = await aiResponse.text();
+        if (!responseText || responseText.trim() === '') {
+          throw new Error('AI response is empty');
+        }
+        aiData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Error parsing AI response:', parseError);
+        throw new Error('Invalid AI response format');
+      }
+
       const validationResult = JSON.parse(aiData.choices[0].message.content);
 
       // Adicionar document_id aos itens do checklist com logging detalhado
