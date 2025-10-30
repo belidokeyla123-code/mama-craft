@@ -15,12 +15,13 @@ serve(async (req) => {
 
   try {
     console.log('[EDGE] Parsing request body...');
-    const { petition, judgeAnalysis, caseId, contextDocuments } = await req.json();
+    const { petition, judgeAnalysis, caseId, contextDocuments, tentativaInfo } = await req.json();
     console.log('[EDGE] Petition length:', petition?.length);
     console.log('[EDGE] JudgeAnalysis exists:', !!judgeAnalysis);
     console.log('[EDGE] JudgeAnalysis brechas:', judgeAnalysis?.brechas?.length || 0);
     console.log('[EDGE] Case ID:', caseId);
     console.log('[EDGE] Context documents:', contextDocuments?.length || 0);
+    console.log('[EDGE] Tentativa info:', tentativaInfo);
 
     // ═══════════════════════════════════════════════════════════════
     // 🔥 BUSCAR DADOS DO CASO PARA CONTEXTO TEMPORAL E DOCUMENTOS
@@ -28,7 +29,7 @@ serve(async (req) => {
     let contextoTemporal = '';
     let documentosContexto = '';
     
-    // ═══ FASE 4: CRIAR CONTEXTO DE DOCUMENTOS ═══
+    // ═══ FASE 4: CRIAR CONTEXTO DE DOCUMENTOS (APENAS NOMES, SEM NUMERAÇÃO) ═══
     if (contextDocuments && contextDocuments.length > 0) {
       documentosContexto = `
 
@@ -36,19 +37,18 @@ serve(async (req) => {
 # 📄 DOCUMENTOS ANEXADOS REAIS (CONTEXTO OBRIGATÓRIO)
 
 A seguir está a lista COMPLETA e DEFINITIVA de documentos que estão anexados ao processo.
-Use EXATAMENTE esta lista ao referenciar documentos na petição.
 
 ${contextDocuments.map((doc: any) => 
-  `${doc.numero}: ${doc.nome} (Tipo: ${doc.tipo})`
+  `- ${doc.nome} (Tipo: ${doc.tipo})`
 ).join('\n')}
 
-⚠️ REGRA ABSOLUTA: 
-- NÃO cite documentos que não estão nesta lista
-- NÃO invente números de documentos  
-- Use EXATAMENTE a numeração acima
-- Se a petição mencionar documentos que não existem, REMOVA essas referências
-- Se a petição não mencionar documentos que existem, ADICIONE essas referências
-- Ao argumentar, cite documentos específicos (ex: "conforme Doc. 03, 04 e 07 anexos")
+⚠️ REGRA ABSOLUTA SOBRE DOCUMENTOS:
+- ❌ NÃO use numeração "Doc. 01", "Doc. 02", etc.
+- ✅ Use APENAS o NOME do documento: "Comprovante de Endereço", "Autodeclaração", "Certidão de Nascimento"
+- ✅ Ao citar provas: "conforme Comprovante de Endereço, RG e CPF anexos"
+- ❌ NUNCA escreva: "conforme Doc. 01, Doc. 02 e Doc. 03 anexos"
+- ❌ NÃO cite documentos que não estão nesta lista
+- ❌ NÃO invente documentos que não existem
 
 ═══════════════════════════════════════════════════════════════
 `;
@@ -145,6 +145,8 @@ ${texto}
     }).join('\n---\n') || '';
 
     // 🔥 CONSOLIDAR TODAS AS CORREÇÕES EM UM ÚNICO PROMPT
+    const contextoTentativa = tentativaInfo?.contextoAnterior || '';
+    
     const todasCorrecoes = [
       brechasList && `# 🔴 BRECHAS CRÍTICAS (OBRIGATÓRIO CORRIGIR)\n${brechasList}`,
       pontosFracosList && `# ⚠️ PONTOS FRACOS (FORTALECER ARGUMENTAÇÃO)\n${pontosFracosList}`,
@@ -174,6 +176,18 @@ ${texto}
     }
 
     const prompt = `Você é um advogado previdenciarista SÊNIOR. Sua tarefa é REESCREVER a petição aplicando TODAS as ${totalCorrecoes} correções abaixo.
+
+${tentativaInfo?.numero > 1 ? `
+═══════════════════════════════════════════════════════════════
+⚠️ ATENÇÃO: Esta é a TENTATIVA ${tentativaInfo.numero} de ${3}!
+
+As seguintes correções NÃO foram aplicadas na tentativa anterior.
+VOCÊ PRECISA APLICÁ-LAS AGORA DE FORMA CLARA E VERIFICÁVEL:
+
+${contextoTentativa}
+═══════════════════════════════════════════════════════════════
+` : ''}
+
 ${contextoTemporal}
 ${documentosContexto}
 
@@ -188,6 +202,26 @@ ${todasCorrecoes}
 
 ═══════════════════════════════════════════════════════════════
 
+# 🚨 REGRAS ANTI-ERRO (CRÍTICO!)
+
+❌ **NÃO FAÇA:**
+1. NÃO remova partes corretas da petição
+2. NÃO mude endereçamento se já estiver correto
+3. NÃO altere valor da causa se já estiver correto
+4. NÃO invente documentos que não existem
+5. NÃO cite jurisprudências genéricas sem número de processo
+6. NÃO use placeholders [XXX]
+7. NÃO use numeração "Doc. 01" - use apenas nomes dos documentos
+
+✅ **VOCÊ DEVE:**
+1. Focar APENAS nas correções solicitadas
+2. Manter TUDO que já está correto
+3. Ser ESPECÍFICO (citar documentos pelo nome, leis com artigos, jurisprudências com número)
+4. Expandir argumentações fracas COM SUBSTÂNCIA REAL
+5. Adicionar fundamentação jurídica CONCRETA
+
+═══════════════════════════════════════════════════════════════
+
 # INSTRUÇÕES CRÍTICAS - LEIA COM ATENÇÃO
 
 ⚠️ **IMPORTANTE:** Você DEVE fazer mudanças SUBSTANCIAIS. NÃO seja conservador.
@@ -195,7 +229,7 @@ ${todasCorrecoes}
 ## COMO APLICAR CADA TIPO DE CORREÇÃO:
 
 ### Para BRECHAS:
-- **Probatórias** → Adicione parágrafos citando documentos específicos anexos (ex: "conforme doc. 04, 05 e 07 anexos")
+- **Probatórias** → Adicione parágrafos citando documentos específicos anexos pelo NOME (ex: "conforme Comprovante de Endereço, RG e CPF anexos")
 - **Argumentativas** → Reescreva completamente argumentos fracos com fundamentação jurídica robusta e persuasiva
 - **Jurídicas** → Adicione citações completas de leis, artigos, incisos, súmulas e jurisprudências específicas
 

@@ -17,6 +17,8 @@ import { extractPlaceholders, generatePlaceholderList } from "@/lib/templatePlac
 import { useAutoCorrection } from "@/hooks/useAutoCorrection";
 import { AutoCorrectionProgress } from "@/components/correction/AutoCorrectionProgress";
 import { CorrectionHistory } from "@/components/correction/CorrectionHistory";
+import { DiffDialog } from "@/components/wizard/DiffDialog";
+import { ProgressCard } from "@/components/wizard/ProgressCard";
 
 interface StepDraftProps {
   data: CaseData;
@@ -84,9 +86,243 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [selectedBrechas, setSelectedBrechas] = useState<number[]>([]);
   const [selectedAdaptations, setSelectedAdaptations] = useState<number[]>([]);
   const [selectedAppellateAdaptations, setSelectedAppellateAdaptations] = useState<number[]>([]);
+  
+  // 🆕 ESTADOS PARA SISTEMA DE CORREÇÃO CRITERIOSA
+  const [tentativaAtual, setTentativaAtual] = useState(1);
+  const [ultimaValidacao, setUltimaValidacao] = useState<any>(null);
+  const [showDiff, setShowDiff] = useState(false);
+  const [petitionBefore, setPetitionBefore] = useState('');
+  const [petitionAfter, setPetitionAfter] = useState('');
 
   // 🆕 Hook de Auto-Correção
   const autoCorrection = useAutoCorrection(data.caseId || '');
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 FUNÇÕES AUXILIARES PARA VALIDAÇÃO CRITERIOSA
+  // ═══════════════════════════════════════════════════════════════
+  
+  const extrairPalavrasChave = (texto: string): string[] => {
+    const stopwords = ['o', 'a', 'de', 'da', 'do', 'que', 'e', 'para', 'com', 'em', 'por', 'na', 'no'];
+    const palavras = texto
+      .toLowerCase()
+      .replace(/[^\w\sçáàâãéêíóôõú]/g, '')
+      .split(/\s+/)
+      .filter(p => p.length > 3 && !stopwords.includes(p));
+    
+    return [...new Set(palavras)];
+  };
+  
+  const extractAllDocReferences = (petition: string, documentos: any[]): string[] => {
+    const nomesMencionados = documentos
+      .map(d => d.nome)
+      .filter(nome => petition.toLowerCase().includes(nome.toLowerCase()));
+    return nomesMencionados;
+  };
+  
+  const validateSpecificCorrections = (
+    petitionCorrigida: string,
+    correcoesSolicitadas: {
+      brechas: any[],
+      pontos_fracos: any[],
+      recomendacoes: any[]
+    },
+    documentosExtraidos: any[]
+  ): {
+    success: boolean;
+    detalhes: {
+      brechas_corrigidas: number;
+      brechas_faltando: any[];
+      pontos_fracos_corrigidos: number;
+      pontos_fracos_faltando: any[];
+      recomendacoes_aplicadas: number;
+      recomendacoes_faltando: any[];
+      documentos_corretos: boolean;
+      documentos_faltando: string[];
+    }
+  } => {
+    const resultado = {
+      brechas_corrigidas: 0,
+      brechas_faltando: [],
+      pontos_fracos_corrigidos: 0,
+      pontos_fracos_faltando: [],
+      recomendacoes_aplicadas: 0,
+      recomendacoes_faltando: [],
+      documentos_corretos: true,
+      documentos_faltando: []
+    };
+    
+    // Validar brechas
+    correcoesSolicitadas.brechas?.forEach((brecha: any, i: number) => {
+      let corrigida = false;
+      
+      switch(brecha.tipo) {
+        case 'probatoria':
+          const citaDocumentos = /comprovante|autodeclaração|certidão|documento/i.test(petitionCorrigida);
+          corrigida = citaDocumentos;
+          break;
+          
+        case 'argumentativa':
+          const palavrasChave = extrairPalavrasChave(brecha.sugestao || '');
+          corrigida = palavrasChave.some(palavra => 
+            petitionCorrigida.toLowerCase().includes(palavra.toLowerCase())
+          );
+          break;
+          
+        case 'juridica':
+          const temCitacaoLegal = /art\.|lei|súmula|tema|decreto/i.test(petitionCorrigida);
+          corrigida = temCitacaoLegal;
+          break;
+      }
+      
+      if (corrigida) {
+        resultado.brechas_corrigidas++;
+      } else {
+        resultado.brechas_faltando.push({
+          numero: i + 1,
+          tipo: brecha.tipo,
+          descricao: brecha.descricao
+        });
+      }
+    });
+    
+    // Validar pontos fracos
+    correcoesSolicitadas.pontos_fracos?.forEach((ponto: any, i: number) => {
+      const texto = typeof ponto === 'string' ? ponto : (ponto.descricao || ponto.problema || '');
+      const palavrasChave = extrairPalavrasChave(texto);
+      
+      const melhorado = palavrasChave.length > 0 && palavrasChave.some(palavra =>
+        petitionCorrigida.toLowerCase().includes(palavra.toLowerCase())
+      );
+      
+      if (melhorado) {
+        resultado.pontos_fracos_corrigidos++;
+      } else {
+        resultado.pontos_fracos_faltando.push({
+          numero: i + 1,
+          problema: texto
+        });
+      }
+    });
+    
+    // Validar recomendações
+    correcoesSolicitadas.recomendacoes?.forEach((rec: any, i: number) => {
+      const texto = typeof rec === 'string' ? rec : rec.texto;
+      const palavrasChave = extrairPalavrasChave(texto);
+      
+      const aplicada = palavrasChave.length > 0 && palavrasChave.some(palavra =>
+        petitionCorrigida.toLowerCase().includes(palavra.toLowerCase())
+      );
+      
+      if (aplicada) {
+        resultado.recomendacoes_aplicadas++;
+      } else {
+        resultado.recomendacoes_faltando.push({
+          numero: i + 1,
+          recomendacao: texto
+        });
+      }
+    });
+    
+    // Validar documentos
+    const docsMencionados = extractAllDocReferences(petitionCorrigida, documentosExtraidos);
+    const docsCorretos = documentosExtraidos.map((d: any) => d.nome);
+    
+    docsCorretos.forEach((docCorreto: string) => {
+      if (!docsMencionados.some(mencionado => mencionado.toLowerCase() === docCorreto.toLowerCase())) {
+        resultado.documentos_corretos = false;
+        resultado.documentos_faltando.push(docCorreto);
+      }
+    });
+    
+    // Calcular sucesso geral
+    const totalCorrecoes = 
+      correcoesSolicitadas.brechas.length +
+      correcoesSolicitadas.pontos_fracos.length +
+      correcoesSolicitadas.recomendacoes.length;
+      
+    const totalCorrigido = 
+      resultado.brechas_corrigidas +
+      resultado.pontos_fracos_corrigidos +
+      resultado.recomendacoes_aplicadas;
+    
+    const success = (
+      totalCorrigido === totalCorrecoes &&
+      resultado.documentos_corretos
+    );
+    
+    return { success, detalhes: resultado };
+  };
+  
+  const validateQuickly = async () => {
+    if (!petition) {
+      toast.warning('Nenhuma petição para validar');
+      return;
+    }
+    
+    const validationChecks = {
+      tem_enderecamento: /JUIZADO ESPECIAL FEDERAL|VARA FEDERAL/i.test(petition),
+      tem_valor_causa: /R\$\s*\d+[.,]\d{2}/.test(petition),
+      sem_placeholders: !/\[.*?\]/.test(petition),
+      tem_provas: /comprovante|autodeclaração|certidão/i.test(petition)
+    };
+    
+    const totalOk = Object.values(validationChecks).filter(Boolean).length;
+    const percentage = (totalOk / 4) * 100;
+    
+    if (percentage === 100) {
+      toast.success('✅ Validação Rápida: 100% OK!', {
+        description: 'Todos os critérios básicos foram atendidos'
+      });
+    } else {
+      const problemas = Object.entries(validationChecks)
+        .filter(([_, ok]) => !ok)
+        .map(([key, _]) => key.replace('tem_', '').replace('sem_', 'sem ').replace(/_/g, ' '));
+      toast.warning(`⚠️ Validação: ${percentage}%`, {
+        description: `Problemas: ${problemas.join(', ')}`
+      });
+    }
+  };
+  
+  const salvarHistoricoDetalhado = async (
+    result: any,
+    validacao: any,
+    tentativas: number,
+    sucesso: boolean,
+    totalBrechas: number,
+    totalPontosFracos: number,
+    totalRecomendacoes: number
+  ) => {
+    await supabase.from('correction_history').insert({
+      case_id: data.caseId,
+      correction_type: sucesso ? 'iterative_fix_success' : 'iterative_fix_partial',
+      module: 'quality_control_criterioso',
+      changes_summary: JSON.stringify({
+        tentativas_usadas: tentativas,
+        sucesso_completo: sucesso,
+        brechas: {
+          total: totalBrechas,
+          corrigidas: validacao.detalhes.brechas_corrigidas,
+          faltando: validacao.detalhes.brechas_faltando.length
+        },
+        pontos_fracos: {
+          total: totalPontosFracos,
+          corrigidos: validacao.detalhes.pontos_fracos_corrigidos,
+          faltando: validacao.detalhes.pontos_fracos_faltando.length
+        },
+        recomendacoes: {
+          total: totalRecomendacoes,
+          aplicadas: validacao.detalhes.recomendacoes_aplicadas,
+          faltando: validacao.detalhes.recomendacoes_faltando.length
+        },
+        documentos_corretos: validacao.detalhes.documentos_corretos,
+        timestamp: new Date().toISOString()
+      }),
+      before_content: petition.substring(0, 500),
+      after_content: result.petition_corrigida.substring(0, 500),
+      confidence_score: sucesso ? 100 : 70,
+      auto_applied: true
+    });
+  };
 
   // ✅ CORREÇÃO #1: Verificar e regeração automática de petição com placeholders
   useEffect(() => {
@@ -1854,16 +2090,8 @@ ${tabelaDocumentos}
         duration: 7000
       });
 
-      // Reanalisar de forma assíncrona (não bloquear)
-      setTimeout(async () => {
-        try {
-          console.log('[FIX-TABS] 🔄 Iniciando reanálise...');
-          await analyzeWithJudgeModule();
-          toast.success('✅ Revalidação concluída!');
-        } catch (error) {
-          console.error('[FIX-TABS] Erro na reanálise:', error);
-        }
-      }, 1000);
+      // ❌ REMOVIDO: Reanálise automática (causava loop infinito)
+      // Usuário controla quando reanalisar usando botão "🔄 Reanalisar Controle de Qualidade"
       
     } catch (error: any) {
       console.error('[FIX-TABS] ❌ Erro ao corrigir:', error);
@@ -2794,16 +3022,22 @@ ${tabelaDocumentos}
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" onClick={() => analyzeWithJudgeModule()} disabled={analyzingJudge}>
-                  {analyzingJudge ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Analisando...
-                    </>
-                  ) : (
-                    "Analisar como Juiz"
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={validateQuickly} disabled={!petition}>
+                    <Check className="h-4 w-4 mr-2" />
+                    🔍 Validar Rápido
+                  </Button>
+                  <Button variant="outline" onClick={() => analyzeWithJudgeModule()} disabled={analyzingJudge}>
+                    {analyzingJudge ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analisando...
+                      </>
+                    ) : (
+                      "Analisar como Juiz"
+                    )}
+                  </Button>
+                </div>
               </div>
             </CollapsibleTrigger>
 
