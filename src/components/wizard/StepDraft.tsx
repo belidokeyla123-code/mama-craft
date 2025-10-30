@@ -459,7 +459,38 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       return;
     }
 
-    const estado = data.authorAddress?.match(/[A-Z]{2}$/)?.[0] || 'SP';
+    // Prioridade 1: birth_state (validado e salvo)
+    // Prioridade 2: Extrair do endereço (formato variado)
+    // Prioridade 3: Extrair de birth_city (formato "Cidade-UF")
+    // Nunca usar 'SP' como fallback!
+    let estado = data.birthState?.toUpperCase() || '';
+
+    if (!estado) {
+      // Tentar extrair do endereço (aceita: "Porto Velho/RO", "Porto Velho-RO", "Porto Velho, RO")
+      const addressMatch = data.authorAddress?.match(/[,/-]\s*([A-Z]{2})\b/i);
+      if (addressMatch) {
+        estado = addressMatch[1].toUpperCase();
+      }
+    }
+
+    if (!estado && data.birthCity) {
+      // Tentar extrair de birth_city (formato "Porto Velho-RO")
+      const cityMatch = data.birthCity.match(/[/-]\s*([A-Z]{2})\b/i);
+      if (cityMatch) {
+        estado = cityMatch[1].toUpperCase();
+      }
+    }
+
+    if (!estado) {
+      toast.error('❌ Não foi possível identificar o estado. Verifique os dados do caso.');
+      return;
+    }
+
+    console.log('[ADAPT-REGIONAL] Estado identificado:', estado, {
+      birthState: data.birthState,
+      authorAddress: data.authorAddress,
+      birthCity: data.birthCity
+    });
     
     setAdaptingRegional(true);
     try {
