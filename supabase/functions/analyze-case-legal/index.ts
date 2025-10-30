@@ -28,6 +28,10 @@ serve(async (req) => {
 
     if (caseError) throw caseError;
 
+    // 🆕 BUSCAR BENEFÍCIOS MANUAIS
+    const manualBenefits = caseData?.manual_benefits || [];
+    console.log('[ANALYZE] Benefícios manuais encontrados:', manualBenefits.length);
+
     const { data: documents } = await supabase
       .from('documents')
       .select('*')
@@ -160,10 +164,31 @@ ${caseExceptions && caseExceptions.length > 0 ?
   caseExceptions.map(ex => `- ${ex.exception_type}: ${ex.description}`).join('\n') : 
   'Nenhuma situação especial identificada'}
 
-**HISTÓRICO DE BENEFÍCIOS:**
+**BENEFÍCIOS ANTERIORES - ANÁLISE COMPLETA:**
+
+📋 Benefícios Detectados Automaticamente (CNIS/Processo Admin):
 ${benefitHistory && benefitHistory.length > 0 ?
   benefitHistory.map(b => `- NB ${b.nb}: ${b.benefit_type} (${b.start_date} a ${b.end_date}) - Status: ${b.status}`).join('\n') :
-  'Nenhum benefício anterior identificado'}
+  'Nenhum benefício detectado automaticamente'}
+
+✍️ Benefícios Informados Manualmente pela Cliente:
+${manualBenefits && manualBenefits.length > 0 ?
+  manualBenefits.map((b: any) => `- TIPO: ${b.tipo} | PERÍODO: ${b.inicio} a ${b.fim} | NB: ${b.numero_beneficio || 'Não informado'}`).join('\n') :
+  'Nenhum benefício informado manualmente'}
+
+⚠️⚠️⚠️ REGRA CRÍTICA SOBRE SALÁRIO-MATERNIDADE ANTERIOR ⚠️⚠️⚠️
+Se a cliente informou manualmente que recebeu SALÁRIO-MATERNIDADE anteriormente:
+→ Isso é um PONTO FORTE, NÃO um ponto fraco!
+→ Jurisprudência consolidada: Mulher pode receber múltiplos salários-maternidade (um para cada filho)
+→ Art. 71, Lei 8.213/91: Direito a salário-maternidade para CADA gestação
+→ Não há impedimento de receber novo benefício se já recebeu antes
+→ Adicione em "pontos_fortes": "Histórico de salário-maternidade anterior comprova vínculo previdenciário e reforça direito ao novo benefício"
+→ NÃO adicione em "pontos_fracos" nada relacionado a "já recebeu benefício" ou "INSS indeferiu por benefício anterior"
+
+Se INSS indeferiu alegando benefício anterior:
+→ Fundamente que salário-maternidade é POR GESTAÇÃO, não há limite
+→ Cite jurisprudência: TNU-PEDILEF 0506032-44.2012.4.05.8300
+→ Adicione em "recomendacoes": "Fundamentar na inicial que salário-maternidade é devido POR CADA GESTAÇÃO, sem limite de quantidade"
 
 Considere:
 - Para segurada especial: carência dispensada

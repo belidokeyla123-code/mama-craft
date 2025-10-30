@@ -48,6 +48,10 @@ serve(async (req) => {
       .select('*')
       .eq('case_id', caseId);
 
+    // 🆕 BUSCAR BENEFÍCIOS MANUAIS
+    const manualBenefits = caseData?.manual_benefits || [];
+    console.log('[PETITION] Benefícios manuais:', manualBenefits.length);
+
     // ✅ CORREÇÃO #1: Extração robusta de cidade e UF
     let city = '';
     let uf = '';
@@ -175,11 +179,54 @@ serve(async (req) => {
     // Preparar histórico de benefícios para o prompt
     let benefitHistoryText = '';
     if (benefitHistory && benefitHistory.length > 0) {
-      benefitHistoryText = '\n\nBENEFÍCIOS ANTERIORES (já reconhecidos pelo INSS):\n';
+      benefitHistoryText = '\n\n**BENEFÍCIOS ANTERIORES (Automáticos - CNIS/Processo Admin):**\n';
       benefitHistory.forEach(b => {
         benefitHistoryText += `- NB ${b.nb}: ${b.benefit_type} (${b.start_date} a ${b.end_date || 'atual'}) - ${b.status}\n`;
       });
       benefitHistoryText += '🚨 CRÍTICO: Estes benefícios PROVAM que o INSS já reconheceu a qualidade de segurada especial!\n';
+    }
+
+    // Adicionar benefícios manuais
+    if (manualBenefits && manualBenefits.length > 0) {
+      benefitHistoryText += '\n**BENEFÍCIOS ANTERIORES (Informados Manualmente pela Cliente):**\n';
+      manualBenefits.forEach((b: any) => {
+        benefitHistoryText += `- TIPO: ${b.tipo}\n`;
+        benefitHistoryText += `  PERÍODO: ${new Date(b.inicio).toLocaleDateString('pt-BR')} até ${new Date(b.fim).toLocaleDateString('pt-BR')}\n`;
+        if (b.numero_beneficio) {
+          benefitHistoryText += `  NÚMERO DO BENEFÍCIO: ${b.numero_beneficio}\n`;
+        }
+      });
+
+      // Detectar se há salário-maternidade anterior
+      const hasSalarioMaternidade = manualBenefits.some((b: any) => 
+        b.tipo?.toLowerCase().includes('maternidade') || b.tipo?.toLowerCase().includes('salário')
+      );
+
+      if (hasSalarioMaternidade) {
+        benefitHistoryText += '\n⚠️⚠️⚠️ INSTRUÇÕES OBRIGATÓRIAS SOBRE SALÁRIO-MATERNIDADE ANTERIOR ⚠️⚠️⚠️\n\n';
+        benefitHistoryText += '**NA SEÇÃO "DOS FATOS":**\n';
+        benefitHistoryText += '- Mencione que a requerente já recebeu salário-maternidade anteriormente\n';
+        benefitHistoryText += '- Deixe claro que foi por OUTRA GESTAÇÃO\n\n';
+        
+        benefitHistoryText += '**NA SEÇÃO "DO DIREITO":**\n';
+        benefitHistoryText += '- Crie subseção específica: "DO DIREITO AO SALÁRIO-MATERNIDADE POR CADA GESTAÇÃO"\n';
+        benefitHistoryText += '- Fundamente no Art. 71, Lei 8.213/91: "O salário-maternidade é devido à segurada da Previdência Social, durante 120 (cento e vinte) dias"\n';
+        benefitHistoryText += '- Argumente: "O benefício é devido A CADA GESTAÇÃO, não havendo limite legal de quantidade"\n';
+        benefitHistoryText += '- Cite precedente: TNU-PEDILEF 0506032-44.2012.4.05.8300\n';
+        benefitHistoryText += '- Explique: "O fato de a requerente já ter recebido salário-maternidade anteriormente não impede o deferimento do presente pedido, pois trata-se de NOVA GESTAÇÃO, gerando NOVO FATO GERADOR"\n\n';
+        
+        benefitHistoryText += '**ANTECIPAÇÃO DE DEFESA:**\n';
+        benefitHistoryText += 'Se o INSS indeferiu alegando "benefício anterior", refute diretamente:\n';
+        benefitHistoryText += '"O indeferimento baseado na existência de benefício anterior é ILEGAL, pois:\n';
+        benefitHistoryText += 'a) Não há vedação legal ao recebimento de múltiplos salários-maternidade\n';
+        benefitHistoryText += 'b) Cada gestação constitui fato gerador autônomo\n';
+        benefitHistoryText += 'c) Jurisprudência consolidada admite o pagamento do benefício mesmo com histórico anterior"\n\n';
+        
+        benefitHistoryText += '**NO PEDIDO:**\n';
+        benefitHistoryText += '- Inclua pedido subsidiário sobre reconhecimento do direito independente de benefício anterior\n\n';
+        
+        benefitHistoryText += '**IMPORTANTE:** Transforme o que seria "ponto fraco" em FUNDAMENTO FAVORÁVEL!\n';
+      }
     }
 
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}

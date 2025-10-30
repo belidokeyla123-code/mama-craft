@@ -29,6 +29,16 @@ serve(async (req) => {
       .single();
     
     console.log('[JURISPRUDENCE] Caso carregado:', caseData?.profile, caseData?.event_type);
+
+    // 🆕 BUSCAR BENEFÍCIOS MANUAIS
+    const manualBenefits = caseData?.manual_benefits || [];
+    console.log('[JURISPRUDENCE] Benefícios manuais:', manualBenefits.length);
+
+    // Buscar histórico de benefícios
+    const { data: benefitHistory } = await supabase
+      .from('benefit_history')
+      .select('*')
+      .eq('case_id', caseId);
     
     // 2. Buscar análise jurídica completa
     const { data: analysisData } = await supabase
@@ -148,6 +158,21 @@ ${draftPayload?.recomendacoes?.length > 0
 ${documents && documents.length > 0 
   ? documents.map(d => `- ${d.document_type} (${d.file_name})`).join('\n')
   : '- Nenhum documento juntado'}
+
+## BENEFÍCIOS ANTERIORES
+Automáticos: ${benefitHistory?.length || 0}
+Manuais: ${manualBenefits?.length || 0}
+
+${manualBenefits && manualBenefits.length > 0 ? `
+📋 Benefícios Informados Manualmente:
+${manualBenefits.map((b: any) => `- ${b.tipo}: ${b.inicio} a ${b.fim}`).join('\n')}
+
+⚠️ SE HOUVER SALÁRIO-MATERNIDADE ANTERIOR:
+- Busque jurisprudências sobre "múltiplos salários-maternidade"
+- Busque TNU-PEDILEF sobre salário-maternidade por gestação
+- Busque precedentes que confirmam direito a benefício mesmo com histórico anterior
+- Priorize julgados que afastem tese de "duplicidade de benefício"
+` : ''}
 
 ---
 

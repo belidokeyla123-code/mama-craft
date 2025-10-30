@@ -84,11 +84,33 @@ Deno.serve(async (req) => {
       .eq('case_id', caseId)
       .maybeSingle();
 
+    // 🆕 BUSCAR BENEFÍCIOS MANUAIS
+    const manualBenefits = caseData?.manual_benefits || [];
+    console.log('[TESE] Benefícios manuais:', manualBenefits.length);
+
     const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
 ${ESPECIALISTA_TESE_PROMPT}
 
-CASO CONCRETO:
+**CONTEXTO COMPLETO DO CASO:**
+
+📊 Análise: ${analysis ? `Probabilidade ${analysis.draft_payload?.probabilidade_exito?.score}%` : 'Não realizada'}
+
+📋 Benefícios Anteriores:
+${manualBenefits && manualBenefits.length > 0 ? `
+Informados manualmente:
+${manualBenefits.map((b: any) => `- ${b.tipo} (${b.inicio} a ${b.fim})`).join('\n')}
+
+⚠️ ARGUMENTO OBRIGATÓRIO SE HOUVER SALÁRIO-MATERNIDADE ANTERIOR:
+Crie tese específica sobre "Direito ao Salário-Maternidade Independente de Benefícios Anteriores":
+- Art. 71, Lei 8.213/91: Direito ao benefício POR CADA GESTAÇÃO
+- Precedente TNU-PEDILEF 0506032-44.2012.4.05.8300
+- "Salário-maternidade não é benefício continuado, mas sim EVENTO GERADOR por gestação"
+- "Recebimento anterior não impede novo benefício, desde que haja nova gestação"
+- Score de persuasão alto (85%+) porque jurisprudência é consolidada
+` : 'Nenhum benefício anterior informado'}
+
+DADOS DO CASO:
 - Nome: ${caseData.author_name}
 - Perfil: ${caseData.profile}
 - Tipo de Evento: ${caseData.event_type}

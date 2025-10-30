@@ -20,6 +20,17 @@ serve(async (req) => {
 **INFORMAÇÕES BÁSICAS:**
 ${JSON.stringify(caseInfo, null, 2)}
 
+**BENEFÍCIOS ANTERIORES (Manual):**
+${caseInfo?.manual_benefits && caseInfo.manual_benefits.length > 0 ?
+  caseInfo.manual_benefits.map((b: any) => `- ${b.tipo}: ${b.inicio} a ${b.fim}`).join('\n') :
+  'Nenhum informado'}
+
+⚠️ REGRA CRÍTICA: 
+Se houver salário-maternidade anterior informado manualmente:
+→ NÃO liste como "brecha" ou "ponto fraco"
+→ VERIFIQUE se a petição fundamentou corretamente que é direito POR CADA GESTAÇÃO
+→ Se NÃO fundamentou, crie brecha tipo "argumentativa" com sugestão para adicionar Art. 71, Lei 8.213/91 e TNU-PEDILEF 0506032-44.2012.4.05.8300
+
 **DOCUMENTOS ANEXADOS (${documents?.length || 0}):**
 ${documents?.map((d: any) => `
 - Tipo: ${d.document_type}
