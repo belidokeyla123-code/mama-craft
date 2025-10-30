@@ -210,8 +210,11 @@ serve(async (req) => {
   }
 
   try {
-    const { documentId, caseId } = await req.json();
+    const { documentId, caseId, forceDocType } = await req.json();
     console.log(`[ANALYZE-SINGLE] 📄 Analisando documento ${documentId} do caso ${caseId}`);
+    if (forceDocType) {
+      console.log(`[ANALYZE-SINGLE] 🔧 Tipo forçado: ${forceDocType}`);
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -271,9 +274,10 @@ serve(async (req) => {
     const base64Image = `data:${mimeType};base64,${base64}`;
     console.log(`[ANALYZE-SINGLE] 🖼️ Imagem convertida para análise (${(base64.length / 1024).toFixed(1)} KB)`);
 
-    // 4. Classificar tipo (se ainda não classificado)
-    let docType = doc.document_type;
-    if (docType === 'OUTROS' || docType === 'outro') {
+    // 4. Classificar tipo (se ainda não classificado OU se forceDocType foi passado)
+    let docType = forceDocType || doc.document_type;
+    
+    if (!forceDocType && (docType === 'OUTROS' || docType === 'outro')) {
       docType = classifyDocument(doc.file_name);
       console.log(`[ANALYZE-SINGLE] 🏷️ Tipo detectado por filename: ${docType}`);
       
@@ -281,7 +285,7 @@ serve(async (req) => {
       // Especialmente para nomes truncados como CERT~1.PDF que podem ser vários tipos
       const isAmbiguousName = /^[A-Z0-9~]{1,8}\.(pdf|png|jpg)/i.test(doc.file_name);
       
-      if (isAmbiguousName || docType === 'outro') {
+      if (!forceDocType && (isAmbiguousName || docType === 'outro')) {
         console.log(`[ANALYZE-SINGLE] 🤖 Classificação visual iniciando (nome ambíguo: ${isAmbiguousName})...`);
         
         const classifyResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -457,7 +461,50 @@ Você é um especialista altamente experiente em análise de documentos previden
       console.error('[ANALYZE-SINGLE] ⚠️ Erro ao salvar:', saveError);
     }
 
-    // 9. Atualizar campos do caso conforme tipo de documento
+    // 9. SALVAR DADOS GENÉRICOS DE IDENTIFICAÇÃO (qualquer documento)
+    if (extracted.extractedData) {
+      const genericUpdates: any = {};
+      
+      // CPF do autor (se disponível e válido)
+      if (extracted.extractedData.cpf && /^\d{11}$/.test(extracted.extractedData.cpf)) {
+        genericUpdates.author_cpf = extracted.extractedData.cpf;
+        console.log(`[ANALYZE-SINGLE] ✅ CPF extraído: ${extracted.extractedData.cpf}`);
+      }
+      
+      // RG do autor (se disponível)
+      if (extracted.extractedData.rg) {
+        genericUpdates.author_rg = extracted.extractedData.rg;
+        console.log(`[ANALYZE-SINGLE] ✅ RG extraído: ${extracted.extractedData.rg}`);
+      }
+      
+      // Nome completo (se não for texto explicativo)
+      if (extracted.extractedData.fullName && !/não disponível|informação não encontrada/i.test(extracted.extractedData.fullName)) {
+        genericUpdates.author_name = extracted.extractedData.fullName;
+        console.log(`[ANALYZE-SINGLE] ✅ Nome completo extraído: ${extracted.extractedData.fullName}`);
+      }
+      
+      // Data de nascimento (se válida)
+      if (extracted.extractedData.birthDate && /^\d{4}-\d{2}-\d{2}$/.test(extracted.extractedData.birthDate)) {
+        genericUpdates.author_birth_date = extracted.extractedData.birthDate;
+        console.log(`[ANALYZE-SINGLE] ✅ Data de nascimento extraída: ${extracted.extractedData.birthDate}`);
+      }
+      
+      // Salvar dados genéricos se houver
+      if (Object.keys(genericUpdates).length > 0) {
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update(genericUpdates)
+          .eq('id', caseId);
+        
+        if (updateError) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar dados genéricos:`, updateError);
+        } else {
+          console.log(`[ANALYZE-SINGLE] ✅ Dados genéricos salvos:`, genericUpdates);
+        }
+      }
+    }
+
+    // 10. Atualizar campos do caso conforme tipo de documento específico
     if ((docType === 'certidao_nascimento' || docType === 'cartao_vacina') && extracted.extractedData) {
       const updates: any = {};
       
@@ -550,7 +597,7 @@ Você é um especialista altamente experiente em análise de documentos previden
       }
     }
     
-    // 10. Salvar dados de documento_terra
+    // 11. Salvar dados de documento_terra
     if (docType === 'documento_terra' && extracted.extractedData) {
       const landUpdates: any = {};
       
@@ -580,7 +627,7 @@ Você é um especialista altamente experiente em análise de documentos previden
       }
     }
     
-    // 11. Salvar dados de autodeclaracao_rural
+    // 12. Salvar dados de autodeclaracao_rural
     if (docType === 'autodeclaracao_rural' && extracted.extractedData) {
       const ruralUpdates: any = {};
       
@@ -604,7 +651,7 @@ Você é um especialista altamente experiente em análise de documentos previden
       }
     }
 
-    // 12. Salvar dados de historico_escolar
+    // 13. Salvar dados de historico_escolar
     if (docType === 'historico_escolar' && extracted.extractedData?.school_history) {
       const { error: updateError } = await supabase
         .from('cases')
@@ -618,7 +665,7 @@ Você é um especialista altamente experiente em análise de documentos previden
       }
     }
     
-    // 13. Salvar dados de declaracao_saude_ubs
+    // 14. Salvar dados de declaracao_saude_ubs
     if (docType === 'declaracao_saude_ubs' && extracted.extractedData?.health_declaration_ubs) {
       const { error: updateError } = await supabase
         .from('cases')
