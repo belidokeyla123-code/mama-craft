@@ -175,6 +175,59 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     }
   };
 
+  const handleQuickReclassify = async (docType: string) => {
+    try {
+      console.log('[RECLASSIFY] 🔄 Buscando documentos "outro" para reclassificar como:', docType);
+      
+      // Buscar documentos tipo "outro"
+      const { data: outrosDocs } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .eq('document_type', 'outro')
+        .limit(5);
+      
+      if (!outrosDocs || outrosDocs.length === 0) {
+        toast({
+          title: "Nenhum documento encontrado",
+          description: "Não há documentos não identificados para reclassificar.",
+          variant: "default"
+        });
+        return;
+      }
+
+      // Mostrar lista de documentos "outro" para o usuário escolher
+      sonnerToast.info(`Encontrados ${outrosDocs.length} documentos não identificados. Reprocessando como "${docType}"...`);
+
+      // Reprocessar primeiro documento "outro" como o tipo desejado
+      const { error } = await supabase.functions.invoke('analyze-single-document', {
+        body: { 
+          documentId: outrosDocs[0].id,
+          caseId: data.caseId,
+          forceDocType: docType
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Documento reclassificado",
+        description: `"${outrosDocs[0].file_name}" agora é "${docType}"`
+      });
+
+      // Revalidar
+      setTimeout(() => handleValidate(), 2000);
+
+    } catch (error: any) {
+      console.error('[RECLASSIFY] Erro:', error);
+      toast({
+        title: "Erro ao reclassificar",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
 
   if (isValidating || !validationResult) {
     return (
@@ -247,12 +300,26 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
                         </p>
                       )}
                     </div>
-                    <Badge variant={isOk ? "outline" : isCritical ? "destructive" : "secondary"} className={isOk ? "text-success border-success" : ""}>
-                      {isOk ? "✓ Enviado" : "Faltante"}
-                    </Badge>
-                    <Badge variant={isCritical ? 'destructive' : 'secondary'}>
-                      {item.importance}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={isOk ? "outline" : isCritical ? "destructive" : "secondary"} className={isOk ? "text-success border-success" : ""}>
+                        {isOk ? "✓ Enviado" : "Faltante"}
+                      </Badge>
+                      <Badge variant={isCritical ? 'destructive' : 'secondary'}>
+                        {item.importance}
+                      </Badge>
+                      
+                      {/* Botão "Buscar em Outros" para documentos faltantes */}
+                      {!isOk && item.status === 'missing' && (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleQuickReclassify(item.item)}
+                          className="text-xs"
+                        >
+                          🔄 Buscar em "Outros"
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 
                   {/* Botão de exclusão se documento presente */}

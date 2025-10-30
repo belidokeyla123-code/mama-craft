@@ -82,6 +82,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [isReprocessing, setIsReprocessing] = useState(false);
+  const [bypassDuplicateCheck, setBypassDuplicateCheck] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [reclassifyDoc, setReclassifyDoc] = useState<Document | null>(null);
@@ -315,12 +316,19 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   // ✅ Função para verificar duplicatas por nome de arquivo
   const checkForDuplicates = (newFiles: File[]) => {
     const duplicates: string[] = [];
-    const existingFileNames = documents.map(d => d.file_name.toLowerCase());
+    const existingFileNames = documents
+      .map(d => d.file_name.toLowerCase().trim());
     
     newFiles.forEach(file => {
-      const fileName = file.name.toLowerCase();
-      if (existingFileNames.includes(fileName)) {
+      const fileName = file.name.toLowerCase().trim();
+      
+      // ⚠️ APENAS bloquear se for EXATAMENTE o mesmo nome
+      // (Permitir variações como "comprovante.pdf" e "comprovante (1).pdf")
+      const exactMatch = existingFileNames.find(existing => existing === fileName);
+      
+      if (exactMatch) {
         duplicates.push(file.name);
+        console.warn('[UPLOAD] ⚠️ Duplicata exata encontrada:', fileName);
       }
     });
     
@@ -335,17 +343,25 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
-    // 🆕 VERIFICAR DUPLICATAS
-    const duplicates = checkForDuplicates(files);
-    if (duplicates.length > 0) {
-      toast({
-        title: "⚠️ Documentos duplicados detectados",
-        description: `Os seguintes arquivos já foram enviados: ${duplicates.join(', ')}`,
-        variant: "destructive"
-      });
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return; // ⛔ NÃO PERMITE UPLOAD
+    console.log('[UPLOAD] 📤 Arquivos selecionados:', files.map(f => f.name));
+
+    // Verificar duplicatas (apenas se não estiver em modo bypass)
+    if (!bypassDuplicateCheck) {
+      const duplicates = checkForDuplicates(files);
+      if (duplicates.length > 0) {
+        console.error('[UPLOAD] ⚠️ DUPLICATAS BLOQUEADAS:', duplicates);
+        toast({
+          title: "⚠️ Documentos duplicados detectados",
+          description: `Já existe: ${duplicates.join(', ')}. Use "Permitir documentos duplicados" se precisar reupar.`,
+          variant: "destructive",
+          duration: 8000
+        });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
     }
+
+    console.log('[UPLOAD] ✅ Nenhuma duplicata encontrada, iniciando upload...');
 
     setIsUploading(true);
     setUploadProgress("Iniciando upload...");
@@ -433,10 +449,15 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       setUploadProgress("Sincronizando análise...");
       await triggerFullPipeline('Novos documentos adicionados');
       
+      console.log('[UPLOAD] ✅ Upload concluído com sucesso:', uploadedDocs);
+      
       toast({
         title: "🔄 Sincronização completa",
         description: "Validação, análise, jurisprudência e tese atualizadas!"
       });
+
+      // Resetar bypass após upload bem-sucedido
+      setBypassDuplicateCheck(false);
 
       // ✅ Disparar evento global para sincronizar todas as abas
       window.dispatchEvent(new CustomEvent('documents-updated', {
@@ -453,11 +474,12 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       }
 
     } catch (error: any) {
-      console.error("Erro ao enviar documentos:", error);
+      console.error('[UPLOAD] ❌ ERRO NO UPLOAD:', error);
       toast({
-        title: "Erro ao enviar",
-        description: error.message,
+        title: "❌ Erro no upload",
+        description: error.message || "Erro desconhecido ao enviar documentos",
         variant: "destructive",
+        duration: 8000
       });
     } finally {
       setIsUploading(false);
@@ -688,29 +710,26 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       />
       
       <Card className="p-6">
-        <div className="space-y-4">
-          {/* ❌ REMOVIDO: Alerta de documentos classificados como OUTROS */}
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">Documentos Enviados</h3>
-              <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
-            </div>
-            <div className="flex gap-2">
-              {/* ❌ REMOVIDO: Botão "Corrigir Classificação" - movido para ícone individual */}
-              <Button
-                onClick={handleReprocess}
-                disabled={isReprocessing}
-                variant="outline"
-                className="gap-2"
-                title="Reprocessar documentos com IA"
-              >
-                {isReprocessing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Atualizando...
-                  </>
-                ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Documentos Enviados</h3>
+                <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleReprocess}
+                  disabled={isReprocessing}
+                  variant="outline"
+                  className="gap-2"
+                  title="Reprocessar documentos com IA"
+                >
+                  {isReprocessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Atualizando...
+                    </>
+                  ) : (
                   <>
                     <RefreshCw className="h-4 w-4" />
                     Atualizar
@@ -754,6 +773,20 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 )}
               </Button>
             </div>
+          </div>
+
+          {/* Checkbox para permitir duplicatas */}
+          <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg border">
+            <input 
+              type="checkbox" 
+              id="bypass-duplicate"
+              checked={bypassDuplicateCheck}
+              onChange={(e) => setBypassDuplicateCheck(e.target.checked)}
+              className="rounded h-4 w-4"
+            />
+            <label htmlFor="bypass-duplicate" className="text-sm text-muted-foreground cursor-pointer">
+              Permitir documentos duplicados (reupar mesmo se já existe)
+            </label>
           </div>
 
           <div className="space-y-3">

@@ -130,16 +130,6 @@ Extrair:
 - raDenialReason: Motivo literal e completo do indeferimento
 - benefitType: Tipo do benefício solicitado`,
 
-    comprovante_residencia: `🏠 COMPROVANTE DE RESIDÊNCIA
-
-Extrair:
-- holderName: Nome do titular
-- address: Endereço completo
-- city: Cidade
-- state: UF
-- zipCode: CEP
-- referenceDate: Data de referência`,
-
     historico_escolar: `🎓 HISTÓRICO ESCOLAR
 
 Extrair:
@@ -154,7 +144,44 @@ Extrair:
 - patientName: Nome do paciente
 - healthUnit: Nome da UBS/Posto
 - declarationDate: Data da declaração
-- content: Conteúdo da declaração`
+- content: Conteúdo da declaração`,
+
+    comprovante_residencia: `🏠 COMPROVANTE DE RESIDÊNCIA - ATENÇÃO MÁXIMA!
+
+**VOCÊ ESTÁ ANALISANDO UM COMPROVANTE DE RESIDÊNCIA**
+
+Procure por qualquer um destes tipos de documento:
+- 💡 Conta de luz (energia elétrica)
+- 💧 Conta de água
+- 📞 Conta de telefone/internet
+- 🏦 Extrato bancário com endereço
+- 📄 Contrato de aluguel
+- 🏘️ Declaração de residência
+- 📬 Correspondências oficiais (INSS, Receita Federal, etc.)
+
+**EXTRAIR OBRIGATORIAMENTE:**
+{
+  "address": "Endereço COMPLETO (rua, número, complemento, bairro, cidade, UF, CEP)",
+  "addressType": "tipo do comprovante (ex: conta de luz, água, telefone, contrato)",
+  "issueDate": "data de emissão do documento (YYYY-MM-DD)",
+  "holderName": "nome do titular da conta/documento",
+  "referenceMonth": "mês de referência (se aplicável)"
+}
+
+⚠️ REGRAS CRÍTICAS:
+1. Se não conseguir extrair o ENDEREÇO COMPLETO → retorne ERROR
+2. O endereço deve incluir: rua/avenida, número, bairro, cidade e CEP
+3. Se a imagem estiver ilegível → retorne ERROR e peça reenvio
+4. Se não for um comprovante de residência válido → retorne ERROR
+
+EXEMPLO DE RESPOSTA:
+{
+  "address": "Rua das Flores, 123, Apto 45, Centro, Manaus-AM, CEP 69000-000",
+  "addressType": "conta de luz",
+  "issueDate": "2025-10-15",
+  "holderName": "Maria da Silva",
+  "referenceMonth": "2025-10"
+}`
   };
 
   return basePrompt + (specificPrompts[docType] || '');
