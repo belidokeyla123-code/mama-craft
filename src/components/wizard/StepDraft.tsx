@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
 import jsPDF from 'jspdf';
 import { useState, useEffect } from "react";
@@ -75,6 +77,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [applyingIndividualSuggestion, setApplyingIndividualSuggestion] = useState<number | null>(null);
   const [applyingIndividualAdaptation, setApplyingIndividualAdaptation] = useState<number | null>(null);
   const [qualityReport, setQualityReport] = useState<any>(null);
+  const [selectedBrechas, setSelectedBrechas] = useState<number[]>([]);
 
   // ✅ CORREÇÃO #1: Verificar e regeração automática de petição com placeholders
   useEffect(() => {
@@ -765,6 +768,106 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       toast.error('Erro: ' + error.message);
     } finally {
       setApplyingIndividualSuggestion(null);
+    }
+  };
+
+  const applySelectedCorrections = async () => {
+    if (selectedBrechas.length === 0) {
+      toast.error("Selecione pelo menos uma brecha para corrigir");
+      return;
+    }
+    if (!judgeAnalysis) return;
+
+    setApplyingJudgeCorrections(true);
+    
+    try {
+      const totalSelected = selectedBrechas.length;
+      let brechasRestantes = [...judgeAnalysis.brechas];
+      let riscoAtual = judgeAnalysis.risco_improcedencia;
+      
+      // Aplicar cada brecha selecionada em sequência
+      for (let i = 0; i < totalSelected; i++) {
+        const index = selectedBrechas[i];
+        const brecha = judgeAnalysis.brechas[index];
+        
+        toast.info(`Aplicando (${i + 1}/${totalSelected}): ${brecha.tipo}...`, { duration: 2000 });
+        
+        // Invocar edge function para essa brecha
+        const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+          body: {
+            petition,
+            judgeAnalysis: {
+              brechas: [brecha],
+              pontos_fortes: [],
+              pontos_fracos: [],
+              recomendacoes: []
+            }
+          }
+        });
+
+        if (error) throw error;
+
+        if (result?.petition_corrigida) {
+          setPetition(result.petition_corrigida);
+          
+          // Atualizar listas locais
+          brechasRestantes = brechasRestantes.filter((_, i) => i !== index);
+          const reducao = brecha.gravidade === 'alta' ? 15 : 
+                          brecha.gravidade === 'media' ? 10 : 5;
+          riscoAtual = Math.max(0, riscoAtual - reducao);
+          
+          // Salvar versão
+          await supabase.from('drafts').insert({
+            case_id: data.caseId,
+            markdown_content: result.petition_corrigida,
+            payload: { selected_correction: brecha.descricao }
+          });
+        }
+        
+        // Aguardar 800ms entre cada correção
+        if (i < totalSelected - 1) {
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+      }
+      
+      // Atualizar estado final
+      setJudgeAnalysis({
+        ...judgeAnalysis,
+        brechas: brechasRestantes,
+        risco_improcedencia: riscoAtual
+      });
+      
+      // Limpar seleção
+      setSelectedBrechas([]);
+      
+      toast.success(
+        `✅ ${totalSelected} correção(ões) aplicada(s) com sucesso!\n📉 Risco reduzido para ${riscoAtual}%`,
+        { duration: 5000 }
+      );
+      
+      // Flash verde
+      setTimeout(() => {
+        const el = document.querySelector('[data-petition-content]');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el.classList.add('ring-4', 'ring-green-500', 'transition-all');
+          setTimeout(() => el.classList.remove('ring-4', 'ring-green-500'), 2000);
+        }
+      }, 300);
+      
+      // Re-análise automática se aplicou todas as brechas
+      if (totalSelected === judgeAnalysis.brechas.length) {
+        setTimeout(() => {
+          toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
+          setTimeout(() => analyzeWithJudgeModule(true), 1500);
+        }, 2000);
+      }
+      
+    } catch (error: any) {
+      console.error('Erro ao aplicar correções selecionadas:', error);
+      toast.error('Erro ao aplicar correções: ' + error.message);
+    } finally {
+      setApplyingJudgeCorrections(false);
     }
   };
 
@@ -1481,21 +1584,21 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                 )}
                 
                 {/* Botão Aplicar Correções */}
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 pt-4 border-t">
                   <Button 
-                    onClick={applyJudgeCorrections}
-                    disabled={applyingJudgeCorrections}
+                    onClick={applySelectedCorrections}
+                    disabled={selectedBrechas.length === 0 || applyingJudgeCorrections}
                     className="gap-2 bg-orange-600 hover:bg-orange-700"
                   >
                     {applyingJudgeCorrections ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Aplicando {judgeAnalysis?.brechas?.length || 0} correções...
+                        Aplicando {selectedBrechas.length} correções...
                       </>
                     ) : (
                       <>
                         <CheckCheck className="h-4 w-4" />
-                        Aplicar {judgeAnalysis?.brechas?.length || 0} Correções Automaticamente
+                        Aplicar {selectedBrechas.length > 0 ? `${selectedBrechas.length} ` : ''}Correção(ões) Selecionada(s)
                       </>
                     )}
                   </Button>
@@ -1519,22 +1622,79 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                       <AlertTriangle className="h-4 w-4" />
                       Brechas Identificadas
                     </h4>
-                    {judgeAnalysis.brechas.map((brecha, index) => (
-                      <Card key={index} className="p-4 border-l-4" style={{
-                        borderLeftColor: brecha.gravidade === 'alta' ? 'hsl(var(--destructive))' : 
-                                       brecha.gravidade === 'media' ? 'hsl(var(--warning))' : 
-                                       'hsl(var(--muted))'
-                      }}>
-                        <div className="flex items-start justify-between mb-2">
-                          <Badge variant={getSeverityColor(brecha.gravidade) as any}>
-                            {brecha.tipo} - {brecha.gravidade}
+                {/* Controles Globais de Seleção */}
+                <div className="flex items-center justify-between mb-4 p-3 bg-muted/30 rounded-lg border border-border">
+                  <div className="flex items-center gap-4">
+                    <Checkbox 
+                      id="select-all-brechas"
+                      checked={selectedBrechas.length === judgeAnalysis.brechas.length && judgeAnalysis.brechas.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedBrechas(judgeAnalysis.brechas.map((_, i) => i));
+                        } else {
+                          setSelectedBrechas([]);
+                        }
+                      }}
+                    />
+                    <Label htmlFor="select-all-brechas" className="font-medium cursor-pointer text-sm">
+                      {selectedBrechas.length === judgeAnalysis.brechas.length && judgeAnalysis.brechas.length > 0
+                        ? "Desmarcar Todas" 
+                        : "Selecionar Todas"}
+                    </Label>
+                  </div>
+                  
+                  <Badge variant="secondary" className="text-xs">
+                    {selectedBrechas.length} de {judgeAnalysis.brechas.length} selecionada(s)
+                  </Badge>
+                </div>
+
+                {judgeAnalysis.brechas.map((brecha, index) => (
+                  <Card key={index} className="p-4 border-l-4" style={{
+                    borderLeftColor: brecha.gravidade === 'alta' ? 'hsl(var(--destructive))' : 
+                                   brecha.gravidade === 'media' ? 'hsl(var(--warning))' : 
+                                   'hsl(var(--muted))'
+                  }}>
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox de Seleção */}
+                      <Checkbox 
+                        id={`brecha-${index}`}
+                        checked={selectedBrechas.includes(index)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedBrechas([...selectedBrechas, index]);
+                          } else {
+                            setSelectedBrechas(selectedBrechas.filter(i => i !== index));
+                          }
+                        }}
+                        className="mt-1"
+                      />
+                      
+                      {/* Conteúdo da Brecha */}
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 flex-1">
+                            {brecha.gravidade === 'alta' && <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />}
+                            {brecha.gravidade === 'media' && <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />}
+                            {brecha.gravidade === 'baixa' && <Lightbulb className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />}
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-sm">{brecha.tipo}</h4>
+                              <p className="text-sm text-muted-foreground mt-1">{brecha.descricao}</p>
+                            </div>
+                          </div>
+                          <Badge variant={
+                            brecha.gravidade === 'alta' ? 'destructive' : 
+                            brecha.gravidade === 'media' ? 'default' : 
+                            'secondary'
+                          }>
+                            {brecha.gravidade.toUpperCase()}
                           </Badge>
                         </div>
-                        <p className="font-medium mb-1">{brecha.descricao}</p>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Local: {brecha.localizacao}
+                        
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Local:</strong> {brecha.localizacao}
                         </p>
-                        <div className="bg-muted/50 p-3 rounded mt-2">
+                        
+                        <div className="bg-muted/50 p-3 rounded">
                           <p className="text-sm mb-3">
                             <strong>Sugestão:</strong> {brecha.sugestao}
                           </p>
@@ -1554,13 +1714,15 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                               </>
                             ) : (
                               <>
-                                <CheckCheck className="h-3 w-3" />
+                                <Check className="h-3 w-3" />
                                 Aplicar esta Sugestão
                               </>
                             )}
                           </Button>
                         </div>
-                      </Card>
+                      </div>
+                    </div>
+                  </Card>
                     ))}
                   </div>
                 )}
