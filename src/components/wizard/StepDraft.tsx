@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2 } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
@@ -957,7 +957,12 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         .insert({
           case_id: data.caseId,
           markdown_content: currentPetition,
-          payload: { selected_corrections: selectedBrechasData.map(b => b.descricao) }
+          payload: { 
+            selected_corrections: selectedBrechasData.map(b => b.descricao),
+            corrections_applied: true,
+            brechas_corrigidas: selectedBrechas.length,
+            risco_reduzido_para: riscoAtual
+          }
         })
         .select()
         .single();
@@ -969,13 +974,14 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
       console.log('[CORRECTIONS] ✅ Salvo no banco - ID:', savedDraft.id);
       console.log('[CORRECTIONS] ✅ Timestamp:', savedDraft.generated_at);
+      console.log('[CORRECTIONS] ✅ Petition length:', currentPetition.length);
       
       // Limpar seleção
       setSelectedBrechas([]);
       
       toast.success(
-        `✅ ${totalSelected} correção(ões) aplicadas e salvas!\n🔍 Re-analisando...`,
-        { duration: 5000 }
+        `✅ ${totalSelected} correção(ões) aplicadas e salvas! Risco reduzido para ${riscoAtual}%`,
+        { duration: 4000 }
       );
       
       // Flash verde
@@ -988,27 +994,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         }
       }, 300);
       
-      // ✅ SEMPRE RE-ANALISAR (com re-fetch forçado)
-      setTimeout(() => {
-        toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
-        
-        // 🆕 FORÇAR RE-FETCH da petition antes de analisar
-        supabase
-          .from('drafts')
-          .select('markdown_content')
-          .eq('case_id', data.caseId)
-          .order('generated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-          .then(({ data: refetchedDraft }) => {
-            if (refetchedDraft?.markdown_content) {
-              console.log('[CORRECTIONS] 🔄 Re-fetched petition length:', refetchedDraft.markdown_content.length);
-              setPetition(refetchedDraft.markdown_content); // Atualizar state
-            }
-            
-            setTimeout(() => analyzeWithJudgeModule(true), 1000); // Aguardar state update
-          });
-      }, 2000);
+      // ❌ NÃO re-analisar automaticamente - deixar usuário decidir
       
     } catch (error: any) {
       console.error('Erro ao aplicar correções selecionadas:', error);
@@ -1134,28 +1120,39 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         
         setPetition(result.petition_corrigida);
         
-        // Salvar versão corrigida no banco com judge_analysis para integração com Módulo Tribunal
-        const { error: upsertError } = await supabase.from('drafts').upsert({
-          case_id: data.caseId,
-          markdown_content: result.petition_corrigida,
-          payload: { 
-            corrected_by_judge: true, 
-            judge_analysis: judgeAnalysis,
-            timestamp: new Date().toISOString() 
-          } as any
-        });
+        // ✅ Salvar imediatamente no banco (INSERT ao invés de UPSERT)
+        const { data: savedDraft, error: saveError } = await supabase
+          .from('drafts')
+          .insert([{
+            case_id: data.caseId,
+            markdown_content: result.petition_corrigida,
+            payload: { 
+              corrected_by_judge: true, 
+              judge_analysis: judgeAnalysis,
+              all_corrections_applied: true,
+              timestamp: new Date().toISOString() 
+            } as any
+          }])
+          .select()
+          .single();
         
-        if (upsertError) {
-          console.error('[APPLY-CORRECTIONS] Erro ao salvar draft:', upsertError);
+        if (saveError) {
+          console.error('[APPLY-CORRECTIONS] Erro ao salvar:', saveError);
+        } else {
+          console.log('[APPLY-CORRECTIONS] ✅ Salvo no banco - ID:', savedDraft.id);
         }
         
-        // Reduzir risco após aplicar correções
+        // Reduzir risco e LIMPAR todas as brechas
         const newRisk = Math.max(0, (judgeAnalysis.risco_improcedencia || 0) - 15);
-        setJudgeAnalysis(prev => prev ? { ...prev, risco_improcedencia: newRisk } : prev);
+        setJudgeAnalysis(prev => prev ? { 
+          ...prev, 
+          brechas: [], // Limpar todas as brechas
+          risco_improcedencia: newRisk 
+        } : prev);
         
-        toast.success(`✅ ${judgeAnalysis.brechas?.length || 0} correções aplicadas! Petição ${diff > 0 ? 'ampliada' : 'otimizada'} em ${Math.abs(diff)} caracteres. Risco reduzido para ${newRisk}%.`);
+        toast.success(`✅ Todas as correções aplicadas e salvas! Risco reduzido para ${newRisk}%.`);
 
-        // ✅ CORREÇÃO #2: Feedback visual melhorado
+        // ✅ Feedback visual melhorado
         setTimeout(() => {
           const petitionElement = document.querySelector('[data-petition-content]');
           if (petitionElement) {
@@ -1169,14 +1166,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           }
         }, 300);
         
-        // ✨ VALIDAÇÃO AUTOMÁTICA: Re-análise após aplicar todas as correções
-        setTimeout(() => {
-          toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
-          
-          setTimeout(() => {
-            analyzeWithJudgeModule(true); // Re-análise automática
-          }, 1500);
-        }, 2500);
+        // ❌ NÃO re-analisar automaticamente - deixar usuário decidir
+        
       } else {
         console.warn('[APPLY-CORRECTIONS] Resposta sem petition_corrigida:', result);
         toast.error("A função retornou, mas sem conteúdo de petição corrigida.");
@@ -1875,38 +1866,72 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                 
                 {/* Botão Aplicar Correções */}
                 <div className="flex justify-end gap-2 pt-4 border-t">
+                  {judgeAnalysis.brechas.length > 0 && (
+                    <>
+                      <Button 
+                        onClick={() => {
+                          if (window.confirm(`Tem certeza que deseja excluir ${selectedBrechas.length} brecha(s) selecionada(s)? Esta ação não pode ser desfeita.`)) {
+                            deleteSelectedBrechas();
+                          }
+                        }}
+                        disabled={selectedBrechas.length === 0}
+                        variant="destructive"
+                        className="gap-2"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Excluir {selectedBrechas.length > 0 ? `${selectedBrechas.length} ` : ''}Selecionada(s)
+                      </Button>
+                      
+                      <Button 
+                        onClick={applySelectedCorrections}
+                        disabled={selectedBrechas.length === 0 || applyingJudgeCorrections}
+                        className="gap-2 bg-orange-600 hover:bg-orange-700"
+                      >
+                        {applyingJudgeCorrections ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Aplicando {selectedBrechas.length} correções...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCheck className="h-4 w-4" />
+                            Aplicar {selectedBrechas.length > 0 ? `${selectedBrechas.length} ` : ''}Correção(ões) Selecionada(s)
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
+                  
+                  {/* Botão Re-analisar - sempre visível */}
                   <Button 
-                    onClick={() => {
-                      if (window.confirm(`Tem certeza que deseja excluir ${selectedBrechas.length} brecha(s) selecionada(s)? Esta ação não pode ser desfeita.`)) {
-                        deleteSelectedBrechas();
-                      }
-                    }}
-                    disabled={selectedBrechas.length === 0}
-                    variant="destructive"
+                    onClick={() => analyzeWithJudgeModule(true)} 
+                    variant="outline"
+                    disabled={analyzingJudge}
                     className="gap-2"
                   >
-                    <Trash2 className="h-4 w-4" />
-                    Excluir {selectedBrechas.length > 0 ? `${selectedBrechas.length} ` : ''}Selecionada(s)
-                  </Button>
-                  
-                  <Button 
-                    onClick={applySelectedCorrections}
-                    disabled={selectedBrechas.length === 0 || applyingJudgeCorrections}
-                    className="gap-2 bg-orange-600 hover:bg-orange-700"
-                  >
-                    {applyingJudgeCorrections ? (
+                    {analyzingJudge ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Aplicando {selectedBrechas.length} correções...
+                        Re-analisando...
                       </>
                     ) : (
                       <>
-                        <CheckCheck className="h-4 w-4" />
-                        Aplicar {selectedBrechas.length > 0 ? `${selectedBrechas.length} ` : ''}Correção(ões) Selecionada(s)
+                        <RefreshCw className="h-4 w-4" />
+                        Re-analisar Petição
                       </>
                     )}
                   </Button>
                 </div>
+                
+                {judgeAnalysis.brechas.length === 0 && (
+                  <Alert className="bg-green-50 border-green-200">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertTitle className="text-green-800">✅ Petição Sem Brechas</AlertTitle>
+                    <AlertDescription className="text-green-700">
+                      Não foram identificadas brechas nesta versão da petição. Você pode re-analisar quando quiser usando o botão acima.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 {/* Risco de Improcedência */}
                 <div className="space-y-2">
