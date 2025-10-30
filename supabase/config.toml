@@ -5,6 +5,7 @@ verify_jwt = false
 
 [functions.reclassify-documents]
 verify_jwt = false
+timeout = 120
 
 [functions.process-queue-worker]
 verify_jwt = false
@@ -32,12 +33,15 @@ verify_jwt = false
 
 [functions.analyze-case-legal]
 verify_jwt = false
+timeout = 120
 
 [functions.search-jurisprudence]
 verify_jwt = false
+timeout = 180
 
 [functions.generate-petition]
 verify_jwt = false
+timeout = 180
 
 [functions.analyze-petition-judge-view]
 verify_jwt = false
@@ -59,12 +63,14 @@ verify_jwt = false
 
 [functions.generate-tese-juridica]
 verify_jwt = false
+timeout = 120
 
 [functions.apply-judge-corrections]
 verify_jwt = false
 
 [functions.analyze-single-document]
 verify_jwt = false
+timeout = 120
 
 [functions.detect-cnis-situation]
 verify_jwt = false
@@ -80,6 +86,7 @@ verify_jwt = false
 
 [functions.validate-jurisdiction]
 verify_jwt = false
+timeout = 120
 
 [functions.auto-fix-quality]
 verify_jwt = false

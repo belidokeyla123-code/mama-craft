@@ -312,6 +312,21 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     }
   };
 
+  // ✅ Função para verificar duplicatas por nome de arquivo
+  const checkForDuplicates = (newFiles: File[]) => {
+    const duplicates: string[] = [];
+    const existingFileNames = documents.map(d => d.file_name.toLowerCase());
+    
+    newFiles.forEach(file => {
+      const fileName = file.name.toLowerCase();
+      if (existingFileNames.includes(fileName)) {
+        duplicates.push(file.name);
+      }
+    });
+    
+    return duplicates;
+  };
+
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
@@ -319,6 +334,18 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
+
+    // 🆕 VERIFICAR DUPLICATAS
+    const duplicates = checkForDuplicates(files);
+    if (duplicates.length > 0) {
+      toast({
+        title: "⚠️ Documentos duplicados detectados",
+        description: `Os seguintes arquivos já foram enviados: ${duplicates.join(', ')}`,
+        variant: "destructive"
+      });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return; // ⛔ NÃO PERMITE UPLOAD
+    }
 
     setIsUploading(true);
     setUploadProgress("Iniciando upload...");
@@ -689,34 +716,6 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                     Atualizar
                   </>
                 )}
-              </Button>
-
-              <Button
-                onClick={async () => {
-                  const { data, error } = await supabase.functions.invoke('cleanup-case-documents', {
-                    body: { caseId }
-                  });
-                  
-                  if (!error && data?.success) {
-                    toast({
-                      title: "✅ Limpeza concluída",
-                      description: `${data.cleaned} duplicatas removidas, ${data.reprocessing} reprocessando`
-                    });
-                    await loadDocuments();
-                  } else {
-                    toast({
-                      title: "❌ Erro na limpeza",
-                      description: error?.message || "Tente novamente",
-                      variant: "destructive"
-                    });
-                  }
-                }}
-                variant="outline"
-                className="gap-2"
-                title="Remove duplicatas e documentos não processados"
-              >
-                <Trash2 className="h-4 w-4" />
-                Limpar Duplicatas
               </Button>
 
               <Button

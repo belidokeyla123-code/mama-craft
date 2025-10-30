@@ -254,6 +254,30 @@ Use "medium" para documentos complementares.`;
 
       const validationResult = JSON.parse(aiData.choices[0].message.content);
 
+      // ✅ FILTRAR DOCUMENTOS JÁ VALIDADOS COM SUCESSO
+      const validatedDocs = documents.filter(doc => 
+        doc.document_type !== 'outro' && 
+        doc.document_type !== 'OUTRO' &&
+        doc.document_type !== 'OUTROS'
+      );
+      
+      const alreadyValidatedTypes = validatedDocs.map(d => normalizeDocType(d.document_type));
+      console.log('[VALIDATION] Documentos já validados:', alreadyValidatedTypes);
+      
+      // Filtrar missing_docs para não pedir documentos já validados
+      if (validationResult.missing_docs) {
+        validationResult.missing_docs = validationResult.missing_docs.filter((doc: any) => {
+          const docTypeNormalized = normalizeDocType(doc.doc_type);
+          const isAlreadyValidated = alreadyValidatedTypes.includes(docTypeNormalized);
+          
+          if (isAlreadyValidated) {
+            console.log(`[VALIDATION] ✅ Documento "${doc.doc_type}" já validado, não solicitar novamente`);
+            return false;
+          }
+          return true;
+        });
+      }
+
       // ✅ MELHORIA: Matching robusto de document_id
       const enrichedChecklist = validationResult.checklist.map((checkItem: any) => {
         const itemLower = checkItem.item.toLowerCase();

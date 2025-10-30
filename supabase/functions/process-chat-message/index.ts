@@ -29,7 +29,18 @@ serve(async (req) => {
       .eq('id', caseId)
       .single();
 
-    const prompt = `Você é um assistente especializado em extrair informações de mensagens/áudios de advogados sobre casos previdenciários de SALÁRIO-MATERNIDADE.
+    // 🆕 BUSCAR DOCUMENTOS PROCESSADOS DO CASO
+    const { data: caseDocuments } = await supabase
+      .from('documents')
+      .select('file_name, document_type')
+      .eq('case_id', caseId)
+      .neq('document_type', 'outro');
+
+    const documentsContext = caseDocuments && caseDocuments.length > 0
+      ? `\n\n📄 DOCUMENTOS JÁ PROCESSADOS:\n${caseDocuments.map(d => `- ${d.file_name} (${d.document_type})`).join('\n')}\n\n⚠️ NÃO solicite novamente documentos que já estão na lista acima.`
+      : '';
+
+    const prompt = `Você é um assistente especializado em extrair informações de mensagens/áudios de advogados sobre casos previdenciários de SALÁRIO-MATERNIDADE.${documentsContext}
 
 MENSAGEM/ÁUDIO RECEBIDA:
 "${messageText}"
