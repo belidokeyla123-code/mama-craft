@@ -310,6 +310,28 @@ Retorne JSON com NO MÁXIMO 3 de cada tipo:
 
       console.log('[JURISPRUDENCE] ✅ Salvo no cache global');
 
+      // ═══ SALVAR RESULTADOS NO BANCO PARA ESTE CASO ═══
+      console.log('[JURISPRUDENCE] Salvando resultados em jurisprudence_results...');
+      
+      const { error: saveError } = await supabase
+        .from('jurisprudence_results')
+        .upsert({
+          case_id: caseId,
+          results: results,
+          selected_ids: [], // Inicialmente vazio, usuário seleciona depois
+          last_case_hash: cacheKey,
+          created_at: new Date().toISOString()
+        }, {
+          onConflict: 'case_id'
+        });
+
+      if (saveError) {
+        console.error('[JURISPRUDENCE] ⚠️ Erro ao salvar resultados:', saveError);
+        // Não falhar se der erro ao salvar, apenas logar
+      } else {
+        console.log('[JURISPRUDENCE] ✅ Resultados salvos em jurisprudence_results!');
+      }
+
       return new Response(JSON.stringify(results), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

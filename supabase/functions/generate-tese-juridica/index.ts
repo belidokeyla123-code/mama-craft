@@ -171,6 +171,27 @@ AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes
 
       console.log('[TESE] Teses geradas com sucesso:', tesesData.teses?.length || 0);
 
+      // ═══ SALVAR TESES NO BANCO ═══
+      console.log('[TESE] Salvando teses em teses_juridicas...');
+      
+      const { error: saveError } = await supabase
+        .from('teses_juridicas')
+        .upsert({
+          case_id: caseId,
+          teses: tesesData.teses,
+          selected_ids: [], // Inicialmente vazio, usuário seleciona depois
+          created_at: new Date().toISOString()
+        }, {
+          onConflict: 'case_id'
+        });
+
+      if (saveError) {
+        console.error('[TESE] ⚠️ Erro ao salvar teses:', saveError);
+        // Não falhar se der erro ao salvar, apenas logar
+      } else {
+        console.log('[TESE] ✅ Teses salvas em teses_juridicas!');
+      }
+
       return new Response(JSON.stringify(tesesData), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
