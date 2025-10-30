@@ -20,33 +20,62 @@ serve(async (req) => {
     console.log('[EDGE] JudgeAnalysis exists:', !!judgeAnalysis);
     console.log('[EDGE] JudgeAnalysis brechas:', judgeAnalysis?.brechas?.length || 0);
 
-    const prompt = `Você é um advogado especialista em petições previdenciárias.
+    // Construir lista detalhada de correções
+    const correcoesList = judgeAnalysis?.brechas?.map((brecha: any, i: number) => {
+      return `
+### BRECHA ${i + 1} - ${brecha.tipo.toUpperCase()} (Gravidade: ${brecha.gravidade})
+**Localização:** ${brecha.localizacao}
+**Problema:** ${brecha.descricao}
+**O QUE FAZER:** ${brecha.sugestao}
+${brecha.documento_necessario ? `**DOCUMENTO NECESSÁRIO:** ${brecha.documento_necessario}` : ''}
+`;
+    }).join('\n---\n');
 
-PETIÇÃO ATUAL:
+    const prompt = `Você é um advogado especialista em petições previdenciárias. Sua tarefa é REESCREVER a petição aplicando TODAS as correções abaixo.
+
+# PETIÇÃO ORIGINAL
 ${petition}
 
-ANÁLISE CRÍTICA DO JUIZ:
-${JSON.stringify(judgeAnalysis, null, 2)}
+---
 
-TAREFA: Aplique TODAS as correções e sugestões do módulo juiz na petição.
+# CORREÇÕES OBRIGATÓRIAS A APLICAR
 
-INSTRUÇÕES:
-1. **Corrija TODAS as brechas identificadas**:
-   - Brechas probatórias: Adicione menções aos documentos faltantes
-   - Brechas argumentativas: Reforce os argumentos fracos com fundamentação adicional
-   - Brechas jurídicas: Adicione fundamentos legais ausentes ou cite jurisprudências
+${correcoesList}
 
-2. **Implemente TODAS as recomendações** fornecidas pelo juiz
+---
 
-3. **Mantenha a estrutura original** da petição (não mude a ordem das seções)
+# INSTRUÇÕES CRÍTICAS
 
-4. **Mantenha o tom profissional** e persuasivo
+⚠️ **IMPORTANTE:** Você DEVE fazer mudanças SUBSTANCIAIS na petição. NÃO seja conservador.
 
-5. **NÃO adicione** informações que não estejam na petição original ou nas sugestões
+1. **CORRIJA CADA BRECHA LISTADA ACIMA:**
+   - Brechas probatórias → Adicione parágrafos mencionando os documentos anexados
+   - Brechas argumentativas → Reescreva os argumentos fracos com fundamentação robusta
+   - Brechas jurídicas → Adicione citações de leis, artigos e jurisprudências
 
-6. **SEJA CIRÚRGICO**: Faça apenas as correções necessárias
+2. **APLIQUE AS SUGESTÕES DE CADA BRECHA** (campo "O QUE FAZER" acima)
 
-Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
+3. **Mantenha a estrutura geral** (cabeçalho, seções I, II, III, pedidos)
+
+4. **Adicione conteúdo novo** onde necessário para corrigir as brechas
+
+5. **Reescreva parágrafos inteiros** se a sugestão pedir
+
+6. **NÃO mencione** que você está fazendo correções (escreva como se fosse a versão original)
+
+7. **Retorne a petição COMPLETA corrigida** em markdown, sem comentários ou JSON
+
+---
+
+# EXEMPLO DE CORREÇÃO
+
+**Antes (com brecha):**
+"A autora preenche os requisitos."
+
+**Depois (corrigido):**
+"A autora preenche os requisitos, conforme demonstrado pela Autodeclaração Rural (doc. AUTODECLARACAO.pdf), corroborada pelas Notas Fiscais de Venda de Produção Rural (doc. NOTAS_FISCAIS.pdf) e pelos comprovantes de compra de insumos agrícolas (doc. COMPROVANTES_INSUMOS.pdf), que atestam o labor rural contínuo no período de 19/02/2022 a 19/11/2022."
+
+Agora, reescreva a petição aplicando TODAS as ${judgeAnalysis?.brechas?.length || 0} correções:`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     console.log('[EDGE] LOVABLE_API_KEY exists:', !!LOVABLE_API_KEY);
@@ -65,8 +94,9 @@ Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash-lite', // 🆕 Modelo mais rápido (3x faster)
+          model: 'google/gemini-2.5-flash', // Modelo intermediário, muito melhor para reescrita
           messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7, // Aumentar criatividade para ser menos conservador
         }),
         signal: controller.signal,
       });
@@ -102,7 +132,17 @@ Retorne APENAS o texto da petição corrigida em markdown, sem JSON.`;
 
       const aiData = await aiResponse.json();
       const petition_corrigida = aiData.choices[0].message.content;
-      console.log('[EDGE] Petition corrigida gerada, length:', petition_corrigida?.length);
+      const lengthDiff = petition_corrigida?.length - petition?.length;
+      const percentChange = ((lengthDiff / petition?.length) * 100).toFixed(1);
+
+      console.log('[EDGE] ✅ Petition corrigida gerada');
+      console.log('[EDGE] Length original:', petition?.length);
+      console.log('[EDGE] Length corrigida:', petition_corrigida?.length);
+      console.log('[EDGE] Diferença:', lengthDiff, `(${percentChange}%)`);
+
+      if (Math.abs(lengthDiff) < 100) {
+        console.warn('[EDGE] ⚠️ ATENÇÃO: Mudanças muito pequenas! AI pode não ter corrigido.');
+      }
 
       return new Response(JSON.stringify({ petition_corrigida }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
