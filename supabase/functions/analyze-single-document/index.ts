@@ -332,6 +332,36 @@ serve(async (req) => {
     // 6. Chamar IA com imagem para OCR + ANÁLISE JURÍDICA
     console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA com conhecimento jurídico especializado...`);
     
+    // ✅ EXTRAÇÃO UNIVERSAL: Sempre buscar campos básicos em QUALQUER documento
+    const universalExtractionGuide = `
+
+📋 **EXTRAÇÃO UNIVERSAL** (aplicável a TODOS os tipos de documento):
+
+Além das informações específicas deste tipo de documento, SEMPRE extraia (se visíveis):
+
+1. **Dados da Autora/Requerente:**
+   - Nome completo
+   - CPF (11 dígitos sem pontuação)
+   - RG (número e órgão emissor)
+   - Data de nascimento (formato YYYY-MM-DD)
+   - Endereço completo (rua, número, bairro, cidade, UF, CEP)
+   - Telefone fixo
+   - Celular/WhatsApp
+   - Estado civil
+
+2. **Dados do Cônjuge (se mencionado):**
+   - Nome completo
+   - CPF
+   - Data de casamento (formato YYYY-MM-DD)
+
+3. **Dados de Filhos/Dependentes (se mencionados):**
+   - Nome completo do filho(a)
+   - Data de nascimento (formato YYYY-MM-DD)
+   - CPF (se aplicável)
+
+**IMPORTANTE:** Retorne esses campos no objeto \`universalData\` separado dos dados específicos do documento.
+`;
+    
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -376,7 +406,7 @@ Você é um especialista altamente experiente em análise de documentos previden
             content: [
               {
                 type: 'text',
-                text: `${prompt}\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Esta é uma IMAGEM de documento\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD (exemplo: "2022-11-19")\n- Para CPF, extraia apenas números (sem pontos/traços)\n- **IMPORTANTE:** Se uma informação NÃO estiver visível no documento, deixe o campo VAZIO ou omita-o completamente\n- **NUNCA** retorne mensagens explicativas como valor de um campo (exemplo: "Não é possível extrair...")\n- **NUNCA** retorne texto descritivo no lugar de valores estruturados\n- Se o documento não corresponder ao tipo esperado, ajuste o documentType e extraia apenas o que é visível\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
+                text: `${prompt}\n\n📋 **EXTRAÇÃO UNIVERSAL** (aplicável a TODOS os tipos de documento):\n\nAlém das informações específicas, SEMPRE extraia (se visíveis):\n- Nome completo da autora\n- CPF (11 dígitos)\n- RG\n- Data de nascimento (YYYY-MM-DD)\n- Endereço completo\n- Telefone/WhatsApp\n- Estado civil\n- Nome do cônjuge e CPF (se mencionado)\n- Nome do filho(a) e data de nascimento (se mencionado)\n\nRetorne esses campos no objeto \`universalData\` separado.\n\n⚠️ **INSTRUÇÕES CRÍTICAS:**\n- Esta é uma IMAGEM de documento\n- Use OCR para ler TODAS as informações visíveis\n- Atenção especial a: datas, números de protocolo, CPFs, nomes completos\n- Para datas, use formato YYYY-MM-DD (exemplo: "2022-11-19")\n- Para CPF, extraia apenas números (sem pontos/traços)\n- **IMPORTANTE:** Se uma informação NÃO estiver visível no documento, deixe o campo VAZIO ou omita-o completamente\n- **NUNCA** retorne mensagens explicativas como valor de um campo (exemplo: "Não é possível extrair...")\n- **NUNCA** retorne texto descritivo no lugar de valores estruturados\n- Se o documento não corresponder ao tipo esperado, ajuste o documentType e extraia apenas o que é visível\n- Responda SEMPRE em português brasileiro\n- Use a função extract_document_data para retornar os dados estruturados`
               },
               {
                 type: 'image_url',
@@ -461,17 +491,39 @@ Você é um especialista altamente experiente em análise de documentos previden
       console.error('[ANALYZE-SINGLE] ⚠️ Erro ao salvar:', saveError);
     }
 
-    // 9. SALVAR DADOS GENÉRICOS DE IDENTIFICAÇÃO (qualquer documento)
+    // 9. SALVAR DADOS GENÉRICOS DE IDENTIFICAÇÃO (qualquer documento) + UNIVERSAIS
     if (extracted.extractedData) {
       const genericUpdates: any = {};
       
-      // CPF do autor (se disponível e válido)
+      // ✅ DADOS UNIVERSAIS (se presentes na resposta da IA)
+      if (extracted.universalData) {
+        const ud = extracted.universalData;
+        
+        if (ud.authorName) genericUpdates.author_name = ud.authorName;
+        if (ud.authorCpf) genericUpdates.author_cpf = ud.authorCpf.replace(/\D/g, '');
+        if (ud.authorRg) genericUpdates.author_rg = ud.authorRg;
+        if (ud.authorBirthDate) genericUpdates.author_birth_date = ud.authorBirthDate;
+        if (ud.authorAddress) genericUpdates.author_address = ud.authorAddress;
+        if (ud.authorPhone) genericUpdates.author_phone = ud.authorPhone;
+        if (ud.authorWhatsapp) genericUpdates.author_whatsapp = ud.authorWhatsapp;
+        if (ud.authorMaritalStatus) genericUpdates.author_marital_status = ud.authorMaritalStatus;
+        if (ud.spouseName) genericUpdates.spouse_name = ud.spouseName;
+        if (ud.spouseCpf) genericUpdates.spouse_cpf = ud.spouseCpf.replace(/\D/g, '');
+        if (ud.marriageDate) genericUpdates.marriage_date = ud.marriageDate;
+        if (ud.childName) genericUpdates.child_name = ud.childName;
+        if (ud.childBirthDate) genericUpdates.child_birth_date = ud.childBirthDate;
+        if (ud.childCpf) genericUpdates.child_cpf = ud.childCpf.replace(/\D/g, '');
+        
+        console.log(`[ANALYZE-SINGLE] 🌍 Dados universais extraídos:`, Object.keys(genericUpdates));
+      }
+      
+      // CPF do autor (se disponível e válido nos dados específicos do documento)
       if (extracted.extractedData.cpf && /^\d{11}$/.test(extracted.extractedData.cpf)) {
         genericUpdates.author_cpf = extracted.extractedData.cpf;
         console.log(`[ANALYZE-SINGLE] ✅ CPF extraído: ${extracted.extractedData.cpf}`);
       }
       
-      // RG do autor (se disponível)
+      // RG do autor (se disponível nos dados específicos)
       if (extracted.extractedData.rg) {
         genericUpdates.author_rg = extracted.extractedData.rg;
         console.log(`[ANALYZE-SINGLE] ✅ RG extraído: ${extracted.extractedData.rg}`);

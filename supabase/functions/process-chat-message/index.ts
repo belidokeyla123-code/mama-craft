@@ -29,48 +29,102 @@ serve(async (req) => {
       .eq('id', caseId)
       .single();
 
-    const prompt = `Você é um assistente especializado em extrair informações de mensagens de advogados sobre casos previdenciários.
+    const prompt = `Você é um assistente especializado em extrair informações de mensagens/áudios de advogados sobre casos previdenciários de SALÁRIO-MATERNIDADE.
 
-MENSAGEM DO ADVOGADO:
+MENSAGEM/ÁUDIO RECEBIDA:
 "${messageText}"
 
-DADOS ATUAIS DO CASO:
+DADOS ATUAIS DO CASO NO SISTEMA:
 ${JSON.stringify(caseData, null, 2)}
 
-TAREFA:
-Analise a mensagem e extraia TODAS as informações relevantes estruturadas. Identifique:
-1. Benefícios anteriores recebidos (NB, tipo, datas)
-2. Períodos de atividade rural adicionais
-3. Análises do CNIS
-4. Reconhecimentos prévios do INSS
-5. Qualquer outra informação relevante sobre a qualidade de segurada
+SUA TAREFA:
+Analise a mensagem/áudio e extraia TODAS as informações mencionadas, incluindo:
 
-Retorne um JSON estruturado com:
+📋 **1. DADOS PESSOAIS DA AUTORA/REQUERENTE:**
+   - Nome completo
+   - CPF (11 dígitos sem pontuação)
+   - RG (número e órgão emissor)
+   - Data de nascimento (formato YYYY-MM-DD)
+   - Endereço completo (rua, número, bairro, cidade, UF, CEP)
+   - Telefone fixo
+   - Celular/WhatsApp
+   - Estado civil
+
+👶 **2. DADOS DE DEPENDENTES (FILHO/CRIANÇA):**
+   - Nome completo do(a) filho(a)
+   - Data de nascimento (formato YYYY-MM-DD)
+   - CPF (se aplicável)
+   - Nome do pai
+   - Nome da mãe
+
+💑 **3. DADOS DO CÔNJUGE (se aplicável):**
+   - Nome completo
+   - CPF
+   - Data de casamento (formato YYYY-MM-DD)
+
+💼 **4. HISTÓRICO DE BENEFÍCIOS ANTERIORES:**
+   - NB (número do benefício)
+   - Tipo de benefício
+   - Data de início (formato YYYY-MM-DD)
+   - Data de fim (formato YYYY-MM-DD ou null se ativo)
+   - Status atual
+
+🌾 **5. PERÍODOS DE ATIVIDADE RURAL:**
+   - Data de início (formato YYYY-MM-DD)
+   - Data de fim (formato YYYY-MM-DD)
+   - Município/localização completa
+   - Tipo de atividade
+
+⚠️ **REGRAS:**
+- NÃO invente informações que NÃO foram mencionadas
+- Se não houver dados de uma categoria, retorne null ou array vazio
+- Datas SEMPRE no formato YYYY-MM-DD
+- CPF sem pontuação (apenas 11 dígitos)
+
+📤 **FORMATO DE RETORNO (JSON):**
 {
-  "type": "benefit_history" | "rural_period" | "cnis_analysis" | "general_info",
-  "data": {
-    // Para benefit_history:
-    "nb": "número do benefício",
-    "benefitType": "tipo do benefício",
-    "startDate": "YYYY-MM-DD",
-    "endDate": "YYYY-MM-DD",
-    "status": "ativo/cessado"
-    
-    // Para rural_period:
-    "startDate": "YYYY-MM-DD",
-    "endDate": "YYYY-MM-DD",
-    "location": "local da atividade",
-    "activityType": "tipo de atividade"
-    
-    // Para cnis_analysis:
-    "observation": "texto da observação",
-    "recognizedAsSpecial": true/false
-    
-    // Para general_info:
-    "field": "nome do campo",
-    "value": "valor"
+  "personal_data": {
+    "author_name": "string ou null",
+    "author_cpf": "string ou null",
+    "author_rg": "string ou null",
+    "author_birth_date": "YYYY-MM-DD ou null",
+    "author_address": "string ou null",
+    "author_phone": "string ou null",
+    "author_whatsapp": "string ou null",
+    "author_marital_status": "string ou null"
   },
-  "summary": "Resumo amigável do que foi extraído"
+  "dependent_data": {
+    "child_name": "string ou null",
+    "child_birth_date": "YYYY-MM-DD ou null",
+    "child_cpf": "string ou null",
+    "father_name": "string ou null",
+    "mother_name": "string ou null"
+  },
+  "spouse_data": {
+    "spouse_name": "string ou null",
+    "spouse_cpf": "string ou null",
+    "marriage_date": "YYYY-MM-DD ou null"
+  },
+  "benefit_history": [
+    {
+      "benefit_number": "string",
+      "benefit_type": "string",
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD ou null",
+      "status": "string"
+    }
+  ],
+  "rural_periods": [
+    {
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD",
+      "location": "string",
+      "municipality": "string",
+      "activity": "string"
+    }
+  ],
+  "cnis_analysis": "texto descritivo ou null",
+  "general_info": "observações gerais ou null"
 }`;
 
     const controller = new AbortController();
@@ -101,29 +155,66 @@ Retorne um JSON estruturado com:
                 parameters: {
                   type: 'object',
                   properties: {
-                    type: {
-                      type: 'string',
-                      enum: ['benefit_history', 'rural_period', 'cnis_analysis', 'general_info']
-                    },
-                    data: {
+                    personal_data: {
                       type: 'object',
                       properties: {
-                        nb: { type: 'string' },
-                        benefitType: { type: 'string' },
-                        startDate: { type: 'string' },
-                        endDate: { type: 'string' },
-                        status: { type: 'string' },
-                        location: { type: 'string' },
-                        activityType: { type: 'string' },
-                        observation: { type: 'string' },
-                        recognizedAsSpecial: { type: 'boolean' },
-                        field: { type: 'string' },
-                        value: { type: 'string' }
+                        author_name: { type: 'string' },
+                        author_cpf: { type: 'string' },
+                        author_rg: { type: 'string' },
+                        author_birth_date: { type: 'string' },
+                        author_address: { type: 'string' },
+                        author_phone: { type: 'string' },
+                        author_whatsapp: { type: 'string' },
+                        author_marital_status: { type: 'string' }
                       }
                     },
-                    summary: { type: 'string' }
-                  },
-                  required: ['type', 'data', 'summary']
+                    dependent_data: {
+                      type: 'object',
+                      properties: {
+                        child_name: { type: 'string' },
+                        child_birth_date: { type: 'string' },
+                        child_cpf: { type: 'string' },
+                        father_name: { type: 'string' },
+                        mother_name: { type: 'string' }
+                      }
+                    },
+                    spouse_data: {
+                      type: 'object',
+                      properties: {
+                        spouse_name: { type: 'string' },
+                        spouse_cpf: { type: 'string' },
+                        marriage_date: { type: 'string' }
+                      }
+                    },
+                    benefit_history: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          benefit_number: { type: 'string' },
+                          benefit_type: { type: 'string' },
+                          start_date: { type: 'string' },
+                          end_date: { type: 'string' },
+                          status: { type: 'string' }
+                        }
+                      }
+                    },
+                    rural_periods: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          start_date: { type: 'string' },
+                          end_date: { type: 'string' },
+                          location: { type: 'string' },
+                          municipality: { type: 'string' },
+                          activity: { type: 'string' }
+                        }
+                      }
+                    },
+                    cnis_analysis: { type: 'string' },
+                    general_info: { type: 'string' }
+                  }
                 }
               }
             }

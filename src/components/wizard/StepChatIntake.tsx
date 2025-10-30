@@ -1509,6 +1509,30 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           <Upload className="h-4 w-4 mr-2" />
           Documentos
         </Button>
+        
+        <Button
+          onClick={async () => {
+            if (!data.caseId) return;
+            setIsProcessing(true);
+            const { data: result, error } = await supabase.functions.invoke('check-case-completeness', {
+              body: { caseId: data.caseId }
+            });
+            if (error) {
+              toast({ title: "Erro", description: error.message, variant: "destructive" });
+            } else if (result.complete) {
+              toast({ title: "Completo!", description: "Todas informações preenchidas" });
+            } else {
+              toast({ title: "Verificado", description: `${result.reanalyzedDocuments} docs reprocessados` });
+              window.dispatchEvent(new CustomEvent('case-updated'));
+            }
+            setIsProcessing(false);
+          }}
+          variant="outline"
+          disabled={isProcessing || !data.caseId}
+        >
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Verificar
+        </Button>
 
         <Button
           variant={isRecording ? "destructive" : isTranscribing ? "secondary" : "outline"}

@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.apply-appellate-adaptations]
 verify_jwt = false
+
+[functions.check-case-completeness]
+verify_jwt = false
