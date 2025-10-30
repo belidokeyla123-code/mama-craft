@@ -549,6 +549,60 @@ Você é um especialista altamente experiente em análise de documentos previden
         }
       }
     }
+    
+    // 10. Salvar dados de documento_terra
+    if (docType === 'documento_terra' && extracted.extractedData) {
+      const landUpdates: any = {};
+      
+      if (extracted.extractedData.landOwnerName) landUpdates.land_owner_name = extracted.extractedData.landOwnerName;
+      if (extracted.extractedData.landOwnerCpf) landUpdates.land_owner_cpf = extracted.extractedData.landOwnerCpf;
+      if (extracted.extractedData.landOwnerRg) landUpdates.land_owner_rg = extracted.extractedData.landOwnerRg;
+      if (extracted.extractedData.landArea) landUpdates.land_area = extracted.extractedData.landArea;
+      if (extracted.extractedData.landTotalArea) landUpdates.land_total_area = extracted.extractedData.landTotalArea;
+      if (extracted.extractedData.landExploitedArea) landUpdates.land_exploited_area = extracted.extractedData.landExploitedArea;
+      if (extracted.extractedData.landPropertyName) landUpdates.land_property_name = extracted.extractedData.landPropertyName;
+      if (extracted.extractedData.landMunicipality) landUpdates.land_municipality = extracted.extractedData.landMunicipality;
+      if (extracted.extractedData.landITR) landUpdates.land_itr = extracted.extractedData.landITR;
+      if (extracted.extractedData.landCessionType) landUpdates.land_cession_type = extracted.extractedData.landCessionType;
+      if (extracted.extractedData.landOwnershipType) landUpdates.land_ownership_type = extracted.extractedData.landOwnershipType;
+      
+      if (Object.keys(landUpdates).length > 0) {
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update(landUpdates)
+          .eq('id', caseId);
+        
+        if (updateError) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar dados da terra:`, updateError);
+        } else {
+          console.log(`[ANALYZE-SINGLE] ✅ Dados da terra salvos:`, landUpdates);
+        }
+      }
+    }
+    
+    // 11. Salvar dados de autodeclaracao_rural
+    if (docType === 'autodeclaracao_rural' && extracted.extractedData) {
+      const ruralUpdates: any = {};
+      
+      if (extracted.extractedData.rural_periods) ruralUpdates.rural_periods = extracted.extractedData.rural_periods;
+      if (extracted.extractedData.family_members) ruralUpdates.family_members = extracted.extractedData.family_members;
+      if (extracted.extractedData.landOwnerName) ruralUpdates.land_owner_name = extracted.extractedData.landOwnerName;
+      if (extracted.extractedData.landOwnerCpf) ruralUpdates.land_owner_cpf = extracted.extractedData.landOwnerCpf;
+      if (extracted.extractedData.landOwnerRg) ruralUpdates.land_owner_rg = extracted.extractedData.landOwnerRg;
+      
+      if (Object.keys(ruralUpdates).length > 0) {
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update(ruralUpdates)
+          .eq('id', caseId);
+        
+        if (updateError) {
+          console.error(`[ANALYZE-SINGLE] ❌ Erro ao atualizar autodeclaração rural:`, updateError);
+        } else {
+          console.log(`[ANALYZE-SINGLE] ✅ Autodeclaração rural salva:`, ruralUpdates);
+        }
+      }
+    }
 
     console.log('[ANALYZE-SINGLE] ✅ Documento processado com sucesso');
     
@@ -676,17 +730,58 @@ function buildPromptForDocType(docType: string, fileName: string): string {
   
   if (docType === 'autodeclaracao_rural') {
     return basePrompt + `🌾 AUTODECLARAÇÃO RURAL - EXTRAIR:
-- ruralPeriods: [{startDate, endDate, location, activities, withWhom}]
-- familyMembersDetailed: Tabela do grupo familiar completa
-- landOwnerName, landOwnerCpf: Dados do proprietário da terra`;
+
+**INSTRUÇÕES:**
+Extraia todos os períodos de atividade rural e informações do grupo familiar.
+
+**RETORNAR JSON:**
+{
+  "rural_periods": [
+    {
+      "startDate": "Data início (YYYY-MM-DD)",
+      "endDate": "Data fim (YYYY-MM-DD) - vazio se ainda ativo",
+      "location": "Local (Sítio/Fazenda, Município - UF)",
+      "activities": "Atividades desenvolvidas",
+      "withWhom": "Com quem morava"
+    }
+  ],
+  "landOwnerName": "Nome do proprietário da terra",
+  "landOwnerCpf": "CPF do proprietário (apenas números)",
+  "landOwnerRg": "RG do proprietário",
+  "familyMembers": [
+    {
+      "name": "Nome completo",
+      "relationship": "Relação (ex: filho, cônjuge, mãe)",
+      "birthDate": "Data nascimento (YYYY-MM-DD)"
+    }
+  ]
+}
+
+**IMPORTANTE:** O campo principal deve ser "rural_periods" como array de períodos.`;
   }
   
   if (docType === 'documento_terra') {
     return basePrompt + `🏡 DOCUMENTO DA TERRA - EXTRAIR:
-- landOwnerName: Nome do proprietário
-- landOwnerCpf: CPF (apenas números)
-- landOwnerRg: RG completo
-- landArea: Área em hectares`;
+
+**INSTRUÇÕES:**
+Extraia todas as informações do documento de propriedade rural (ITR, matrícula, escritura, comodato, etc).
+
+**RETORNAR JSON:**
+{
+  "landOwnerName": "Nome completo do proprietário",
+  "landOwnerCpf": "CPF do proprietário (apenas números)",
+  "landOwnerRg": "RG com órgão expedidor",
+  "landArea": "Área total em hectares (número)",
+  "landTotalArea": "Área total (número)",
+  "landExploitedArea": "Área explorada (número)",
+  "landPropertyName": "Nome da propriedade/sítio/fazenda",
+  "landMunicipality": "Município - UF",
+  "landITR": "Número do ITR se houver",
+  "landCessionType": "Tipo de cessão (próprio, arrendado, comodato, parceria, etc)",
+  "landOwnershipType": "Tipo de posse (proprietário, posseiro, etc)"
+}
+
+**IMPORTANTE:** Extraia TODOS os campos disponíveis no documento.`;
   }
   
   if (docType === 'identificacao') {

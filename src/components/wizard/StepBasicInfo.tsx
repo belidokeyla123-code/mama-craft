@@ -493,7 +493,18 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
             landPropertyName: result.extracted.landPropertyName,
             landMunicipality: result.extracted.landMunicipality,
             landITR: result.extracted.landITR,
-            landCessionType: result.extracted.landCessionType
+            landCessionType: result.extracted.landCessionType,
+            landOwnershipType: result.extracted.landOwnershipType
+          });
+          await syncWithOtherTabs();
+        }
+        if (docType === 'autodeclaracao_rural') {
+          updateData({
+            ruralPeriods: result.extracted.rural_periods || [],
+            familyMembers: result.extracted.family_members || [],
+            landOwnerName: result.extracted.landOwnerName || data.landOwnerName,
+            landOwnerCpf: result.extracted.landOwnerCpf || data.landOwnerCpf,
+            landOwnerRg: result.extracted.landOwnerRg || data.landOwnerRg
           });
           await syncWithOtherTabs();
         }
@@ -1547,10 +1558,61 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       {/* SEÇÃO 4.5: DADOS DA TERRA (apenas se especial) */}
       {data.profile === "especial" && (
         <Card className="p-6 bg-green-50/50 dark:bg-green-950/20">
-          <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-green-600" />
-            Dados da Terra / Propriedade Rural
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-green-600" />
+              <h3 className="text-xl font-semibold">Dados da Terra / Propriedade Rural</h3>
+              {(data.landArea || data.landPropertyName || data.landMunicipality) ? (
+                <Badge variant="default" className="bg-green-600">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> Extraído
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-orange-600 border-orange-600">
+                  <AlertCircle className="h-3 w-3 mr-1" /> Pendente
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              {(data.landArea || data.landPropertyName || data.landMunicipality) && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => reanalyzeSingleDocument('documento_terra')}
+                  disabled={isReanalyzing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                  Reanalisar Documento
+                </Button>
+              )}
+              
+              {(!data.landArea && !data.landPropertyName && !data.landMunicipality) && (
+                <Button 
+                  size="sm" 
+                  variant="secondary"
+                  onClick={async () => {
+                    const { data: docs } = await supabase
+                      .from('documents')
+                      .select('id')
+                      .eq('case_id', data.caseId)
+                      .eq('document_type', 'documento_terra' as any)
+                      .order('uploaded_at', { ascending: false })
+                      .limit(1);
+                    
+                    if (docs && docs.length > 0) {
+                      await reanalyzeSingleDocument('documento_terra');
+                    } else {
+                      toast.info('Nenhum documento da terra encontrado. Faça o upload primeiro.');
+                    }
+                  }}
+                  disabled={isReanalyzing}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Analisar Documento Existente
+                </Button>
+              )}
+            </div>
+          </div>
           
           {/* Alerta se dados da terra não foram extraídos COM UPLOAD INLINE */}
           {(!data.landArea && !data.landPropertyName && !data.landMunicipality) && (
@@ -1726,12 +1788,71 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       {data.profile === "especial" && (
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold">Períodos de Atividade Rural</h3>
-            <Button onClick={addRuralPeriod} size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Adicionar Período
-            </Button>
+            <div className="flex items-center gap-2">
+              <Tractor className="h-5 w-5 text-green-600" />
+              <h3 className="text-xl font-semibold">Períodos de Atividade Rural</h3>
+              {(data.ruralPeriods && data.ruralPeriods.length > 0) ? (
+                <Badge variant="default" className="bg-green-600">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> {data.ruralPeriods.length} período(s)
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-orange-600 border-orange-600">
+                  <AlertCircle className="h-3 w-3 mr-1" /> Nenhum período
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              <Button onClick={addRuralPeriod} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Adicionar Período
+              </Button>
+              
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={async () => {
+                  const { data: docs } = await supabase
+                    .from('documents')
+                    .select('id')
+                    .eq('case_id', data.caseId)
+                    .eq('document_type', 'autodeclaracao_rural' as any)
+                    .order('uploaded_at', { ascending: false })
+                    .limit(1);
+                  
+                  if (docs && docs.length > 0) {
+                    await reanalyzeSingleDocument('autodeclaracao_rural');
+                    toast.success('Analisando autodeclaração rural...');
+                  } else {
+                    toast.info('Nenhuma autodeclaração rural encontrada. Faça o upload primeiro.');
+                  }
+                }}
+                disabled={isReanalyzing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                Analisar Autodeclaração
+              </Button>
+            </div>
           </div>
+          
+          {/* Upload da autodeclaração rural */}
+          {(!data.ruralPeriods || data.ruralPeriods.length === 0) && data.caseId && (
+            <Alert className="mb-4 border-blue-400">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <AlertDescription>
+                <p className="font-medium mb-2">Nenhum período rural cadastrado</p>
+                <p className="text-sm mb-3">Adicione a autodeclaração rural para extração automática dos períodos:</p>
+                <DocumentUploadInline 
+                  caseId={data.caseId}
+                  suggestedDocType="autodeclaracao_rural"
+                  onUploadComplete={async () => {
+                    toast.success("Documento enviado! Aguarde processamento...");
+                    setTimeout(() => window.location.reload(), 3000);
+                  }}
+                />
+              </AlertDescription>
+            </Alert>
+          )}
           
           <div className="space-y-4">
             {(data.ruralPeriods || []).map((period, idx) => (

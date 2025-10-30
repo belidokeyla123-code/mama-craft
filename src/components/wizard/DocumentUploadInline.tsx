@@ -61,19 +61,41 @@ export const DocumentUploadInline = ({
       }
       
       if (docType === 'documento_terra') {
+        // ✅ Normalizar resposta da IA
+        const landData = extracted.extractedData || extracted;
+        
         await supabase.from('cases').update({
-          land_owner_name: extracted.landOwnerName,
-          land_owner_cpf: extracted.landOwnerCpf,
-          land_owner_rg: extracted.landOwnerRg,
-          land_area: extracted.landArea,
-          land_total_area: extracted.landTotalArea,
-          land_exploited_area: extracted.landExploitedArea,
-          land_property_name: extracted.landPropertyName,
-          land_municipality: extracted.landMunicipality,
-          land_itr: extracted.landITR,
-          land_cession_type: extracted.landCessionType
+          land_owner_name: landData.landOwnerName,
+          land_owner_cpf: landData.landOwnerCpf,
+          land_owner_rg: landData.landOwnerRg,
+          land_area: landData.landArea,
+          land_total_area: landData.landTotalArea,
+          land_exploited_area: landData.landExploitedArea,
+          land_property_name: landData.landPropertyName,
+          land_municipality: landData.landMunicipality,
+          land_itr: landData.landITR,
+          land_cession_type: landData.landCessionType,
+          land_ownership_type: landData.landOwnershipType
         }).eq('id', caseId);
-        console.log('[EXTRACT] ✅ Dados da terra salvos');
+        
+        console.log('[EXTRACT] ✅ Dados da terra salvos:', landData);
+      }
+      
+      if (docType === 'autodeclaracao_rural') {
+        // ✅ Normalizar resposta da IA
+        const ruralData = extracted.extractedData || extracted;
+        const ruralPeriods = ruralData.rural_periods || ruralData.ruralPeriods || [];
+        const familyMembers = ruralData.family_members || ruralData.familyMembers || [];
+        
+        await supabase.from('cases').update({
+          rural_periods: ruralPeriods,
+          family_members: familyMembers,
+          land_owner_name: ruralData.landOwnerName || undefined,
+          land_owner_cpf: ruralData.landOwnerCpf || undefined,
+          land_owner_rg: ruralData.landOwnerRg || undefined
+        }).eq('id', caseId);
+        
+        console.log('[EXTRACT] ✅ Autodeclaração rural salva:', { ruralPeriods, familyMembers });
       }
     } catch (error) {
       console.error('[EXTRACT] Erro ao salvar dados:', error);
