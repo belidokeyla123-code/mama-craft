@@ -17,6 +17,7 @@ import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
 import { toast } from "sonner";
 import { useCasePipeline } from "@/hooks/useCasePipeline";
+import { useChatSync } from "@/hooks/useChatSync";
 
 export interface RuralPeriod {
   startDate: string;
@@ -193,6 +194,9 @@ const NewCase = () => {
   // ✅ FASE 2: Hook de pipeline centralizado
   const { status, isStale, checkPipelineStatus } = useCasePipeline(caseData.caseId || '');
 
+  // ✅ FASE 2: Hook de sincronização em tempo real
+  useChatSync(caseData.caseId || '');
+
   const progress = ((currentStep) / (STEPS.length - 1)) * 100;
 
   // Atualizar status quando mudar de aba ou caseId
@@ -201,6 +205,39 @@ const NewCase = () => {
       checkPipelineStatus();
     }
   }, [currentStep, caseData.caseId]);
+
+  // ✅ FASE 2: Escutar evento global de sincronização e refazer query
+  useEffect(() => {
+    const handleCaseUpdate = (e: CustomEvent) => {
+      console.log('[NewCase] 📡 Caso atualizado via chat, atualizando dados...', e.detail);
+      checkPipelineStatus();
+      
+      // Atualizar dados locais do caso
+      if (e.detail?.data) {
+        setCaseData(prev => ({ ...prev, ...e.detail.data }));
+      }
+    };
+    
+    const handleDocumentsUpdate = () => {
+      console.log('[NewCase] 📄 Documentos atualizados, refazendo validação...');
+      checkPipelineStatus();
+    };
+
+    const handleAnalysisUpdate = () => {
+      console.log('[NewCase] 📊 Análise atualizada, refazendo queries...');
+      checkPipelineStatus();
+    };
+    
+    window.addEventListener('case-updated', handleCaseUpdate as any);
+    window.addEventListener('documents-updated', handleDocumentsUpdate as any);
+    window.addEventListener('analysis-updated', handleAnalysisUpdate as any);
+    
+    return () => {
+      window.removeEventListener('case-updated', handleCaseUpdate as any);
+      window.removeEventListener('documents-updated', handleDocumentsUpdate as any);
+      window.removeEventListener('analysis-updated', handleAnalysisUpdate as any);
+    };
+  }, [checkPipelineStatus]);
 
   const updateCaseData = (data: Partial<CaseData>) => {
     setCaseData(prev => ({ ...prev, ...data }));

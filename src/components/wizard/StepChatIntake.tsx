@@ -697,6 +697,45 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
           console.log('[CHAT] ✅ Dados salvos no banco com sucesso');
           
+          // ✅ FASE 2: DISPARAR SYNC APÓS EXTRAÇÃO
+          console.log('[CHAT] ✅ Dados salvos, disparando sync...');
+          
+          // Disparar evento de sincronização para outras abas
+          window.dispatchEvent(new CustomEvent('case-updated', { 
+            detail: { caseId, source: 'chat-extraction' } 
+          }));
+          
+          // Invalidar cache downstream
+          await supabase
+            .from('case_analysis')
+            .update({ is_stale: true })
+            .eq('case_id', caseId);
+          
+          // ✅ FASE 3: SALVAR BENEFÍCIOS ANTERIORES EM BENEFIT_HISTORY
+          if (extractedData.raProtocol && extractedData.raRequestDate) {
+            const { data: existing } = await supabase
+              .from('benefit_history')
+              .select('id')
+              .eq('case_id', caseId)
+              .eq('nb', extractedData.raProtocol)
+              .maybeSingle();
+            
+            if (!existing) {
+              await supabase
+                .from('benefit_history')
+                .insert({
+                  case_id: caseId,
+                  nb: extractedData.raProtocol,
+                  benefit_type: extractedData.benefitType || 'Salário-Maternidade',
+                  start_date: extractedData.raRequestDate,
+                  end_date: extractedData.raDenialDate,
+                  status: 'negado'
+                });
+              
+              console.log('[CHAT] ✅ Benefício anterior salvo');
+            }
+          }
+          
           // 🆕 DISPARAR PIPELINE COMPLETO
           if (triggerFullPipeline) {
             console.log('[CHAT] Disparando pipeline completo...');
@@ -1012,6 +1051,38 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       if (data.text) {
         const transcribedText = data.text;
         
+        // ✅ FASE 6: SALVAR TRANSCRIÇÃO EM CASE_EXCEPTIONS PARA AUDITORIA
+        if (data.caseId) {
+          try {
+            // Upload do áudio para storage
+            const audioFileName = `audio_${Date.now()}.webm`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('case-documents')
+              .upload(`${data.caseId}/${audioFileName}`, audioBlob);
+            
+            if (!uploadError && uploadData) {
+              const { data: urlData } = supabase.storage
+                .from('case-documents')
+                .getPublicUrl(`${data.caseId}/${audioFileName}`);
+              
+              // Salvar transcrição para auditoria
+              await supabase
+                .from('case_exceptions')
+                .insert({
+                  case_id: data.caseId,
+                  exception_type: 'voice_transcription',
+                  description: transcribedText,
+                  voice_transcribed: true
+                });
+              
+              console.log('[CHAT] ✅ Transcrição salva para auditoria');
+            }
+          } catch (error) {
+            console.error('[CHAT] Erro ao salvar transcrição:', error);
+            // Não interromper o fluxo se houver erro na auditoria
+          }
+        }
+        
         // Remove temporary transcribing message
         setMessages(prev => prev.filter((_, idx) => idx !== transcribingMessageIndex));
         
@@ -1164,6 +1235,29 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           Envie os documentos e deixe a IA extrair as informações automaticamente
         </p>
       </div>
+
+      {/* ✅ FASE 4: Painel de Status Visual */}
+      {data.caseId && (
+        <Alert>
+          <CheckCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <span className={data.childName ? 'text-green-600' : 'text-red-600'}>
+                👶 Criança: {data.childName ? '✅' : '❌'}
+              </span>
+              <span className={data.authorName && data.authorName !== 'Processando...' ? 'text-green-600' : 'text-red-600'}>
+                👤 Mãe: {data.authorName && data.authorName !== 'Processando...' ? '✅' : '❌'}
+              </span>
+              <span className={data.authorCpf && data.authorCpf !== '00000000000' ? 'text-green-600' : 'text-red-600'}>
+                🪪 CPF: {data.authorCpf && data.authorCpf !== '00000000000' ? '✅' : '❌'}
+              </span>
+              <span className={data.raProtocol ? 'text-green-600' : 'text-muted-foreground'}>
+                📋 RA: {data.raProtocol ? '✅' : '⚪'}
+              </span>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card className="p-4">
         <ScrollArea className="h-96 pr-4">

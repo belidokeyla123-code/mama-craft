@@ -322,11 +322,11 @@ serve(async (req) => {
       console.log(`[ANALYZE-SINGLE] 🏷️ Tipo já classificado: ${docType}`);
     }
 
-    // 5. Montar prompt específico
+    // 5. Montar prompt JURÍDICO específico com conhecimento de especialista
     const prompt = buildPromptForDocType(docType, doc.file_name);
 
-    // 6. Chamar IA com imagem para OCR
-    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA (Google Gemini 2.5 Flash)...`);
+    // 6. Chamar IA com imagem para OCR + ANÁLISE JURÍDICA
+    console.log(`[ANALYZE-SINGLE] 🤖 Chamando IA com conhecimento jurídico especializado...`);
     
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -550,6 +550,15 @@ Você é um especialista altamente experiente em análise de documentos previden
       }
     }
 
+    console.log('[ANALYZE-SINGLE] ✅ Documento processado com sucesso');
+    
+    // ✅ FASE 1: VALIDAÇÃO PÓS-EXTRAÇÃO
+    const validation = validateExtractedData(extracted.extractedData, docType);
+    
+    if (validation.warnings.length > 0) {
+      console.log('[ANALYZE-SINGLE] ⚠️ Avisos de validação:', validation.warnings);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -557,6 +566,8 @@ Você é um especialista altamente experiente em análise de documentos previden
         docType,
         extracted: extracted.extractedData,
         confidence: extracted.extractionConfidence,
+        validationWarnings: validation.warnings,
+        isValid: validation.valid,
         debug: {
           modelUsed: 'google/gemini-2.5-flash',
           processingType: 'visual_ocr'
@@ -573,6 +584,46 @@ Você é um especialista altamente experiente em análise de documentos previden
     );
   }
 });
+
+// ✅ FASE 1: FUNÇÃO DE VALIDAÇÃO PÓS-EXTRAÇÃO COM CONHECIMENTO JURÍDICO
+function validateExtractedData(extracted: any, docType: string): { valid: boolean; warnings: string[] } {
+  const warnings: string[] = [];
+  
+  // Validar certidão de nascimento
+  if (docType === 'certidao_nascimento') {
+    if (extracted.childName === extracted.motherName) {
+      warnings.push('⚠️ Nome da criança igual ao da mãe - provavelmente erro de extração');
+    }
+    
+    if (extracted.childBirthDate && new Date(extracted.childBirthDate) > new Date()) {
+      warnings.push('❌ Data de nascimento da criança no futuro - erro crítico');
+    }
+    
+    if (!extracted.motherName || !extracted.childName) {
+      warnings.push('❌ Dados críticos faltando (mãe ou criança)');
+    }
+  }
+  
+  // Validar CPF
+  if (extracted.motherCpf && extracted.motherCpf.replace(/\D/g, '').length !== 11) {
+    warnings.push('⚠️ CPF da mãe inválido (não tem 11 dígitos)');
+  }
+  
+  // Validar propriedade rural
+  if (docType === 'documento_terra') {
+    if (!extracted.landOwnerName) {
+      warnings.push('❌ Nome do proprietário não encontrado');
+    }
+    if (!extracted.landOwnerCpf) {
+      warnings.push('⚠️ CPF do proprietário não encontrado - verifique manualmente');
+    }
+  }
+  
+  return {
+    valid: warnings.filter(w => w.startsWith('❌')).length === 0,
+    warnings
+  };
+}
 
 // Classificar tipo de documento baseado no nome
 function classifyDocument(fileName: string): string {
