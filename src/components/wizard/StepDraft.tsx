@@ -321,14 +321,24 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   };
 
   const analyzeWithJudgeModule = async (isRevalidation = false) => {
-    // 🔍 Buscar a última draft do banco (versão mais recente salva)
-    const { data: latestDraft } = await supabase
+    // 🔍 Buscar a última draft do banco (FORÇAR FRESH)
+    const { data: latestDraft, error: fetchError } = await supabase
       .from('drafts')
-      .select('markdown_content')
+      .select('markdown_content, id, generated_at')
       .eq('case_id', data.caseId)
       .order('generated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    console.log('[JUDGE] 🔍 Draft buscada:', {
+      id: latestDraft?.id,
+      timestamp: latestDraft?.generated_at,
+      length: latestDraft?.markdown_content?.length
+    });
+
+    if (fetchError) {
+      console.error('[JUDGE] Erro ao buscar draft:', fetchError);
+    }
     
     const petitionToAnalyze = latestDraft?.markdown_content || petition;
     
@@ -812,9 +822,11 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       const BATCH_SIZE = 2; // Processar 2 brechas por vez
       let currentPetition = petition;
       
-      console.log('[CORRECTIONS] 🔧 Aplicando correções em lotes');
+      console.log('[CORRECTIONS] 🔧 Iniciando aplicação de correções');
       console.log('[CORRECTIONS] Total de brechas:', totalSelected);
-      console.log('[CORRECTIONS] Batch size:', BATCH_SIZE);
+      console.log('[CORRECTIONS] Case ID:', data.caseId);
+      console.log('[CORRECTIONS] Petition length ANTES:', petition.length);
+      console.log('[CORRECTIONS] Tamanho dos lotes:', BATCH_SIZE);
       
       toast.info(`⚙️ Aplicando ${totalSelected} correção(ões)...`, { duration: 3000 });
       
@@ -850,7 +862,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         if (error) throw error;
         
         if (result?.petition_corrigida) {
+          console.log('[CORRECTIONS] Petition length DEPOIS do lote:', result.petition_corrigida.length);
           currentPetition = result.petition_corrigida; // Atualizar para próximo lote
+          setPetition(currentPetition);
         }
       }
       
@@ -878,18 +892,30 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         risco_improcedencia: riscoAtual
       });
       
-      // Salvar versão no banco
-      await supabase.from('drafts').insert({
-        case_id: data.caseId,
-        markdown_content: currentPetition,
-        payload: { selected_corrections: selectedBrechasData.map(b => b.descricao) }
-      });
+      // Salvar a versão final no banco de dados E CONFIRMAR O ID
+      const { data: savedDraft, error: saveError } = await supabase
+        .from('drafts')
+        .insert({
+          case_id: data.caseId,
+          markdown_content: currentPetition,
+          payload: { selected_corrections: selectedBrechasData.map(b => b.descricao) }
+        })
+        .select()
+        .single();
+
+      if (saveError) {
+        console.error('[CORRECTIONS] Erro ao salvar:', saveError);
+        throw saveError;
+      }
+
+      console.log('[CORRECTIONS] ✅ Salvo no banco - ID:', savedDraft.id);
+      console.log('[CORRECTIONS] ✅ Timestamp:', savedDraft.generated_at);
       
       // Limpar seleção
       setSelectedBrechas([]);
       
       toast.success(
-        `✅ ${totalSelected} correção(ões) aplicadas!\n🔍 Re-analisando...`,
+        `✅ ${totalSelected} correção(ões) aplicadas e salvas!\n🔍 Re-analisando...`,
         { duration: 5000 }
       );
       
@@ -903,10 +929,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         }
       }, 300);
       
-      // ✅ SEMPRE RE-ANALISAR (não só quando aplica todas)
+      // ✅ SEMPRE RE-ANALISAR (delay aumentado para garantir propagação)
       setTimeout(() => {
         toast.info("🔍 Validando correções com o Módulo Juiz...", { duration: 3000 });
-        setTimeout(() => analyzeWithJudgeModule(true), 1500);
+        setTimeout(() => analyzeWithJudgeModule(true), 2500); // 2.5s em vez de 1.5s
       }, 2000);
       
     } catch (error: any) {
