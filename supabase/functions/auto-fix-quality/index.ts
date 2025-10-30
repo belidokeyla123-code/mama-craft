@@ -253,11 +253,37 @@ serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // CORREÇÃO 5: PORTUGUÊS E SINTAXE (NOVA)
+    // CORREÇÕES 5 E 6: RODAR EM PARALELO (PORTUGUÊS + DOCUMENTOS)
     // ═══════════════════════════════════════════════════════════════
-    console.log('[AUTO-FIX] 🔧 Verificando português e sintaxe...');
+    console.log('[AUTO-FIX] 🚀 Iniciando análises em paralelo (Português + Documentos)...');
     
-    const promptPortugues = `Você é um revisor especializado em português jurídico.
+    // Declarar variáveis FORA dos try/catch
+    let analisePortugues: any = null;
+    let analiseDocumentos: any = null;
+    let errosPortugues: any[] = [];
+    let problemasDocumentos: any[] = [];
+    
+    // Buscar documentos do caso
+    const { data: caseDocuments } = await supabase
+      .from('documents')
+      .select('file_name, document_type')
+      .eq('case_id', caseId)
+      .order('created_at', { ascending: true });
+
+    const documentosInfo = caseDocuments?.map((doc: any, i: number) => 
+      `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name} (tipo: ${doc.document_type})`
+    ).join('\n') || 'Nenhum documento anexado';
+
+    // Extrair seção "Das Provas" da petição
+    const secaoProvasMatch = petition.match(/(?:DAS PROVAS|DOS DOCUMENTOS)([\s\S]*?)(?=\n\n[A-Z]{2,}|$)/i);
+    const secaoProvas = secaoProvasMatch ? secaoProvasMatch[0] : '';
+
+    // ✅ RODAR ANÁLISES EM PARALELO
+    const [resultPortugues, resultDocumentos] = await Promise.all([
+      // Análise 1: Português e Sintaxe
+      (async () => {
+        try {
+          const promptPortugues = `Você é um revisor especializado em português jurídico.
 
 PETIÇÃO:
 ${petition}
@@ -287,72 +313,22 @@ RETORNE JSON:
   "peticao_corrigida": "texto completo corrigido ou null se não houver erros"
 }`;
 
-    try {
-      const resultPortugues = await callLovableAI(promptPortugues, {
-        model: 'google/gemini-2.5-flash',
-        responseFormat: "json_object"
-      });
-
-      const analisePortugues = JSON.parse(resultPortugues.content);
+          const result = await callLovableAI(promptPortugues, {
+            model: 'google/gemini-2.5-flash',
+            responseFormat: "json_object"
+          });
+          
+          return JSON.parse(result.content);
+        } catch (error) {
+          console.error('[AUTO-FIX] ❌ FALHA na análise de português:', error);
+          return null;
+        }
+      })(),
       
-      if (analisePortugues.temErros && analisePortugues.peticao_corrigida) {
-        console.log('[AUTO-FIX] ✅ Erros de português encontrados e corrigidos:', analisePortugues.errosEncontrados.length);
-        
-        // Salvar petição corrigida
-        await supabase.from('drafts').insert({
-          case_id: caseId,
-          markdown_content: analisePortugues.peticao_corrigida,
-          payload: { 
-            auto_fixed_portugues: true,
-            erros_corrigidos: analisePortugues.errosEncontrados
-          }
-        });
-
-        corrections.push({
-          module: 'portugues',
-          issue: `${analisePortugues.errosEncontrados.length} erros de português`,
-          action: 'Erros de concordância, pontuação e coesão corrigidos',
-          before: analisePortugues.errosEncontrados.map((e: any) => e.trecho_original).join('; '),
-          after: 'Corrigido',
-          confidence: 90
-        });
-
-        // Registrar em correction_history
-        await supabase.from('correction_history').insert({
-          case_id: caseId,
-          correction_type: 'portugues',
-          module: 'quality_report',
-          changes_summary: { erros: analisePortugues.errosEncontrados },
-          auto_applied: true,
-          confidence_score: 90
-        });
-      } else {
-        console.log('[AUTO-FIX] ✅ Nenhum erro de português detectado');
-      }
-    } catch (error) {
-      console.error('[AUTO-FIX] Erro ao verificar português:', error);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // CORREÇÃO 6: VALIDAÇÃO DE DOCUMENTOS CITADOS (NOVA)
-    // ═══════════════════════════════════════════════════════════════
-    console.log('[AUTO-FIX] 🔧 Validando documentos citados...');
-    
-    const { data: caseDocuments } = await supabase
-      .from('documents')
-      .select('file_name, document_type')
-      .eq('case_id', caseId)
-      .order('created_at', { ascending: true });
-
-    const documentosInfo = caseDocuments?.map((doc: any, i: number) => 
-      `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name} (tipo: ${doc.document_type})`
-    ).join('\n') || 'Nenhum documento anexado';
-
-    // Extrair seção "Das Provas" da petição
-    const secaoProvasMatch = petition.match(/(?:DAS PROVAS|DOS DOCUMENTOS)([\s\S]*?)(?=\n\n[A-Z]{2,}|$)/i);
-    const secaoProvas = secaoProvasMatch ? secaoProvasMatch[0] : '';
-
-    const promptDocumentos = `Você é um assistente jurídico especializado em validação de provas.
+      // Análise 2: Validação de Documentos
+      (async () => {
+        try {
+          const promptDocumentos = `Você é um assistente jurídico especializado em validação de provas.
 
 DOCUMENTOS ANEXADOS AO CASO:
 ${documentosInfo}
@@ -382,67 +358,112 @@ RETORNE JSON:
   "secao_provas_corrigida": "Seção 'Das Provas' reescrita com citações corretas ou null se não houver problemas"
 }`;
 
-    try {
-      const resultDocumentos = await callLovableAI(promptDocumentos, {
-        model: 'google/gemini-2.5-flash',
-        responseFormat: "json_object"
+          const result = await callLovableAI(promptDocumentos, {
+            model: 'google/gemini-2.5-flash',
+            responseFormat: "json_object"
+          });
+          
+          return JSON.parse(result.content);
+        } catch (error) {
+          console.error('[AUTO-FIX] ❌ FALHA na validação de documentos:', error);
+          return null;
+        }
+      })()
+    ]);
+
+    // ═══ PROCESSAR RESULTADO: PORTUGUÊS ═══
+    analisePortugues = resultPortugues;
+    if (analisePortugues && analisePortugues.temErros && analisePortugues.peticao_corrigida) {
+      console.log('[AUTO-FIX] ✅ Erros de português encontrados e corrigidos:', analisePortugues.errosEncontrados.length);
+      errosPortugues = analisePortugues.errosEncontrados || [];
+      
+      // Salvar petição corrigida
+      await supabase.from('drafts').insert({
+        case_id: caseId,
+        markdown_content: analisePortugues.peticao_corrigida,
+        payload: { 
+          auto_fixed_portugues: true,
+          erros_corrigidos: analisePortugues.errosEncontrados
+        }
       });
 
-      const analiseDocumentos = JSON.parse(resultDocumentos.content);
+      corrections.push({
+        module: 'portugues',
+        issue: `${analisePortugues.errosEncontrados.length} erros de português`,
+        action: 'Erros de concordância, pontuação e coesão corrigidos',
+        before: analisePortugues.errosEncontrados.map((e: any) => e.trecho_original).join('; '),
+        after: 'Corrigido',
+        confidence: 90
+      });
+
+      // Registrar em correction_history
+      await supabase.from('correction_history').insert({
+        case_id: caseId,
+        correction_type: 'portugues',
+        module: 'quality_report',
+        changes_summary: { erros: analisePortugues.errosEncontrados },
+        auto_applied: true,
+        confidence_score: 90
+      });
+    } else {
+      console.log('[AUTO-FIX] ✅ Nenhum erro de português detectado');
+    }
+
+    // ═══ PROCESSAR RESULTADO: DOCUMENTOS ═══
+    analiseDocumentos = resultDocumentos;
+    if (analiseDocumentos && analiseDocumentos.temProblemas && analiseDocumentos.secao_provas_corrigida) {
+      console.log('[AUTO-FIX] ✅ Problemas em documentos encontrados e corrigidos:', analiseDocumentos.problemas.length);
+      problemasDocumentos = analiseDocumentos.problemas || [];
       
-      if (analiseDocumentos.temProblemas && analiseDocumentos.secao_provas_corrigida) {
-        console.log('[AUTO-FIX] ✅ Problemas em documentos encontrados e corrigidos:', analiseDocumentos.problemas.length);
-        
-        // Substituir seção "Das Provas" na petição
-        let petitionCorrigidaDocs = petition;
-        if (secaoProvas) {
-          petitionCorrigidaDocs = petition.replace(secaoProvas, analiseDocumentos.secao_provas_corrigida);
-        } else {
-          // Se não existe seção, adicionar antes do "Dos Pedidos"
-          petitionCorrigidaDocs = petition.replace(
-            /(?=DOS PEDIDOS)/i, 
-            `\n\n${analiseDocumentos.secao_provas_corrigida}\n\n`
-          );
-        }
-
-        // Salvar petição corrigida
-        await supabase.from('drafts').insert({
-          case_id: caseId,
-          markdown_content: petitionCorrigidaDocs,
-          payload: { 
-            auto_fixed_documentos: true,
-            problemas_corrigidos: analiseDocumentos.problemas
-          }
-        });
-
-        corrections.push({
-          module: 'documentos',
-          issue: `${analiseDocumentos.problemas.length} problemas em documentos citados`,
-          action: 'Citações de documentos corrigidas',
-          before: 'Citações incorretas ou ausentes',
-          after: 'Citações corrigidas e validadas',
-          confidence: 95
-        });
-
-        // Registrar em correction_history
-        await supabase.from('correction_history').insert({
-          case_id: caseId,
-          correction_type: 'documentos',
-          module: 'quality_report',
-          changes_summary: { problemas: analiseDocumentos.problemas },
-          auto_applied: true,
-          confidence_score: 95
-        });
+      // Substituir seção "Das Provas" na petição
+      let petitionCorrigidaDocs = petition;
+      if (secaoProvas) {
+        petitionCorrigidaDocs = petition.replace(secaoProvas, analiseDocumentos.secao_provas_corrigida);
       } else {
-        console.log('[AUTO-FIX] ✅ Documentos citados corretamente');
+        // Se não existe seção, adicionar antes do "Dos Pedidos"
+        petitionCorrigidaDocs = petition.replace(
+          /(?=DOS PEDIDOS)/i, 
+          `\n\n${analiseDocumentos.secao_provas_corrigida}\n\n`
+        );
       }
-    } catch (error) {
-      console.error('[AUTO-FIX] Erro ao validar documentos:', error);
+
+      // Salvar petição corrigida
+      await supabase.from('drafts').insert({
+        case_id: caseId,
+        markdown_content: petitionCorrigidaDocs,
+        payload: { 
+          auto_fixed_documentos: true,
+          problemas_corrigidos: analiseDocumentos.problemas
+        }
+      });
+
+      corrections.push({
+        module: 'documentos',
+        issue: `${analiseDocumentos.problemas.length} problemas em documentos citados`,
+        action: 'Citações de documentos corrigidas',
+        before: 'Citações incorretas ou ausentes',
+        after: 'Citações corrigidas e validadas',
+        confidence: 95
+      });
+
+      // Registrar em correction_history
+      await supabase.from('correction_history').insert({
+        case_id: caseId,
+        correction_type: 'documentos',
+        module: 'quality_report',
+        changes_summary: { problemas: analiseDocumentos.problemas },
+        auto_applied: true,
+        confidence_score: 95
+      });
+    } else {
+      console.log('[AUTO-FIX] ✅ Documentos citados corretamente');
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // ATUALIZAR QUALITY REPORT
+    // FINALIZAR: ATUALIZAR QUALITY REPORT COM VALORES CORRETOS
     // ═══════════════════════════════════════════════════════════════
+    console.log('[AUTO-FIX] ✅ Todas as correções aplicadas. Atualizando quality_report...');
+    
     await supabase
       .from('quality_reports')
       .update({
@@ -451,8 +472,15 @@ RETORNE JSON:
         jurisdicao_ok: true,
         valor_causa_validado: true,
         dados_completos: true,
-        portugues_ok: true,
-        documentos_validados: true,
+        
+        // ✅ CORREÇÃO: Só marca como true se a análise RODOU com sucesso
+        portugues_ok: analisePortugues !== null,
+        documentos_validados: analiseDocumentos !== null,
+        
+        // ✅ NOVO: Armazenar detalhes dos erros/problemas encontrados
+        erros_portugues: errosPortugues,
+        problemas_documentos: problemasDocumentos,
+        
         campos_faltantes: [],
         issues: [],
         generated_at: new Date().toISOString()

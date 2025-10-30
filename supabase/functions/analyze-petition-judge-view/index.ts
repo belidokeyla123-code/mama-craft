@@ -44,83 +44,72 @@ serve(async (req) => {
 
     const prompt = `Você é um JUIZ FEDERAL fazendo CONTROLE DE QUALIDADE FINAL.
 
-⚠️ IMPORTANTE: A petição JÁ passou por análise preliminar automática que corrigiu:
-✅ Endereçamento e jurisdição
-✅ Valor da causa (com salário mínimo correto)
-✅ Dados completos (sem placeholders)
-✅ Português e sintaxe (concordância, pontuação, coesão)
-✅ Documentos citados (numeração e validação)
+⚠️ IMPORTANTE: A petição JÁ passou por análise preliminar que corrigiu:
+✅ Endereçamento, jurisdição, valor da causa
+✅ Dados completos, português, sintaxe
+✅ Documentos validados e citados corretamente
 
 📁 DADOS DO CASO:
-**INFORMAÇÕES BÁSICAS:**
 ${JSON.stringify(caseInfo, null, 2)}
-
-**DOCUMENTOS (${documents?.length || 0}):**
-${documents?.map((doc: any, i: number) => 
-  `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name} (${doc.document_type})`
-).join('\n') || 'Nenhum documento anexado'}
-
-**ANÁLISE JURÍDICA:**
-${analysis ? JSON.stringify(analysis, null, 2) : 'Não realizada'}
-
-**JURISPRUDÊNCIAS:**
-${jurisprudence?.results ? JSON.stringify(jurisprudence.results, null, 2) : 'Nenhuma selecionada'}
-
-**TESE JURÍDICA:**
-${tese?.teses ? JSON.stringify(tese.teses, null, 2) : 'Não elaborada'}
 
 **PETIÇÃO:**
 ${petition}
 
 ---
 
-⚖️ TAREFA: CONTROLE DE QUALIDADE GERAL
+⚖️ TAREFA: ANÁLISE CRÍTICA DE MÉRITO
 
-Foque APENAS em:
+Foque EXCLUSIVAMENTE em:
 
-1. **COERÊNCIA ARGUMENTATIVA**
-   - A tese faz sentido lógico?
-   - Os argumentos se sustentam mutuamente?
-   - Há contradições na narrativa?
+1. **TESE JURÍDICA**
+   - A tese é sólida e bem fundamentada?
+   - Há precedentes suficientes para sustentá-la?
+   - A argumentação está alinhada com a jurisprudência atual?
 
-2. **FUNDAMENTAÇÃO JURÍDICA**
-   - Leis e artigos citados são adequados?
-   - Jurisprudências selecionadas fortalecem o caso?
-   - Há gaps na fundamentação legal?
-
-3. **FORÇA PERSUASIVA**
+2. **PODER DE CONVENCIMENTO**
    - A petição convence um juiz neutro?
-   - Há brechas críticas que o réu pode explorar?
-   - Os pedidos estão bem fundamentados?
+   - A narrativa dos fatos é clara e persuasiva?
+   - Os argumentos estão bem encadeados?
 
-🚫 NÃO ANALISE (já corrigido):
-- Português/sintaxe
+3. **RISCO DE IMPROCEDÊNCIA**
+   - Quais as chances de procedência total? (0-100%)
+   - Existem brechas críticas que o réu pode explorar?
+   - Há contradições ou fragilidades argumentativas?
+
+4. **FUNDAMENTO LEGAL**
+   - As leis citadas são apropriadas?
+   - Faltam normas importantes?
+   - Os artigos estão atualizados?
+
+🚫 NÃO ANALISE (já verificado):
+- Português/sintaxe/gramática
 - Documentos citados
-- Endereçamento/jurisdição
-- Dados completos
+- Endereçamento/competência
+- Dados completos/placeholders
 
 RETORNE JSON:
 {
   "status_geral": "APROVADO" | "REVISAR" | "REFAZER",
+  "risco_improcedencia": 15,
+  "chance_procedencia_total": 85,
   "brechas_criticas": [
     {
-      "tipo": "argumentativa" | "juridica",
-      "descricao": "Descrição específica e objetiva",
-      "gravidade": "alta" | "media",
-      "sugestao": "Como corrigir (seja PRÁTICO e DIRETO)"
+      "tipo": "tese" | "fundamentacao" | "convencimento",
+      "descricao": "Descrição específica da brecha",
+      "gravidade": "alta" | "media" | "baixa",
+      "sugestao": "Como corrigir de forma prática"
     }
   ],
-  "pontos_fortes": ["Máximo 3 pontos fortes"],
-  "pontos_fracos": ["Máximo 3 pontos fracos"],
-  "risco_improcedencia": 15,
-  "recomendacao_final": "Breve recomendação geral em 1-2 frases"
+  "pontos_fortes": ["Máximo 3 pontos"],
+  "pontos_fracos": ["Máximo 3 pontos"],
+  "recomendacao_final": "Recomendação em 1-2 frases"
 }
 
 DIRETRIZES:
-- Seja RÁPIDO e OBJETIVO (não repita análises já feitas)
-- Foque apenas em QUALIDADE ARGUMENTATIVA e JURÍDICA
-- NÃO crie brechas sobre português ou documentos
-- Se tudo estiver OK, retorne brechas_criticas vazio`;
+- Seja RÁPIDO (não repita análises já feitas)
+- Foque em ARGUMENTAÇÃO e MÉRITO
+- Se está perfeito, deixe brechas_criticas vazio
+- Seja objetivo e prático nas sugestões`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

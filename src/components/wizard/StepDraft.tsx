@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Calculator, Zap } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Zap } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
@@ -1218,105 +1218,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
-  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    if (file.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      toast.error('Por favor, envie apenas arquivos .docx');
-      return;
-    }
-
-    try {
-      // 1. Upload para Storage
-      const fileName = `${data.caseId}/${Date.now()}_template.docx`;
-      const { error: uploadError } = await supabase.storage
-        .from('case-templates')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // 2. Obter URL pública
-      const { data: publicUrl } = supabase.storage
-        .from('case-templates')
-        .getPublicUrl(fileName);
-
-      // 3. Salvar URL no banco
-      await supabase
-        .from('cases')
-        .update({ template_url: publicUrl.publicUrl })
-        .eq('id', data.caseId);
-
-      setTemplateFile(file);
-      toast.success('Modelo enviado com sucesso!');
-
-    } catch (error) {
-      console.error('Erro ao enviar modelo:', error);
-      toast.error('Erro ao enviar modelo');
-    }
-  };
-
-  const handleDownloadTemplate = async () => {
-    if (!data.caseId) return;
-    
-    try {
-      // Buscar URL do template
-      const { data: caseData } = await supabase
-        .from('cases')
-        .select('template_url')
-        .eq('id', data.caseId)
-        .maybeSingle();
-
-      if (!caseData?.template_url) {
-        toast.error('Modelo não encontrado');
-        return;
-      }
-
-      // Fazer download
-      window.open(caseData.template_url, '_blank');
-      
-    } catch (error) {
-      console.error('Erro ao baixar modelo:', error);
-      toast.error('Erro ao baixar modelo');
-    }
-  };
-
-  const handleRemoveTemplate = async () => {
-    if (!data.caseId) return;
-    
-    try {
-      // 1. Buscar URL atual
-      const { data: caseData } = await supabase
-        .from('cases')
-        .select('template_url')
-        .eq('id', data.caseId)
-        .maybeSingle();
-
-      if (caseData?.template_url) {
-        // 2. Extrair path do Storage
-        const path = caseData.template_url.split('/case-templates/')[1];
-        
-        // 3. Deletar do Storage
-        await supabase.storage
-          .from('case-templates')
-          .remove([path]);
-      }
-
-      // 4. Limpar do banco
-      await supabase
-        .from('cases')
-        .update({ template_url: null })
-        .eq('id', data.caseId);
-
-      // 5. Limpar estado local
-      setTemplateFile(null);
-      toast.success('Modelo removido com sucesso');
-
-    } catch (error) {
-      console.error('Erro ao remover modelo:', error);
-      toast.error('Erro ao remover modelo');
-    }
-  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(petition);
@@ -1324,38 +1225,6 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadPlaceholders = async () => {
-    if (!data.caseId) {
-      toast.error("ID do caso não encontrado");
-      return;
-    }
-    
-    try {
-      // Buscar análise jurídica
-      const { data: analysis } = await supabase
-        .from('case_analysis')
-        .select('*')
-        .eq('case_id', data.caseId)
-        .maybeSingle();
-      
-      // Extrair placeholders
-      const placeholders = extractPlaceholders(data, analysis);
-      const content = generatePlaceholderList(placeholders);
-      
-      // Download
-      const blob = new Blob([content], { type: 'text/plain; charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `placeholders_${data.authorName || 'caso'}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-      
-    } catch (error) {
-      console.error('Erro ao gerar placeholders:', error);
-      toast.error('Erro ao gerar lista de placeholders');
-    }
-  };
 
   const handleDownloadDOCX = async () => {
     if (!petition) return;
@@ -2916,10 +2785,6 @@ ${tabelaDocumentos}
           <Download className="h-4 w-4" />
           Baixar PDF
         </Button>
-        <Button onClick={handleDownloadPlaceholders} variant="outline" className="gap-2">
-          <FileText className="h-4 w-4" />
-          Baixar Lista
-        </Button>
         <Button
           onClick={revalidateQualityReport}
           variant="outline"
@@ -2929,53 +2794,6 @@ ${tabelaDocumentos}
           <RefreshCw className="h-4 w-4" />
           🔧 Validar e Corrigir
         </Button>
-        <Button
-          onClick={recalculateValorCausa}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-        >
-          <Calculator className="h-4 w-4" />
-          Recalcular Valor da Causa (Ano Correto)
-        </Button>
-        {!templateFile ? (
-          <div>
-            <input
-              type="file"
-              accept=".docx"
-              onChange={handleTemplateUpload}
-              className="hidden"
-              id="template-upload"
-            />
-            <label htmlFor="template-upload">
-              <Button variant="outline" className="gap-2" asChild>
-                <span>
-                  <Upload className="h-4 w-4" />
-                  Enviar Modelo
-                </span>
-              </Button>
-            </label>
-          </div>
-        ) : (
-          <>
-            <Button 
-              onClick={handleDownloadTemplate}
-              variant="outline" 
-              className="gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Baixar Modelo
-            </Button>
-            <Button
-              onClick={handleRemoveTemplate}
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </>
-        )}
       </div>
 
       {/* Petição Gerada */}
