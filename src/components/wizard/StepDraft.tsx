@@ -152,6 +152,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     
     // Carregar template também
     await loadExistingTemplate();
+    
+    // 🔥 GARANTIR SALÁRIO CORRETO AO CARREGAR
+    await ensureCorrectSalarioMinimo();
   };
   
   const loadQualityReport = async () => {
@@ -236,8 +239,26 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       });
       const dadosCompletos = camposFaltantes.length === 0;
       
-      // 4. Verificar valor da causa
-      const valorCausaValidado = valorCausa > 0 && petition.includes(valorCausa.toFixed(2));
+      // 4. Verificar valor da causa (aceitar formato brasileiro)
+      const valorCausaFormatado = valorCausa.toLocaleString('pt-BR', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      }); // Ex: "4.848,00"
+      
+      const valorCausaValidado = valorCausa > 0 && (
+        petition.includes(valorCausaFormatado) || 
+        petition.includes(`R$ ${valorCausaFormatado}`) ||
+        petition.includes(valorCausa.toFixed(0)) // Aceitar sem decimais também
+      );
+      
+      console.log('[REVALIDATE-QR] ✅ Detalhes da validação:', {
+        valor_causa: valorCausa,
+        valor_causa_formatado: valorCausaFormatado,
+        valor_causa_validado: valorCausaValidado,
+        petition_includes_valor: petition.includes(valorCausaFormatado),
+        enderecamento_ok: enderecamentoOk,
+        jurisdicao_ok: jurisdicaoOk
+      });
       
       // 5. Determinar status geral
       const issues: any[] = [];
@@ -284,9 +305,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           enderecamento_ok: enderecamentoOk,
           dados_completos: dadosCompletos,
           campos_faltantes: camposFaltantes,
-          valor_causa_validado: valorCausaValidado,
           jurisdicao_ok: jurisdicaoOk,
           competencia: isJuizado ? 'juizado' : 'vara',
+          valor_causa_validado: valorCausaValidado,
+          valor_causa_referencia: valorCausa,
           issues: issues,
           generated_at: new Date().toISOString()
         })
@@ -360,7 +382,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         valor_causa: valorCausaCorreto
       });
       
-      // Atualizar no banco
+      // Atualizar no banco (cases)
       const { error } = await supabase
         .from('cases')
         .update({
@@ -370,6 +392,17 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         .eq('id', data.caseId);
       
       if (error) throw error;
+      
+      // 🔥 ATUALIZAR TAMBÉM NA CASE_ANALYSIS
+      const { error: analysisError } = await supabase
+        .from('case_analysis')
+        .update({ valor_causa: valorCausaCorreto })
+        .eq('case_id', data.caseId);
+
+      if (analysisError) {
+        console.warn('[RECALC] Não foi possível atualizar case_analysis:', analysisError);
+        // Não bloquear - case_analysis pode não existir ainda
+      }
       
       // Atualizar petição substituindo valores incorretos
       if (petition) {
@@ -407,6 +440,51 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     } catch (error: any) {
       console.error('[RECALC] Erro:', error);
       toast.error('Erro ao recalcular: ' + error.message);
+    }
+  };
+
+  // 🔥 CORREÇÃO #5: Garantir que salário mínimo está correto ao carregar
+  const ensureCorrectSalarioMinimo = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select('child_birth_date, event_date, salario_minimo_history, salario_minimo_ref')
+        .eq('id', data.caseId)
+        .single();
+      
+      if (!caseData) return;
+      
+      const fatoGeradorDate = caseData.child_birth_date || caseData.event_date;
+      const fatoGeradorYear = new Date(fatoGeradorDate).getFullYear();
+      const salarioCorreto = (caseData.salario_minimo_history as any[])?.find(
+        (h: any) => h.year === fatoGeradorYear
+      )?.value;
+      
+      // Se o salário no banco está errado, corrigir automaticamente
+      if (salarioCorreto && caseData.salario_minimo_ref !== salarioCorreto) {
+        console.log('[ENSURE-SM] Corrigindo salário mínimo:', {
+          atual: caseData.salario_minimo_ref,
+          correto: salarioCorreto
+        });
+        
+        await supabase
+          .from('cases')
+          .update({ 
+            salario_minimo_ref: salarioCorreto,
+            valor_causa: salarioCorreto * 4
+          })
+          .eq('id', data.caseId);
+          
+        // Atualizar também na case_analysis
+        await supabase
+          .from('case_analysis')
+          .update({ valor_causa: salarioCorreto * 4 })
+          .eq('case_id', data.caseId);
+      }
+    } catch (error) {
+      console.error('[ENSURE-SM] Erro:', error);
     }
   };
 

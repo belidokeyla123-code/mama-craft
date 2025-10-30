@@ -1028,6 +1028,7 @@ export type Database = {
         Row: {
           campos_faltantes: string[] | null
           case_id: string | null
+          competencia: string | null
           created_at: string | null
           dados_completos: boolean | null
           document_type: string
@@ -1037,12 +1038,16 @@ export type Database = {
           id: string
           issues: Json | null
           jurisdicao_confianca: string | null
+          jurisdicao_ok: boolean | null
           jurisdicao_validada: Json | null
           status: string
+          valor_causa_referencia: number | null
+          valor_causa_validado: boolean | null
         }
         Insert: {
           campos_faltantes?: string[] | null
           case_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           dados_completos?: boolean | null
           document_type: string
@@ -1052,12 +1057,16 @@ export type Database = {
           id?: string
           issues?: Json | null
           jurisdicao_confianca?: string | null
+          jurisdicao_ok?: boolean | null
           jurisdicao_validada?: Json | null
           status: string
+          valor_causa_referencia?: number | null
+          valor_causa_validado?: boolean | null
         }
         Update: {
           campos_faltantes?: string[] | null
           case_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           dados_completos?: boolean | null
           document_type?: string
@@ -1067,8 +1076,11 @@ export type Database = {
           id?: string
           issues?: Json | null
           jurisdicao_confianca?: string | null
+          jurisdicao_ok?: boolean | null
           jurisdicao_validada?: Json | null
           status?: string
+          valor_causa_referencia?: number | null
+          valor_causa_validado?: boolean | null
         }
         Relationships: [
           {
