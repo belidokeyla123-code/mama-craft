@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2 } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Upload, Sparkles, X, CheckCircle2, Shield } from "lucide-react";
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
+import jsPDF from 'jspdf';
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -554,8 +556,101 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
-  const handleDownload = () => {
-    toast.info("Download DOCX com formatação ABNT será implementado em breve");
+  const handleDownloadDOCX = async () => {
+    if (!petition) return;
+    
+    try {
+      // Converter markdown para DOCX com formatação ABNT
+      const lines = petition.split('\n');
+      const paragraphs = lines.map(line => {
+        if (line.startsWith('# ')) {
+          return new Paragraph({
+            text: line.replace('# ', ''),
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 240, after: 120 }
+          });
+        } else if (line.startsWith('## ')) {
+          return new Paragraph({
+            text: line.replace('## ', ''),
+            heading: HeadingLevel.HEADING_2,
+            alignment: AlignmentType.LEFT,
+            spacing: { before: 200, after: 100 }
+          });
+        } else {
+          return new Paragraph({
+            text: line,
+            spacing: { line: 360 }, // 1.5 linhas (ABNT)
+            alignment: AlignmentType.JUSTIFIED
+          });
+        }
+      });
+
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              margin: {
+                top: 1134, // 2cm (ABNT)
+                right: 1134,
+                bottom: 1134,
+                left: 1134
+              }
+            }
+          },
+          children: paragraphs
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `peticao_${data.authorName || 'caso'}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success('✅ DOCX baixado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar DOCX:', error);
+      toast.error('Erro ao gerar DOCX');
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    if (!petition) return;
+    
+    try {
+      const doc = new jsPDF({
+        format: 'a4',
+        unit: 'mm'
+      });
+
+      // Configurar fonte e margens ABNT
+      doc.setFontSize(12);
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margins = { top: 20, left: 30, right: 20 };
+      const maxWidth = pageWidth - margins.left - margins.right;
+
+      // Adicionar texto com quebra de linha
+      const lines = doc.splitTextToSize(petition, maxWidth);
+      let y = margins.top;
+
+      lines.forEach((line: string) => {
+        if (y > 280) {
+          doc.addPage();
+          y = margins.top;
+        }
+        doc.text(line, margins.left, y);
+        y += 7; // Espaçamento 1.5 linhas
+      });
+
+      doc.save(`peticao_${data.authorName || 'caso'}.pdf`);
+      toast.success('✅ PDF baixado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    }
   };
 
   const getSeverityColor = (gravidade: string) => {
@@ -687,11 +782,17 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         
         toast.success(`✅ ${judgeAnalysis.brechas?.length || 0} correções aplicadas! Petição ${diff > 0 ? 'ampliada' : 'otimizada'} em ${Math.abs(diff)} caracteres. Risco reduzido para ${newRisk}%.`);
 
-        // Scroll para o topo da petição corrigida
+        // ✅ CORREÇÃO #2: Feedback visual melhorado
         setTimeout(() => {
           const petitionElement = document.querySelector('[data-petition-content]');
           if (petitionElement) {
             petitionElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Flash visual
+            petitionElement.classList.add('ring-4', 'ring-green-500', 'animate-pulse');
+            setTimeout(() => {
+              petitionElement.classList.remove('ring-4', 'ring-green-500', 'animate-pulse');
+            }, 2000);
           }
         }, 300);
       } else {
@@ -825,16 +926,92 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
   };
 
+  const applyRegionalAdaptations = async () => {
+    setApplyingRegionalAdaptations(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: {
+          petition,
+          judgeAnalysis: {
+            brechas: [],
+            pontos_fortes: [],
+            pontos_fracos: [],
+            recomendacoes: regionalAdaptation?.adaptacoes_sugeridas.map(a => a.adaptacao) || []
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (result?.petition_corrigida) {
+        setPetition(result.petition_corrigida);
+        
+        await supabase.from('drafts').upsert({
+          case_id: data.caseId,
+          markdown_content: result.petition_corrigida,
+          payload: { regional_adaptations_applied: true }
+        });
+        
+        toast.success(`✅ ${regionalAdaptation?.adaptacoes_sugeridas.length || 0} adaptações regionais aplicadas!`);
+      }
+    } catch (error: any) {
+      toast.error('Erro: ' + error.message);
+    } finally {
+      setApplyingRegionalAdaptations(false);
+    }
+  };
+
+  const applyAppellateAdaptations = async () => {
+    setApplyingRegionalAdaptations(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('apply-judge-corrections', {
+        body: {
+          petition,
+          judgeAnalysis: {
+            brechas: [],
+            pontos_fortes: [],
+            pontos_fracos: [],
+            recomendacoes: appellateAnalysis?.adaptacoes_regionais?.map((a: any) => a.sugestao) || []
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (result?.petition_corrigida) {
+        setPetition(result.petition_corrigida);
+        
+        await supabase.from('drafts').upsert({
+          case_id: data.caseId,
+          markdown_content: result.petition_corrigida,
+          payload: { appellate_adaptations_applied: true }
+        });
+        
+        toast.success(`✅ ${appellateAnalysis?.adaptacoes_regionais?.length || 0} adaptações do tribunal aplicadas!`);
+      }
+    } catch (error: any) {
+      toast.error('Erro: ' + error.message);
+    } finally {
+      setApplyingRegionalAdaptations(false);
+    }
+  };
+
   const handleSaveFinal = async () => {
     if (!petition || !data.caseId) return;
     
     try {
+      toast.info('Salvando versão final e gerando documentos...');
+      
       // Marcar como versão final
-      await supabase.from('drafts').insert({
+      const { data: savedDraft } = await supabase.from('drafts').insert({
         case_id: data.caseId,
         markdown_content: petition,
         payload: { final_version: true, timestamp: new Date().toISOString() }
-      });
+      }).select().single();
+
+      if (savedDraft) {
+        toast.success('✅ Versão final salva com sucesso!');
+      }
     } catch (error) {
       console.error('Erro ao salvar versão final:', error);
       toast.error("Erro ao salvar versão final");
@@ -1041,9 +1218,13 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           Limpar Cache & Regerar Tudo
         </Button>
         
-        <Button onClick={handleDownload} variant="outline" disabled={!petition} className="gap-2">
+        <Button onClick={handleDownloadDOCX} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar DOCX
+        </Button>
+        <Button onClick={handleDownloadPDF} variant="outline" disabled={!petition} className="gap-2">
+          <Download className="h-4 w-4" />
+          Baixar PDF
         </Button>
         <Button onClick={handleDownloadPlaceholders} variant="outline" className="gap-2">
           <FileText className="h-4 w-4" />
@@ -1212,6 +1393,13 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
             {judgeAnalysis && (
               <CollapsibleContent className="mt-6 space-y-4">
+                {/* ✅ CORREÇÃO #2: Badge de status atualizado */}
+                {applyingJudgeCorrections && (
+                  <Badge className="animate-pulse bg-green-600 mb-4">
+                    ⚡ Aplicando correções na petição...
+                  </Badge>
+                )}
+                
                 {/* Botão Aplicar Correções */}
                 <div className="flex justify-end gap-2">
                   <Button 
@@ -1364,7 +1552,26 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
             {regionalAdaptation && (
               <CollapsibleContent className="mt-6 space-y-4">
-                {/* Botões individuais aplicam as adaptações - sem botão global */}
+                {/* ✅ CORREÇÃO #1: Botão Global Aplicar Todas as Adaptações */}
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    onClick={applyRegionalAdaptations}
+                    disabled={applyingRegionalAdaptations}
+                    className="gap-2 bg-blue-600 hover:bg-blue-700"
+                  >
+                    {applyingRegionalAdaptations ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Aplicando adaptações...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCheck className="h-4 w-4" />
+                        Aplicar Todas as Adaptações Regionais
+                      </>
+                    )}
+                  </Button>
+                </div>
 
                 {/* Identificação do TRF */}
                 <div className="flex items-center gap-3">
@@ -1410,20 +1617,184 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                   </div>
                 )}
 
-                {/* Adaptações Sugeridas */}
+                {/* ✅ CORREÇÃO #1: Adaptações Sugeridas com botões individuais */}
                 {regionalAdaptation.adaptacoes_sugeridas.length > 0 && (
                   <div className="space-y-3">
                     <h4 className="font-semibold">Adaptações Sugeridas por Seção</h4>
                     {regionalAdaptation.adaptacoes_sugeridas.map((adapt, index) => (
-                      <Card key={index} className="p-4">
+                      <Card key={index} className="p-4 border-l-4 border-blue-500">
                         <Badge variant="outline" className="mb-2">{adapt.secao}</Badge>
                         <p className="text-sm mb-2">{adapt.adaptacao}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mb-3">
                           <strong>Justificativa:</strong> {adapt.justificativa}
                         </p>
+                        
+                        <Button
+                          size="sm"
+                          onClick={() => applySingleAdaptation(adapt, index)}
+                          disabled={applyingIndividualAdaptation !== null}
+                          className="gap-2 w-full"
+                          variant="outline"
+                        >
+                          {applyingIndividualAdaptation === index ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Aplicando...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCheck className="h-3 w-3" />
+                              Aplicar esta Adaptação
+                            </>
+                          )}
+                        </Button>
                       </Card>
                     ))}
                   </div>
+                )}
+              </CollapsibleContent>
+            )}
+          </Collapsible>
+        </Card>
+      )}
+
+      {/* ✅ CORREÇÃO #3: Módulo Tribunal Recursivo (Appellate) */}
+      {petition && (
+        <Card className="p-6 border-2 border-purple-200 dark:border-purple-900">
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <Shield className="h-6 w-6 text-purple-600" />
+                  <div>
+                    <h3 className="text-xl font-bold">Módulo Tribunal - Análise Recursiva Preventiva</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Análise desembargadora para prever recursos e fortalecer argumentos
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={analyzeWithAppellateModule} disabled={analyzingAppellate}>
+                  {analyzingAppellate ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Analisando...
+                    </>
+                  ) : (
+                    "Analisar Recursivamente"
+                  )}
+                </Button>
+              </div>
+            </CollapsibleTrigger>
+
+            {appellateAnalysis && (
+              <CollapsibleContent className="mt-6 space-y-4">
+                {/* Botão Global Aplicar Todas as Adaptações */}
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    onClick={applyAppellateAdaptations}
+                    disabled={applyingRegionalAdaptations}
+                    className="gap-2 bg-purple-600 hover:bg-purple-700"
+                  >
+                    {applyingRegionalAdaptations ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Aplicando adaptações...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCheck className="h-4 w-4" />
+                        Aplicar Todas as Adaptações do Tribunal
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Adaptações Regionais */}
+                {appellateAnalysis.adaptacoes_regionais?.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Adaptações Regionais Sugeridas</h4>
+                    {appellateAnalysis.adaptacoes_regionais.map((adapt: any, index: number) => (
+                      <Card key={index} className="p-4 border-l-4 border-purple-500">
+                        <Badge variant="outline" className="mb-2">{adapt.tipo}</Badge>
+                        <p className="text-sm mb-2">{adapt.sugestao}</p>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          <strong>Justificativa:</strong> {adapt.justificativa}
+                        </p>
+                        
+                        <Button
+                          size="sm"
+                          onClick={() => applySingleAdaptation(adapt, index)}
+                          disabled={applyingIndividualAdaptation !== null}
+                          className="gap-2 w-full"
+                          variant="outline"
+                        >
+                          {applyingIndividualAdaptation === index ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Aplicando...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCheck className="h-3 w-3" />
+                              Aplicar esta Adaptação
+                            </>
+                          )}
+                        </Button>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* Pontos a Reforçar */}
+                {appellateAnalysis.pontos_a_reforcar?.length > 0 && (
+                  <Card className="p-4 bg-yellow-50 dark:bg-yellow-950">
+                    <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-2">⚠️ Pontos a Reforçar</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      {appellateAnalysis.pontos_a_reforcar.map((ponto: string, index: number) => (
+                        <li key={index}>{ponto}</li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
+
+                {/* Jurisprudências Relevantes */}
+                {appellateAnalysis.jurisprudencias_relevantes?.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">Jurisprudências Relevantes para o TRF</h4>
+                    {appellateAnalysis.jurisprudencias_relevantes.map((juris: any, index: number) => (
+                      <Card key={index} className="p-3 border-l-4 border-blue-500">
+                        <p className="text-xs font-medium text-blue-600 mb-1">{juris.tribunal}</p>
+                        <p className="text-sm mb-1"><strong>{juris.numero}</strong></p>
+                        <p className="text-sm">{juris.tese}</p>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* Avaliação de Risco de Recurso */}
+                {appellateAnalysis.risco_recurso && (
+                  <Card className="p-4 bg-red-50 dark:bg-red-950">
+                    <h4 className="font-semibold text-red-800 dark:text-red-200 mb-2">🎯 Avaliação de Risco de Recurso</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Probabilidade de Recurso</span>
+                        <Badge variant="destructive">{appellateAnalysis.risco_recurso.probabilidade}%</Badge>
+                      </div>
+                      <Progress value={appellateAnalysis.risco_recurso.probabilidade} className="h-2" />
+                      <p className="text-sm text-muted-foreground">{appellateAnalysis.risco_recurso.motivo}</p>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Recomendação Executiva */}
+                {appellateAnalysis.recomendacao_executiva && (
+                  <Alert>
+                    <Target className="h-4 w-4" />
+                    <AlertTitle>Recomendação Executiva</AlertTitle>
+                    <AlertDescription>
+                      {appellateAnalysis.recomendacao_executiva}
+                    </AlertDescription>
+                  </Alert>
                 )}
               </CollapsibleContent>
             )}
