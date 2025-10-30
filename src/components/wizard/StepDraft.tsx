@@ -1431,6 +1431,106 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
               </div>
             </CollapsibleTrigger>
 
+            {/* Seção de Benefícios */}
+            <CollapsibleContent className="mt-6">
+              <Card className="p-6 bg-muted/30 border-primary/20">
+                <h4 className="font-bold text-lg mb-4">BENEFÍCIOS:</h4>
+                <ol className="space-y-3">
+                  <li className="flex gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-sm bg-green-600 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold">Feedback instantâneo</span>
+                      <span className="text-muted-foreground"> - Usuário vê mudanças imediatamente</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-sm bg-green-600 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold">Risco atualiza em tempo real</span>
+                      <span className="text-muted-foreground"> - 20% → 15% → 10% → 5% → 0%</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-sm bg-green-600 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold">Brechas desaparecem</span>
+                      <span className="text-muted-foreground"> ao serem corrigidas</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-sm bg-green-600 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold">Validação automática</span>
+                      <span className="text-muted-foreground"> - Re-analisa quando termina</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-sm bg-green-600 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold">Toast informativo</span>
+                      <span className="text-muted-foreground"> - Mostra progresso claramente</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-sm bg-green-600 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold">Highlight visual</span>
+                      <span className="text-muted-foreground"> - Petição pisca verde</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-sm bg-green-600 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold">UX profissional</span>
+                      <span className="text-muted-foreground"> - Fluxo completo e satisfatório</span>
+                    </div>
+                  </li>
+                </ol>
+              </Card>
+            </CollapsibleContent>
+
             {judgeAnalysis && (
               <CollapsibleContent className="mt-6 space-y-4">
                 {/* ✅ CORREÇÃO #2: Badge de status atualizado */}
