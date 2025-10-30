@@ -3313,7 +3313,7 @@ ${tabelaDocumentos}
       )}
 
       {/* Seção 3: Módulo Tribunal */}
-      {petition && data.petition_type === 'recurso_apelacao' && (
+      {petition && data.petitionType === 'recurso_apelacao' && (
         <Card className="p-6 border-2 border-blue-200 dark:border-blue-900">
           <Collapsible>
             <CollapsibleTrigger asChild>
@@ -3495,7 +3495,7 @@ ${tabelaDocumentos}
       )}
 
       {/* ✅ CORREÇÃO #3: Módulo Tribunal Recursivo (Appellate) */}
-      {petition && data.petition_type === 'recurso_apelacao' && (
+      {petition && data.petitionType === 'recurso_apelacao' && (
         <Card className="p-6 border-2 border-purple-200 dark:border-purple-900">
           <Collapsible>
             <CollapsibleTrigger asChild>

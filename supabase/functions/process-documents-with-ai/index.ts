@@ -536,11 +536,13 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
       
       updateData.rural_periods = mergedPeriods;
       
-      // Usar a data mais antiga como "rural_activity_since"
-      const oldestPeriod = mergedPeriods.reduce((oldest: any, current: any) => {
-        return new Date(current.startDate) < new Date(oldest.startDate) ? current : oldest;
-      });
-      updateData.rural_activity_since = oldestPeriod.startDate;
+      // Usar a data mais antiga como "rural_activity_since" (apenas se houver períodos)
+      if (mergedPeriods.length > 0) {
+        const oldestPeriod = mergedPeriods.reduce((oldest: any, current: any) => {
+          return new Date(current.startDate) < new Date(oldest.startDate) ? current : oldest;
+        });
+        updateData.rural_activity_since = oldestPeriod.startDate;
+      }
     }
     
     if (extractedData.urbanPeriods) updateData.urban_periods = extractedData.urbanPeriods;
