@@ -425,7 +425,27 @@ Você é um especialista altamente experiente em análise de documentos previden
               properties: {
                 documentType: { type: 'string', description: 'Tipo do documento' },
                 extractionConfidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                extractedData: getSchemaForDocType(docType)
+                extractedData: getSchemaForDocType(docType),
+                universalData: {
+                  type: 'object',
+                  description: 'Dados universais extraídos de qualquer documento',
+                  properties: {
+                    authorName: { type: 'string' },
+                    authorCpf: { type: 'string' },
+                    authorRg: { type: 'string' },
+                    authorBirthDate: { type: 'string' },
+                    authorAddress: { type: 'string' },
+                    authorPhone: { type: 'string' },
+                    authorWhatsapp: { type: 'string' },
+                    authorMaritalStatus: { type: 'string' },
+                    spouseName: { type: 'string' },
+                    spouseCpf: { type: 'string' },
+                    marriageDate: { type: 'string' },
+                    childName: { type: 'string' },
+                    childBirthDate: { type: 'string' },
+                    childCpf: { type: 'string' }
+                  }
+                }
               },
               required: ['documentType', 'extractionConfidence', 'extractedData']
             }

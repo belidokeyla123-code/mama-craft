@@ -216,26 +216,43 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         updateData({ caseId });
       }
 
-      // Verificar duplicatas no banco antes de fazer upload
-      const fileNames = files.map(f => f.name);
+      // Função para normalizar nome de arquivo (remove extensão, sufixo de página, truncation DOS 8.3)
+      const normalizeFileName = (name: string): string => {
+        let base = name.replace(/\.(pdf|png|jpg|jpeg|docx)$/i, '');
+        base = base.replace(/_pagina_\d+$/i, '');
+        base = base.replace(/~\d+/g, '');
+        return base.toLowerCase().trim();
+      };
+
+      // Buscar TODOS os documentos existentes
       const { data: existingDocs, error: checkError } = await supabase
         .from("documents")
         .select("file_name")
-        .eq("case_id", caseId)
-        .in("file_name", fileNames);
+        .eq("case_id", caseId);
 
       if (checkError) throw checkError;
 
-      const existingFileNames = existingDocs?.map(d => d.file_name) || [];
+      // Criar set de nomes base normalizados
+      const existingBaseNames = new Set(
+        existingDocs?.map(d => normalizeFileName(d.file_name)) || []
+      );
+
+      console.log('[DEDUPE] Documentos existentes (normalizados):', Array.from(existingBaseNames));
+
+      // Filtrar arquivos que não existem
       const filesToUpload = files.filter(file => {
-        if (existingFileNames.includes(file.name)) {
+        const normalizedName = normalizeFileName(file.name);
+        
+        if (existingBaseNames.has(normalizedName)) {
+          console.warn(`[DEDUPE] ❌ "${file.name}" é duplicata de arquivo já enviado`);
           toast({
-            title: "Documento já existe",
+            title: "Documento duplicado",
             description: `"${file.name}" já foi enviado anteriormente`,
             variant: "destructive",
           });
           return false;
         }
+        
         return true;
       });
 
