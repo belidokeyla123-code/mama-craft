@@ -453,54 +453,25 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Timeout de 90 segundos
+    // ✅ Timeout otimizado de 45 segundos
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-    // ✅ USAR GEMINI FLASH (mais estável que Pro para prompts grandes)
-    const models = ['google/gemini-2.5-flash', 'google/gemini-2.5-pro'];
-    let aiResponse: Response | null = null;
-    let lastError: Error | null = null;
-
-    // Tentar com flash primeiro, depois pro como fallback
-    for (const model of models) {
-      try {
-        console.log(`[PETITION] 🔄 Tentando com modelo: ${model}`);
-        
-        aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [{ role: 'user', content: prompt }],
-          }),
-          signal: controller.signal,
-        });
-
-        // Se obteve resposta OK, sair do loop
-        if (aiResponse.ok) {
-          console.log(`[PETITION] ✅ Sucesso com modelo: ${model}`);
-          break;
-        }
-
-        console.log(`[PETITION] ⚠️ Modelo ${model} retornou status ${aiResponse.status}, tentando próximo...`);
-      } catch (err) {
-        lastError = err as Error;
-        console.error(`[PETITION] ❌ Erro com modelo ${model}:`, err);
-        if (model === models[models.length - 1]) {
-          throw lastError; // Se for o último modelo, lançar erro
-        }
-      }
-    }
-
-    if (!aiResponse) {
-      throw new Error('Todos os modelos falharam');
-    }
+    console.log('[PETITION] 🚀 Usando google/gemini-2.5-flash (otimizado para velocidade)');
 
     try {
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash', // ✅ Flash: mais rápido e confiável
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: controller.signal,
+      });
       clearTimeout(timeoutId);
 
       if (aiResponse.status === 429) {

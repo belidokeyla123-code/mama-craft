@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -175,7 +176,30 @@ ${texto}
       });
     }
 
-    const prompt = `Você é um advogado previdenciarista SÊNIOR. Sua tarefa é REESCREVER a petição aplicando TODAS as ${totalCorrecoes} correções abaixo.
+    const prompt = `Você é um EDITOR DE PETIÇÕES com PODER ABSOLUTO de modificação. Sua tarefa é REESCREVER a petição aplicando TODAS as ${totalCorrecoes} correções abaixo.
+
+⚠️ REGRAS CRÍTICAS DE CORREÇÃO:
+
+1. **Documentos com numeração errada:**
+   → LOCALIZE a seção "Das Provas" ou "Documentos Anexos"
+   → REESCREVA COMPLETAMENTE usando esta lista EXATA:
+${contextDocuments?.split('\n').slice(0, 10).join('\n') || '(documentos não fornecidos)'}
+
+2. **Benefício anterior não fundamentado:**
+   → ADICIONE parágrafo após mencionar benefícios anteriores:
+   "Ressalta-se que cada gestação gera direito autônomo ao salário-maternidade, nos termos do Art. 71 da Lei 8.213/91, conforme entendimento consolidado (TNU PEDILEF 0506032-44.2012.4.05.8300)."
+
+3. **Valor da causa incorreto:**
+   → LOCALIZE "Atribui-se à causa o valor"
+   → SUBSTITUA por valor correto do contexto temporal
+
+4. **Fundamentação jurídica fraca:**
+   → ADICIONE citações de lei específicas (Arts. 11, 39, 71 da Lei 8.213/91)
+   → INCLUA jurisprudência relevante quando mencionada nas correções
+
+5. **Falta de documentos obrigatórios:**
+   → MENCIONE explicitamente cada documento necessário na seção de provas
+   → JUSTIFIQUE por que cada documento comprova o alegado
 
 ${tentativaInfo?.numero > 1 ? `
 ═══════════════════════════════════════════════════════════════
@@ -361,6 +385,33 @@ Agora, reescreva a petição aplicando TODAS as ${totalCorrecoes} correções:`;
         });
       }
       throw fetchError;
+    }
+
+    // ✅ ATUALIZAR QUALITY REPORT PARA INDICAR QUE PRECISA REVALIDAÇÃO
+    if (caseId) {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        
+        const { error: qrError } = await supabase
+          .from('quality_reports')
+          .update({ 
+            status: 'em_revisao',
+            updated_at: new Date().toISOString()
+          })
+          .eq('case_id', caseId)
+          .eq('document_type', 'petition');
+        
+        if (qrError) {
+          console.error('[EDGE] Erro ao atualizar quality report:', qrError);
+        } else {
+          console.log('[EDGE] ✅ Quality report atualizado para EM_REVISAO');
+        }
+      } catch (qrUpdateError) {
+        console.error('[EDGE] Erro ao atualizar quality report:', qrUpdateError);
+      }
     }
 
   } catch (error) {

@@ -1065,7 +1065,8 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             (result.recomendacoes && result.recomendacoes.length > 0)
           );
           
-          if (hasIssues) {
+          // ✅ NÃO aplicar correções automaticamente em revalidações
+          if (hasIssues && !isRevalidation) {
             toast.loading("🔧 Aplicando correções automaticamente...", { id: 'auto-apply' });
             
             // Aguardar um momento para garantir que o estado foi atualizado
@@ -2091,7 +2092,19 @@ ${tabelaDocumentos}
       });
 
       // 🔥 FASE 8: REVALIDAÇÃO INTELIGENTE (SEM LOOP INFINITO)
-      console.log('[FIX-TABS] 🔄 Iniciando revalidação...');
+      
+      // ✅ VERIFICAR LIMITE DE TENTATIVAS
+      if (correctionAttempts >= MAX_CORRECTION_ATTEMPTS) {
+        console.warn('[FIX-TABS] ⚠️ Limite de tentativas atingido, pulando revalidação');
+        toast.warning('Correções aplicadas. Revisão manual recomendada para validação final.', {
+          duration: 6000
+        });
+        setCorrectionAttempts(0); // Reset para próxima vez
+        return;
+      }
+      
+      setCorrectionAttempts(prev => prev + 1);
+      console.log(`[FIX-TABS] 🔄 Iniciando revalidação (tentativa ${correctionAttempts + 1}/${MAX_CORRECTION_ATTEMPTS})...`);
       toast.info('🔄 Revalidando status das abas...', { id: 'revalidating' });
       
       try {
