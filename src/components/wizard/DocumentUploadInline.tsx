@@ -35,6 +35,43 @@ export const DocumentUploadInline = ({
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   // ⚡ Polling otimizado para aguardar extrações
+  // ✅ SALVAR DADOS EXTRAÍDOS AUTOMATICAMENTE
+  const saveExtractedData = async (extracted: any, docType: string, caseId: string) => {
+    try {
+      if (docType === 'historico_escolar') {
+        await supabase.from('cases').update({
+          school_history: extracted.school_history || []
+        }).eq('id', caseId);
+        console.log('[EXTRACT] ✅ Histórico escolar salvo');
+      }
+      
+      if (docType === 'declaracao_saude_ubs') {
+        await supabase.from('cases').update({
+          health_declaration_ubs: extracted.health_declaration_ubs || {}
+        }).eq('id', caseId);
+        console.log('[EXTRACT] ✅ Declaração de saúde salva');
+      }
+      
+      if (docType === 'documento_terra') {
+        await supabase.from('cases').update({
+          land_owner_name: extracted.landOwnerName,
+          land_owner_cpf: extracted.landOwnerCpf,
+          land_owner_rg: extracted.landOwnerRg,
+          land_area: extracted.landArea,
+          land_total_area: extracted.landTotalArea,
+          land_exploited_area: extracted.landExploitedArea,
+          land_property_name: extracted.landPropertyName,
+          land_municipality: extracted.landMunicipality,
+          land_itr: extracted.landITR,
+          land_cession_type: extracted.landCessionType
+        }).eq('id', caseId);
+        console.log('[EXTRACT] ✅ Dados da terra salvos');
+      }
+    } catch (error) {
+      console.error('[EXTRACT] Erro ao salvar dados:', error);
+    }
+  };
+
   const pollForExtractions = async (
     docIds: string[], 
     maxWaitMs: number = 10000 // ⚡ Reduzido de 30s para 10s
@@ -280,17 +317,49 @@ export const DocumentUploadInline = ({
         }
       }
 
-      // Processar com IA passando os IDs dos documentos
-      const { error: processError } = await supabase.functions.invoke('process-documents-with-ai', {
-        body: { 
-          caseId,
-          documentIds: insertedDocIds
+      // ✅ ANÁLISE INDIVIDUAL IMEDIATA (se suggestedDocType fornecido)
+      if (suggestedDocType && insertedDocIds.length > 0) {
+        console.log('[UPLOAD] 🔍 Analisando documentos individualmente...');
+        setUploadState('processing');
+        
+        for (const docId of insertedDocIds) {
+          try {
+            const { data: result, error: analyzeError } = await supabase.functions.invoke('analyze-single-document', {
+              body: { 
+                documentId: docId,
+                caseId,
+                forceDocType: suggestedDocType
+              }
+            });
+            
+            if (analyzeError) {
+              console.error('[ANALYZE] Erro ao analisar:', analyzeError);
+              continue;
+            }
+            
+            // ✅ SALVAR DADOS EXTRAÍDOS AUTOMATICAMENTE
+            if (result?.extracted) {
+              await saveExtractedData(result.extracted, suggestedDocType, caseId);
+            }
+          } catch (error) {
+            console.error('[ANALYZE] Erro:', error);
+          }
         }
-      });
+        
+        toast.success('Documentos analisados e dados extraídos!');
+      } else {
+        // Processar com IA em lote (modo antigo)
+        const { error: processError } = await supabase.functions.invoke('process-documents-with-ai', {
+          body: { 
+            caseId,
+            documentIds: insertedDocIds
+          }
+        });
 
-      if (processError) {
-        console.error('Erro ao processar:', processError);
-        toast.warning("Documentos enviados mas processamento falhou. Tente reprocessar.");
+        if (processError) {
+          console.error('Erro ao processar:', processError);
+          toast.warning("Documentos enviados mas processamento falhou. Tente reprocessar.");
+        }
       }
 
       // Aguardar extrações serem criadas antes de chamar callback
@@ -304,6 +373,7 @@ export const DocumentUploadInline = ({
         
         // Force UI refresh
         window.dispatchEvent(new CustomEvent('revalidate-documents'));
+        window.dispatchEvent(new CustomEvent('case-updated', { detail: { caseId, source: 'document-upload' } }));
         
         if (success) {
           toast.success('Documentos processados e validados!');

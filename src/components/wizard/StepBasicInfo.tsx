@@ -1,13 +1,4 @@
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Sparkles, AlertTriangle, CheckCircle2, Calendar, FileText, User, Baby, Heart, MapPin, Tractor, Building, Home, PlusCircle, Trash2, Save, RefreshCw, AlertCircle, Stethoscope } from "lucide-react";
 import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText, Loader2, Brain } from "lucide-react";
 import { CaseData, RuralPeriod, UrbanPeriod } from "@/pages/NewCase";
 import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMinimo";
@@ -63,8 +54,11 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
   // ✅ CORREÇÃO #3: Estado para benefícios anteriores
   const [benefitHistory, setBenefitHistory] = useState<any[]>([]);
+  const [cnisAnalysis, setCnisAnalysis] = useState<any>(null);
+  const [birthStateAI, setBirthStateAI] = useState<any>(null);
   const [aiValidation, setAiValidation] = useState<any>(null);
   const [validatingWithAI, setValidatingWithAI] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   const isAutoFilled = (fieldName: string) => {
     return autoFilledFields.includes(fieldName);
@@ -250,7 +244,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     }
   }, [data.birthCity, data.authorAddress]);
 
-  // Carregar análise do CNIS quando o componente montar
+  // ✅ Carregar análise do CNIS e popular campos automaticamente
   useEffect(() => {
     const loadCnisAnalysis = async () => {
       if (!data.caseId) return;
@@ -261,10 +255,40 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         .eq('case_id', data.caseId)
         .maybeSingle();
       
-      if (analysis?.draft_payload && typeof analysis.draft_payload === 'object') {
+      if (analysis?.draft_payload) {
         const payload = analysis.draft_payload as any;
-        if (payload.cnis_analysis) {
-          updateData({ cnisAnalysis: payload.cnis_analysis });
+        const cnisAnalysis = payload.cnis_analysis;
+        
+        if (cnisAnalysis) {
+          setCnisAnalysis(cnisAnalysis);
+          
+          // ✅ POPULAR PERÍODOS URBANOS AUTOMATICAMENTE DO CNIS
+          if (cnisAnalysis.periodos_urbanos?.length > 0 && (!data.urbanPeriods || data.urbanPeriods.length === 0)) {
+            const urbanPeriods = cnisAnalysis.periodos_urbanos.map((p: any) => ({
+              startDate: p.inicio,
+              endDate: p.fim,
+              details: `Empregador: ${p.empregador || 'Não informado'}`
+            }));
+            
+            updateData({ urbanPeriods });
+            toast.success(`✅ ${urbanPeriods.length} período(s) urbano(s) adicionado(s) do CNIS`);
+          }
+          
+          // ✅ POPULAR PERÍODOS RURAIS DO CNIS (mesclar com existentes)
+          if (cnisAnalysis.periodos_rurais?.length > 0) {
+            const ruralPeriodsFromCnis = cnisAnalysis.periodos_rurais.map((p: any) => ({
+              startDate: p.inicio,
+              endDate: p.fim,
+              location: 'Conforme CNIS',
+              activities: p.detalhes || 'Atividade rural'
+            }));
+            
+            // Verificar se já existem períodos para não duplicar
+            if (!data.ruralPeriods || data.ruralPeriods.length === 0) {
+              updateData({ ruralPeriods: ruralPeriodsFromCnis });
+              toast.success(`✅ ${ruralPeriodsFromCnis.length} período(s) rural(is) adicionado(s) do CNIS`);
+            }
+          }
         }
       }
     };
@@ -405,6 +429,76 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     updateData({ urbanPeriods: updated });
   };
 
+  // ✅ REANÁLISE INDIVIDUAL DE DOCUMENTOS
+  const reanalyzeSingleDocument = async (docType: string) => {
+    if (!data.caseId) return;
+    
+    setIsReanalyzing(true);
+    toast.info(`🔄 Reprocessando ${docType}...`, { id: 'reanalyze' });
+    
+    try {
+      // Buscar documento do tipo específico
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('case_id', data.caseId)
+        .eq('document_type', docType)
+        .order('uploaded_at', { ascending: false })
+        .limit(1);
+      
+      if (!docs || docs.length === 0) {
+        toast.error(`Nenhum documento de ${docType} encontrado`, { id: 'reanalyze' });
+        setIsReanalyzing(false);
+        return;
+      }
+      
+      // Chamar analyze-single-document
+      const { data: result, error } = await supabase.functions.invoke('analyze-single-document', {
+        body: {
+          documentId: docs[0].id,
+          caseId: data.caseId,
+          forceDocType: docType as any
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (result?.extracted) {
+        // Atualizar dados localmente
+        if (docType === 'historico_escolar') {
+          updateData({ schoolHistory: result.extracted.school_history });
+          await syncWithOtherTabs();
+        }
+        if (docType === 'declaracao_saude_ubs') {
+          updateData({ healthDeclarationUbs: result.extracted.health_declaration_ubs });
+          await syncWithOtherTabs();
+        }
+        if (docType === 'documento_terra') {
+          updateData({
+            landOwnerName: result.extracted.landOwnerName,
+            landOwnerCpf: result.extracted.landOwnerCpf,
+            landOwnerRg: result.extracted.landOwnerRg,
+            landArea: result.extracted.landArea,
+            landTotalArea: result.extracted.landTotalArea,
+            landExploitedArea: result.extracted.landExploitedArea,
+            landPropertyName: result.extracted.landPropertyName,
+            landMunicipality: result.extracted.landMunicipality,
+            landITR: result.extracted.landITR,
+            landCessionType: result.extracted.landCessionType
+          });
+          await syncWithOtherTabs();
+        }
+        
+        toast.success(`✅ ${docType} reanalisado!`, { id: 'reanalyze' });
+      }
+    } catch (error) {
+      console.error('Erro ao reanalisar:', error);
+      toast.error('Erro ao reanalisar documento', { id: 'reanalyze' });
+    } finally {
+      setIsReanalyzing(false);
+    }
+  };
+
   const handleReprocessDocuments = async () => {
     if (!data.caseId) {
       toast.error("ID do caso não encontrado");
@@ -453,6 +547,21 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       toast.error("❌ Falha ao re-processar documentos", { id: 'reprocess' });
       setIsReprocessing(false);
     }
+  };
+
+  // ✅ SINCRONIZAÇÃO COM OUTRAS ABAS
+  const syncWithOtherTabs = async () => {
+    if (!data.caseId) return;
+    
+    // Invalidar análise
+    await supabase.from('case_analysis').update({ is_stale: true }).eq('case_id', data.caseId);
+    
+    // Disparar evento global
+    window.dispatchEvent(new CustomEvent('case-updated', { 
+      detail: { caseId: data.caseId, source: 'basic_info' } 
+    }));
+    
+    console.log('[SYNC] ✅ Abas sincronizadas');
   };
 
   const handleSaveSection = async () => {
@@ -1100,18 +1209,39 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-purple-600" />
             <h3 className="text-lg font-semibold">Histórico Escolar</h3>
+            {data.schoolHistory && data.schoolHistory.length > 0 ? (
+              <Badge variant="default" className="bg-green-600">
+                <CheckCircle2 className="h-3 w-3 mr-1" /> Analisado
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-orange-600 border-orange-600">
+                <AlertCircle className="h-3 w-3 mr-1" /> Pendente
+              </Badge>
+            )}
           </div>
-          {data.caseId && (
-            <DocumentUploadInline 
-              caseId={data.caseId}
-              suggestedDocType="historico_escolar"
-              onUploadComplete={async () => {
-                toast.success("Documento enviado! Aguarde processamento...");
-                setTimeout(() => window.location.reload(), 3000);
-              }}
-            />
+          {data.schoolHistory && data.schoolHistory.length > 0 && (
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => reanalyzeSingleDocument('historico_escolar')}
+              disabled={isReanalyzing}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
+              Reanalisar
+            </Button>
           )}
         </div>
+        
+        {data.caseId && (
+          <DocumentUploadInline 
+            caseId={data.caseId}
+            suggestedDocType="historico_escolar"
+            onUploadComplete={async () => {
+              toast.success("Documento enviado! Aguarde processamento...");
+              setTimeout(() => window.location.reload(), 3000);
+            }}
+          />
+        )}
 
         {(!data.schoolHistory || data.schoolHistory.length === 0) ? (
           <Alert className="border-orange-400">
@@ -1178,9 +1308,32 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-green-600" />
-            <h3 className="text-lg font-semibold">Declaração de Saúde UBS</h3>
+            <Stethoscope className="h-5 w-5 text-red-600" />
+            <h3 className="text-lg font-semibold">Declaração de Saúde (UBS)</h3>
+            {data.healthDeclarationUbs && Object.keys(data.healthDeclarationUbs).length > 0 ? (
+              <Badge variant="default" className="bg-green-600">
+                <CheckCircle2 className="h-3 w-3 mr-1" /> Analisado
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-orange-600 border-orange-600">
+                <AlertCircle className="h-3 w-3 mr-1" /> Pendente
+              </Badge>
+            )}
           </div>
+          {data.healthDeclarationUbs && Object.keys(data.healthDeclarationUbs).length > 0 && (
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => reanalyzeSingleDocument('declaracao_saude_ubs')}
+              disabled={isReanalyzing}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isReanalyzing ? 'animate-spin' : ''}`} />
+              Reanalisar
+            </Button>
+          )}
+        </div>
+
+        <div className="space-y-4">
           {data.caseId && (
             <DocumentUploadInline 
               caseId={data.caseId}
