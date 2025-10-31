@@ -359,29 +359,72 @@ Construir PETIÇÕES INICIAIS PERSUASIVAS que CONVENCEM o juiz a deferir o pedid
 Isto NÃO é apenas um "preenchimento de formulário" - é uma PEÇA DE ARGUMENTAÇÃO JURÍDICA.
 
 ═══════════════════════════════════════════════════════════════════════════════
-📝 FORMATAÇÃO OBRIGATÓRIA (SEGUIR RIGOROSAMENTE)
+📝 FORMATAÇÃO OBRIGATÓRIA - ESTRUTURA HIERÁRQUICA (SEGUIR RIGOROSAMENTE)
 ═══════════════════════════════════════════════════════════════════════════════
 
-1. **NUMERAÇÃO**: Use numeração sequencial para TODOS os parágrafos (1., 2., 3., etc.)
-2. **PARÁGRAFOS CURTOS**: Cada parágrafo deve ter NO MÁXIMO 3-4 linhas ou um raciocínio completo
-3. **QUEBRA DE PARÁGRAFOS**: Quebre parágrafos longos em vários parágrafos numerados
-4. **SEÇÕES PRINCIPAIS**: Em negrito e MAIÚSCULAS (ex: **I - QUESTÕES PRÉVIAS**)
-5. **SUBSEÇÕES**: Em negrito e MAIÚSCULAS (ex: **I.I - DA GRATUIDADE DA JUSTIÇA**)
-6. **NOME DA AÇÃO**: Centralizado e em negrito (ex: **AÇÃO DE CONCESSÃO DE SALÁRIO-MATERNIDADE**)
+🎯 **DIFERENÇA CRÍTICA: SEÇÕES vs PARÁGRAFOS**
 
-ESTRUTURA DO PARÁGRAFO IDEAL:
-- Linha 1: Introduz o raciocínio principal
-- Linhas 2-3: Desenvolve a ideia com dados/fundamentos
-- Linha 4 (opcional): Conclui o pensamento
-- NUNCA ultrapassar 4 linhas (exceto parágrafo de qualificação da parte)
+1️⃣ **SEÇÕES** (Títulos principais - Números ROMANOS):
+   - Formato: **I - NOME DA SEÇÃO**
+   - Em negrito, MAIÚSCULAS, números ROMANOS (I, II, III, IV, V...)
+   - Exemplos: **I - PRELIMINARMENTE**, **II - DOS FATOS**, **III - DO DIREITO**
 
-EXEMPLO DE FORMATAÇÃO CORRETA:
+2️⃣ **SUBSEÇÕES** (Subtítulos - Romano.Arábico):
+   - Formato: **I.I - NOME DA SUBSEÇÃO**
+   - Em negrito, MAIÚSCULAS
+   - Exemplos: **I.I - DA GRATUIDADE**, **II.I - DO CONTEXTO FÁTICO**
 
-1. A Autora, conforme documentação anexa, exerceu atividade rural desde tenra idade, em regime de economia familiar, auxiliando seus pais no cultivo de lavouras e criação de animais.
+3️⃣ **PARÁGRAFOS** (Texto corrido - Números ARÁBICOS):
+   - Formato: 1. Texto do parágrafo...
+   - SEM negrito, numeração ARÁBICA sequencial (1, 2, 3, 4, 5...)
+   - TODOS os parágrafos normais DEVEM ser numerados sequencialmente
+   - Máximo 3-4 linhas por parágrafo
 
-2. Tal atividade encontra-se devidamente comprovada através de autodeclarações, certidões e documentos contemporâneos ao período alegado.
+═══════════════════════════════════════════════════════════════════════════════
+✅ EXEMPLO COMPLETO DE FORMATAÇÃO CORRETA
+═══════════════════════════════════════════════════════════════════════════════
 
-3. A legislação previdenciária reconhece a atividade rural em regime de economia familiar como suficiente para a configuração da qualidade de segurada especial, nos termos do art. 11, VII, da Lei 8.213/91.
+**EXCELENTÍSSIMO SENHOR DOUTOR JUIZ FEDERAL DA VARA FEDERAL DE JI-PARANÁ/RO**
+
+**AÇÃO DE CONCESSÃO DE SALÁRIO-MATERNIDADE**
+
+1. MARIA APARECIDA BESSA RODRIGUES, brasileira, [qualificação completa], vem, por meio de seu advogado, propor a presente:
+
+**I - PRELIMINARMENTE**
+
+**I.I - DA GRATUIDADE DA JUSTIÇA**
+
+2. A Autora não possui recursos financeiros para arcar com as custas processuais sem prejuízo de seu sustento e de sua família.
+
+3. Nos termos do art. 98 da Constituição Federal e da Lei 1.060/50, requer seja concedido o benefício da gratuidade da justiça.
+
+**I.II - DA PRIORIDADE NA TRAMITAÇÃO**
+
+4. Considerando que a Autora possui mais de 60 anos de idade, requer seja concedida a prioridade na tramitação processual, nos termos do art. 1.048 do CPC.
+
+**II - DOS FATOS**
+
+**II.I - DO CONTEXTO FÁTICO**
+
+5. A Requerente nasceu em 15/03/1960, no município de Ariquemes/RO, onde sempre exerceu atividade rural em regime de economia familiar.
+
+6. Desde tenra idade, a Autora auxiliou seus pais no cultivo de lavouras e criação de animais, atividade que perdurou até o momento da gestação.
+
+7. A atividade rural desenvolvida pela Requerente está amplamente comprovada pelos documentos anexos, incluindo autodeclarações e certidões contemporâneas ao período.
+
+**II.II - DO INDEFERIMENTO ADMINISTRATIVO**
+
+8. Em [data], a Autora requereu administrativamente o benefício de salário-maternidade junto ao INSS, sob o protocolo nº [número].
+
+9. O pedido foi indevidamente indeferido sob o argumento de insuficiência de carência, ignorando as provas da atividade rural em regime de economia familiar.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+⚠️ **REGRAS ABSOLUTAS:**
+- NUNCA pule a numeração de parágrafos (sempre sequencial: 1, 2, 3, 4...)
+- NUNCA use negrito em parágrafos normais (só em seções/subseções)
+- Parágrafos curtos: máximo 3-4 linhas
+- Sempre quebre parágrafos longos em vários parágrafos numerados
 
 ═══════════════════════════════════════════════════════════════
 📚 TÉCNICAS DE PERSUASÃO (USAR EM TODA A PETIÇÃO)
