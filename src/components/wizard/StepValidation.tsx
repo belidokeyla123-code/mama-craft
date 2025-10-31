@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { useTabSync } from "@/hooks/useTabSync";
-import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
 interface StepValidationProps {
   data: CaseData;
@@ -22,7 +21,6 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
   const { toast } = useToast();
-  const { triggerFullPipeline } = useCaseOrchestration({ caseId: data.caseId || '', enabled: true });
 
   // ✅ FASE 3: Sincronização em tempo real
   useTabSync({
