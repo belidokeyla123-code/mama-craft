@@ -356,26 +356,19 @@ RETORNE JSON com análise detalhada:
     // 5. Salvar os resultados da análise no banco de dados
     // ==================================================================
     console.log(`[DOC ${documentId}] Salvando resultados da análise no banco de dados...`);
-    
-    // Deletar análise existente (se houver) e inserir nova
-    await supabaseClient
+    const { error: upsertError } = await supabaseClient
       .from('extractions')
-      .delete()
-      .eq('document_id', documentId);
-    
-    const { error: insertError } = await supabaseClient
-      .from('extractions')
-      .insert({
+      .upsert({
         document_id: documentId,
         case_id: caseId,
         entities: analysisResult,
         auto_filled_fields: analysisResult,
         extracted_at: new Date().toISOString(),
-      });
+      }, { onConflict: 'document_id' });
 
-    if (insertError) {
-      console.error(`[DOC ${documentId}] Erro ao salvar análise no banco de dados:`, insertError);
-      throw new Error(insertError.message);
+    if (upsertError) {
+      console.error(`[DOC ${documentId}] Erro ao salvar análise no banco de dados:`, upsertError);
+      throw new Error(upsertError.message);
     }
 
     console.log(`[DOC ${documentId}] Análise salva no banco de dados.`);
