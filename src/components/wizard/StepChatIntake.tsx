@@ -1496,69 +1496,6 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               </div>
             </AlertDescription>
           </Alert>
-
-          <Button
-            onClick={async () => {
-              if (!data.caseId) return;
-              
-              // Buscar documentos importantes que precisam reprocessamento
-              const { data: docs } = await supabase
-                .from('documents')
-                .select('id, file_name, document_type')
-                .eq('case_id', data.caseId)
-                .in('document_type', ['procuracao', 'identificacao', 'processo_administrativo']);
-              
-              if (!docs || docs.length === 0) {
-                toast({
-                  title: "Nenhum documento encontrado",
-                  description: "Envie procuração, RG e processo administrativo primeiro",
-                  variant: "destructive",
-                });
-                return;
-              }
-              
-              setMessages(prev => [...prev, {
-                role: "assistant",
-                content: `🔄 Reprocessando ${docs.length} documento(s): ${docs.map(d => d.file_name).join(', ')}`
-              }]);
-              
-              setIsProcessing(true);
-              
-              // Reprocessar cada documento
-              for (const doc of docs) {
-                const { error } = await supabase.functions.invoke('analyze-single-document', {
-                  body: {
-                    caseId: data.caseId,
-                    documentId: doc.id,
-                    forceDocType: doc.document_type
-                  }
-                });
-                
-                if (error) {
-                  console.error(`Erro ao reprocessar ${doc.file_name}:`, error);
-                }
-              }
-              
-              setIsProcessing(false);
-              
-              // Aguardar 2s e forçar refresh
-              setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('case-updated', { 
-                  detail: { caseId: data.caseId, source: 'reprocess-important-docs' } 
-                }));
-                
-                setMessages(prev => [...prev, {
-                  role: "assistant",
-                  content: `✅ Documentos reprocessados! Verifique a aba "Informações Básicas"`
-                }]);
-              }, 2000);
-            }}
-            variant="outline"
-            className="w-full"
-            disabled={isProcessing}
-          >
-            🔄 Reprocessar Procuração, RG e Processo Administrativo
-          </Button>
         </>
       )}
 
@@ -1705,30 +1642,6 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           Documentos
         </Button>
         
-        <Button
-          onClick={async () => {
-            if (!data.caseId) return;
-            setIsProcessing(true);
-            const { data: result, error } = await supabase.functions.invoke('check-case-completeness', {
-              body: { caseId: data.caseId }
-            });
-            if (error) {
-              toast({ title: "Erro", description: error.message, variant: "destructive" });
-            } else if (result.complete) {
-              toast({ title: "Completo!", description: "Todas informações preenchidas" });
-            } else {
-              toast({ title: "Verificado", description: `${result.reanalyzedDocuments} docs reprocessados` });
-              window.dispatchEvent(new CustomEvent('case-updated'));
-            }
-            setIsProcessing(false);
-          }}
-          variant="outline"
-          disabled={isProcessing || !data.caseId}
-        >
-          <CheckCircle className="h-4 w-4 mr-2" />
-          Verificar
-        </Button>
-
         <Button
           variant={isRecording ? "destructive" : isTranscribing ? "secondary" : "outline"}
           onClick={isRecording ? stopRecording : startRecording}
