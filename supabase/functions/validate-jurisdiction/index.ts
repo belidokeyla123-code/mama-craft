@@ -132,6 +132,9 @@ serve(async (req) => {
           uf: 'RO',
           ...resultado,
           trf: 'TRF1',
+          tribunal: 'TRF1',
+          competencia: 'Juizado Especial Federal',
+          enderecamento_completo: `Excelentíssimo Senhor Doutor Juiz Federal do Juizado Especial Federal de ${resultado.subsecao}/RO`,
           observacao: `${city} é atendido pela subseção judiciária de ${resultado.subsecao}/RO`
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -145,6 +148,9 @@ serve(async (req) => {
         subsecao: 'Ji-Paraná',
         endereco: JURISDICAO_RONDONIA['ji-parana'].endereco,
         trf: 'TRF1',
+        tribunal: 'TRF1',
+        competencia: 'Juizado Especial Federal',
+        enderecamento_completo: `Excelentíssimo Senhor Doutor Juiz Federal do Juizado Especial Federal de Ji-Paraná/RO`,
         municipios_jurisdicao: JURISDICAO_RONDONIA['ji-parana'].municipios,
         confianca: 'media',
         fonte: 'Fallback hardcoded - Ji-Paraná atende a maioria dos municípios de RO',
@@ -193,7 +199,10 @@ Retorne APENAS um JSON válido no formato:
   "city": "cidade consultada",
   "uf": "UF",
   "subsecao": "nome da subseção correta",
+  "tribunal": "TRF1",
+  "competencia": "Juizado Especial Federal" ou "Vara Federal",
   "endereco": "endereço completo da Justiça Federal",
+  "enderecamento_completo": "Excelentíssimo Senhor Doutor Juiz Federal do Juizado Especial Federal de [Subseção]/[UF]",
   "trf": "TRF1",
   "municipios_jurisdicao": ["município1", "município2"],
   "confianca": "alta" | "media" | "baixa",
@@ -231,7 +240,10 @@ Busque especificamente no site trf1.jus.br a lista de municípios sob jurisdiç�
         city,
         uf,
         subsecao: city,
+        tribunal: 'TRF1',
+        competencia: 'Juizado Especial Federal',
         endereco: `JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}`,
+        enderecamento_completo: `Excelentíssimo Senhor Doutor Juiz Federal do Juizado Especial Federal de ${city}/${uf}`,
         trf: 'TRF1',
         municipios_jurisdicao: [city],
         confianca: 'baixa',
@@ -254,6 +266,13 @@ Busque especificamente no site trf1.jus.br a lista de municípios sob jurisdiç�
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         jurisdictionData = JSON.parse(jsonMatch[0]);
+        
+        // Garantir campos obrigatórios se a IA não retornou
+        if (!jurisdictionData.tribunal) jurisdictionData.tribunal = 'TRF1';
+        if (!jurisdictionData.competencia) jurisdictionData.competencia = 'Juizado Especial Federal';
+        if (!jurisdictionData.enderecamento_completo) {
+          jurisdictionData.enderecamento_completo = `Excelentíssimo Senhor Doutor Juiz Federal do ${jurisdictionData.competencia} de ${jurisdictionData.subsecao}/${jurisdictionData.uf}`;
+        }
       } else {
         throw new Error('JSON não encontrado na resposta');
       }
@@ -265,7 +284,10 @@ Busque especificamente no site trf1.jus.br a lista de municípios sob jurisdiç�
         city,
         uf,
         subsecao: city,
+        tribunal: 'TRF1',
+        competencia: 'Juizado Especial Federal',
         endereco: `JUIZADO ESPECIAL FEDERAL DE ${city.toUpperCase()}/${uf}`,
+        enderecamento_completo: `Excelentíssimo Senhor Doutor Juiz Federal do Juizado Especial Federal de ${city}/${uf}`,
         trf: 'TRF1',
         municipios_jurisdicao: [city],
         confianca: 'baixa',

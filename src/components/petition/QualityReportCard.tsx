@@ -47,10 +47,35 @@ export const QualityReportCard = ({
       <CardContent className="space-y-4">
         {/* Status Grid */}
         <div className="grid gap-3">
-          {/* Jurisdição */}
+          {/* Jurisdição (Tribunal + Competência) */}
           <div className="p-3 bg-muted rounded-lg space-y-1">
             <div className="flex items-center justify-between">
               <span className="font-medium">Jurisdição</span>
+              {qualityReport.jurisdicao_ok ? (
+                <Badge variant="default" className="bg-green-600">✅ Correto</Badge>
+              ) : (
+                <Badge variant="destructive">❌ Incorreto</Badge>
+              )}
+            </div>
+            {qualityReport.jurisdicao_ok && qualityReport.jurisdicao_validada && (
+              <div className="space-y-1 mt-2">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Tribunal:</strong> {qualityReport.jurisdicao_validada.trf || 'TRF1'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Competência:</strong> {qualityReport.competencia === 'juizado' ? 'Juizado Especial Federal' : 'Vara Federal'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Subseção:</strong> {qualityReport.jurisdicao_validada.subsecao || qualityReport.jurisdicao_validada.city}/{qualityReport.jurisdicao_validada.uf}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Endereçamento (Texto formal) */}
+          <div className="p-3 bg-muted rounded-lg space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Endereçamento</span>
               {qualityReport.enderecamento_ok ? (
                 <Badge variant="default" className="bg-green-600">✅ Correto</Badge>
               ) : (
@@ -58,14 +83,9 @@ export const QualityReportCard = ({
               )}
             </div>
             {qualityReport.enderecamento_ok && qualityReport.jurisdicao_validada && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {typeof qualityReport.jurisdicao_validada === 'string' 
-                  ? qualityReport.jurisdicao_validada 
-                  : typeof qualityReport.jurisdicao_validada === 'object' && qualityReport.jurisdicao_validada.endereco
-                    ? qualityReport.jurisdicao_validada.endereco
-                    : typeof qualityReport.jurisdicao_validada === 'object'
-                      ? `${qualityReport.competencia === 'juizado' ? 'Juizado Especial Federal' : 'Vara Federal'} ${qualityReport.jurisdicao_validada.city ? 'de ' + qualityReport.jurisdicao_validada.city : ''} - ${qualityReport.jurisdicao_validada.uf || ''}`
-                      : 'Jurisdição validada'}
+              <p className="text-xs text-muted-foreground mt-2 italic">
+                "{qualityReport.jurisdicao_validada.enderecamento_completo || 
+                  `Excelentíssimo Senhor Doutor Juiz Federal do ${qualityReport.competencia === 'juizado' ? 'Juizado Especial Federal' : 'Vara Federal'} de ${qualityReport.jurisdicao_validada.subsecao || qualityReport.jurisdicao_validada.city}/${qualityReport.jurisdicao_validada.uf}`}"
               </p>
             )}
           </div>
