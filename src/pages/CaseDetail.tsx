@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useChatSync } from "@/hooks/useChatSync";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
 import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
 import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
@@ -46,6 +47,9 @@ export default function CaseDetail() {
     caseId: id,
   });
   const [isLoading, setIsLoading] = useState(true);
+
+  // ✅ Sincronização em tempo real entre abas
+  useChatSync(id || '');
 
   useEffect(() => {
     loadCaseData();

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, differenceInMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useTabSync } from "@/hooks/useTabSync";
 
 interface TimelineEvent {
   date: Date;
@@ -25,6 +26,18 @@ export function CaseEventsTimeline({ caseId }: CaseEventsTimelineProps) {
   const [carenciaDate, setCarenciaDate] = useState<Date | null>(null);
   const [carenciaMet, setCarenciaMet] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // ✅ Sincronização em tempo real
+  useTabSync({
+    caseId: caseId || '',
+    events: ['extractions-updated', 'documents-updated'],
+    onSync: (detail) => {
+      console.log('[CaseEventsTimeline] 🔄 Documentos atualizados, recarregando timeline...');
+      if (detail.timestamp && !isLoading) {
+        loadTimelineEvents();
+      }
+    }
+  });
 
   useEffect(() => {
     loadTimelineEvents();
