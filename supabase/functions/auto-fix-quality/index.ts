@@ -9,17 +9,36 @@ serve(async (req) => {
   }
 
   try {
-    const { caseId, qualityReport } = await req.json();
+    const { caseId, qualityReport: qualityReportParam } = await req.json();
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Buscar qualityReport do banco se não foi passado no body
+    let qualityReport = qualityReportParam;
+    if (!qualityReport) {
+      const { data: qrData } = await supabase
+        .from('quality_reports')
+        .select('*')
+        .eq('case_id', caseId)
+        .eq('document_type', 'petition')
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      qualityReport = qrData;
+      
+      if (!qualityReport) {
+        throw new Error('Quality report não encontrado');
+      }
+    }
     
     console.log('[AUTO-FIX-QUALITY] Iniciando correções automáticas:', {
       caseId,
       status: qualityReport?.status,
       issues: qualityReport?.issues?.length || 0
     });
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Buscar dados do caso
     const { data: caseData } = await supabase
