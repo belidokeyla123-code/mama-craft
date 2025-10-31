@@ -100,7 +100,16 @@ Verifique RIGOROSAMENTE:
    - A argumentação é convincente e bem estruturada?
    - Há precedentes do STF/STJ/TRF citados adequadamente?
 
-5. **BRECHAS CRÍTICAS QUE O RÉU (INSS) PODE EXPLORAR**
+5. **JURISDIÇÃO CORRETA (CRÍTICO)**
+   - Verificar se o endereçamento está CORRETO e SEM ERROS
+   - Para Rondônia: Porto Velho é atendido por Ji-Paraná (não pode ser "Porto Velho")
+   - O endereçamento deve mencionar "Subseção Judiciária" quando aplicável
+   - Formato correto: "Juizado Especial Federal de [Subseção]/[UF]"
+   - NUNCA use UF errada (ex: Porto Velho-PR é ERRO CRÍTICO, deve ser Ji-Paraná/RO)
+   - Exemplo CORRETO: "Juizado Especial Federal da Subseção Judiciária de Ji-Paraná/RO"
+   - Exemplo ERRADO: "Juizado Especial Federal de Porto Velho-PR" ❌
+
+6. **BRECHAS CRÍTICAS QUE O RÉU (INSS) PODE EXPLORAR**
    - Inconsistências entre autodeclaração e CNIS
    - Falta de documentos essenciais
    - Erros de datas, cálculos ou valores

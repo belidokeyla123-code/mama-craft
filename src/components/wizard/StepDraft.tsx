@@ -24,6 +24,7 @@ import { DiffDialog } from "@/components/wizard/DiffDialog";
 import { ProgressCard } from "@/components/wizard/ProgressCard";
 import { useTabSync } from "@/hooks/useTabSync";
 import { QualityReportCard } from "@/components/petition/QualityReportCard";
+import { PetitionViewer } from "@/components/petition/PetitionViewer";
 
 interface StepDraftProps {
   data: CaseData;
@@ -103,6 +104,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [showDiff, setShowDiff] = useState(false);
   const [petitionBefore, setPetitionBefore] = useState('');
   const [petitionAfter, setPetitionAfter] = useState('');
+  
+  // 🆕 ESTADOS PARA EDITOR REACTQUILL E VISIBILIDADE DE VALIDAÇÃO
+  const [currentDraftId, setCurrentDraftId] = useState<string | undefined>(undefined);
+  const [showRecomendacoesValidacao, setShowRecomendacoesValidacao] = useState(true);
 
   // ✅ FASE 5: Estados para painel de pré-requisitos
   const [prerequisitesCheck, setPrerequisitesCheck] = useState({
@@ -413,6 +418,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           } else {
             // Cache válido, carregar
             setPetition(draft.markdown_content);
+            setCurrentDraftId(draft.id); // ← ADICIONAR currentDraftId
             setHasCache(true);
             console.log('[DRAFT] ✅ Carregado do cache (sem placeholders)');
             
@@ -3164,12 +3170,26 @@ ${tabelaDocumentos}
       />
 
       {/* 🆕 VALIDAÇÃO DE RECOMENDAÇÕES DA ANÁLISE */}
-      {recomendacoesValidacao.length > 0 && (
+      {recomendacoesValidacao.length > 0 && showRecomendacoesValidacao && (
         <Card className="p-6 mt-6 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <CheckCircle2 className="h-6 w-6 text-primary" />
-            Validação de Recomendações da Análise
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <CheckCircle2 className="h-6 w-6 text-primary" />
+              Validação de Recomendações da Análise
+            </h3>
+            
+            {/* 🆕 BOTÃO PARA OCULTAR */}
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setShowRecomendacoesValidacao(false)}
+              className="gap-2"
+            >
+              <X className="h-4 w-4" />
+              Ocultar
+            </Button>
+          </div>
+          
           <p className="text-sm text-muted-foreground mb-4">
             Verificação automática de que todas as recomendações da análise jurídica foram refletidas na petição
           </p>
@@ -3228,7 +3248,38 @@ ${tabelaDocumentos}
               )}
             </p>
           </div>
+          
+          {/* 🆕 BOTÃO "TODAS ATENDIDAS" (SE TODAS ESTIVEREM OK) */}
+          {recomendacoesValidacao.filter(r => r.atendida).length === recomendacoesValidacao.length && (
+            <div className="mt-4 flex justify-center">
+              <Button 
+                onClick={() => {
+                  setShowRecomendacoesValidacao(false);
+                  toast.success('✅ Todas as recomendações atendidas!');
+                }}
+                className="gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle className="h-4 w-4" />
+                Todas Atendidas - Confirmar e Ocultar
+              </Button>
+            </div>
+          )}
         </Card>
+      )}
+
+      {/* 🆕 BOTÃO PARA REEXIBIR (se ocultado) */}
+      {recomendacoesValidacao.length > 0 && !showRecomendacoesValidacao && (
+        <div className="mt-6 flex justify-center">
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={() => setShowRecomendacoesValidacao(true)}
+            className="gap-2"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Reexibir Validação de Recomendações
+          </Button>
+        </div>
       )}
 
       {/* Ações da Petição */}
@@ -3267,24 +3318,37 @@ ${tabelaDocumentos}
         </Card>
       ) : petition ? (
         <Card className="p-6">
-          <div className="flex justify-end mb-3">
-            <Button 
-              onClick={handleCopy} 
-              variant="outline" 
-              size="sm"
-              disabled={!petition} 
-              className="gap-2"
-            >
-              {copied ? <CheckCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copiado!" : "Copiar Petição"}
-            </Button>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-2xl font-bold">📄 Petição Gerada</h3>
+            <div className="flex gap-2">
+              <Button onClick={handleDownloadPDF} variant="outline" size="sm" disabled={!petition} className="gap-2">
+                <Download className="h-4 w-4" />
+                Baixar PDF
+              </Button>
+              <Button onClick={handleDownloadDOCX} variant="outline" size="sm" disabled={!petition} className="gap-2">
+                <Download className="h-4 w-4" />
+                Baixar DOCX
+              </Button>
+              <Button 
+                onClick={handleCopy} 
+                variant="outline" 
+                size="sm"
+                disabled={!petition} 
+                className="gap-2"
+              >
+                {copied ? <CheckCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? "Copiado!" : "Copiar Petição"}
+              </Button>
+            </div>
           </div>
-          <div 
-            className="bg-muted/30 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto"
-            data-petition-content
-          >
-            {petition}
-          </div>
+          
+          {/* 🆕 USAR PETITION VIEWER COM EDITOR REACTQUILL */}
+          <PetitionViewer
+            petition={petition}
+            qualityReport={qualityReport}
+            caseId={data.caseId}
+            currentDraftId={currentDraftId}
+          />
 
           {/* 🆕 VALIDAÇÃO DE ABAS DO MÓDULO JUIZ */}
           {judgeAnalysis?.validacao_abas && (

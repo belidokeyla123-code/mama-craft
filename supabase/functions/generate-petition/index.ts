@@ -184,7 +184,7 @@ serve(async (req) => {
     
     // ═══ VALIDAÇÃO ONLINE DE JURISDIÇÃO ═══
     console.log('🔍 Validando jurisdição na internet...');
-    let subsecao = city;
+    let subsecao = city; // ← FALLBACK se validação falhar
     let enderecoJusticaFederal = '';
     let jurisdicaoValidada: any = {
       confianca: 'media',
@@ -197,7 +197,7 @@ serve(async (req) => {
       });
 
       if (!validationError && validation?.subsecao) {
-        subsecao = validation.subsecao;
+        subsecao = validation.subsecao; // ← USAR SUBSEÇÃO VALIDADA
         enderecoJusticaFederal = validation.endereco || '';
         jurisdicaoValidada = validation;
         
@@ -205,7 +205,8 @@ serve(async (req) => {
           cidade_autora: city,
           subsecao_correta: subsecao,
           confianca: validation.confianca,
-          fonte: validation.fonte
+          fonte: validation.fonte,
+          observacao: validation.observacao || 'N/A'
         });
       } else {
         console.warn('⚠️ Não foi possível validar jurisdição online. Usando cidade como fallback.');
@@ -213,7 +214,7 @@ serve(async (req) => {
       }
     } catch (validationError) {
       console.error('❌ Erro ao validar jurisdição:', validationError);
-      subsecao = city;
+      subsecao = city; // Fallback para cidade da autora
     }
     
     // Mapear tribunal por UF
