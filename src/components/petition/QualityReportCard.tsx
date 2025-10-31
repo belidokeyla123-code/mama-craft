@@ -105,9 +105,9 @@ export const QualityReportCard = ({
                 <Badge variant="destructive">❌ Incorreta</Badge>
               )}
             </div>
-            {qualityReport.jurisdicao_ok && qualityReport.trf && (
+            {qualityReport.jurisdicao_ok && qualityReport.trf && typeof qualityReport.trf === 'object' && (
               <p className="text-xs text-muted-foreground mt-1">
-                {qualityReport.trf}
+                {qualityReport.trf.trf || 'TRF'} - {qualityReport.trf.city || qualityReport.trf.uf || ''}
               </p>
             )}
           </div>
