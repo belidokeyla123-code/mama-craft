@@ -357,10 +357,10 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (!data.caseId) return;
       
       try {
-        // Buscar petição do cache
+        // Buscar petição do cache com payload completo
         const { data: draft } = await supabase
           .from('drafts')
-          .select('markdown_content, generated_at')
+          .select('markdown_content, generated_at, payload, judge_analysis, regional_adaptation, appellate_analysis')
           .eq('case_id', data.caseId)
           .order('generated_at', { ascending: false })
           .limit(1)
@@ -406,27 +406,43 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             toast.success('✅ Petição regerada com sucesso!', { id: 'regen' });
           } else {
             // Cache válido, carregar
-          setPetition(draft.markdown_content);
-          setHasCache(true);
-          console.log('[DRAFT] ✅ Carregado do cache (sem placeholders)');
-          
-          // ✅ Carregar relatório de qualidade
-          await loadQualityReport();
+            setPetition(draft.markdown_content);
+            setHasCache(true);
+            console.log('[DRAFT] ✅ Carregado do cache (sem placeholders)');
+            
+            // ✅ CARREGAR ANÁLISES SALVAS DO PAYLOAD
+            if (draft.judge_analysis) {
+              setJudgeAnalysis(draft.judge_analysis as JudgeAnalysis);
+              console.log('[DRAFT] ✅ Judge Analysis carregada do payload');
+            }
+            
+            if (draft.regional_adaptation) {
+              setRegionalAdaptation(draft.regional_adaptation as RegionalAdaptation);
+              console.log('[DRAFT] ✅ Regional Adaptation carregada do payload');
+            }
+            
+            if (draft.appellate_analysis) {
+              setAppellateAnalysis(draft.appellate_analysis);
+              console.log('[DRAFT] ✅ Appellate Analysis carregada do payload');
+            }
+            
+            // ✅ Carregar relatório de qualidade
+            await loadQualityReport();
+          }
         }
+      } catch (error) {
+        console.error('[DRAFT] Erro ao verificar cache:', error);
       }
-    } catch (error) {
-      console.error('[DRAFT] Erro ao verificar cache:', error);
-    }
-    
-    // Carregar template também
-    await loadExistingTemplate();
-    
-    // 🔥 GARANTIR SALÁRIO CORRETO AO CARREGAR
-    await ensureCorrectSalarioMinimo();
-    
-    // ✅ FASE 5: Verificar pré-requisitos ao carregar
-    await checkPrerequisites();
-  };
+      
+      // Carregar template também
+      await loadExistingTemplate();
+      
+      // 🔥 GARANTIR SALÁRIO CORRETO AO CARREGAR
+      await ensureCorrectSalarioMinimo();
+      
+      // ✅ FASE 5: Verificar pré-requisitos ao carregar
+      await checkPrerequisites();
+    };
   
   const loadQualityReport = async () => {
     if (!data.caseId) return;
