@@ -202,8 +202,26 @@ serve(async (req) => {
       throw new Error("File not found in storage");
     }
 
-    const fileBase64 = base64Encode(await fileData.arrayBuffer());
-    console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64.`);
+    // ⚠️ VERIFICAR SE É PDF - PDFs devem ser convertidos em imagens primeiro
+    const isPDF = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
+    if (isPDF) {
+      console.log(`[DOC ${documentId}] ⚠️ DOCUMENTO É PDF - Não pode ser processado diretamente pela IA`);
+      console.log(`[DOC ${documentId}] PDFs devem ser convertidos em imagens antes do processamento`);
+      
+      return new Response(
+        JSON.stringify({ 
+          error: "PDFs devem ser convertidos em imagens antes do processamento",
+          documentId,
+          shouldConvert: true
+        }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    const arrayBuffer = await fileData.arrayBuffer();
+    const fileBase64 = base64Encode(arrayBuffer);
+    console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64 (${Math.round(arrayBuffer.byteLength / 1024)}KB).`);
 
     // ==================================================================
     // 4. ETAPA 1: CLASSIFICAR PRIMEIRO (não confiar no tipo atual)
@@ -211,36 +229,52 @@ serve(async (req) => {
     console.log(`[DOC ${documentId}] 🎯 ETAPA 1: Classificando documento pelo CONTEÚDO...`);
     
     const classificationPrompt = `Você é um especialista em análise documental jurídica para processos previdenciários.
-Analise o documento "${originalFileName}" e identifique o tipo baseando-se NO CONTEÚDO, não apenas no nome.
 
-⚠️ CRÍTICO: RETORNE APENAS JSON VÁLIDO!
+⚠️ CRÍTICO: RETORNE APENAS JSON VÁLIDO! SUA RESPOSTA DEVE COMEÇAR COM { E TERMINAR COM }
 
-🎯 **BASEIE-SE NO CONTEÚDO DO DOCUMENTO, NÃO APENAS NO NOME!**
+🔍 **ANALISE A IMAGEM E IDENTIFIQUE O TIPO DO DOCUMENTO:**
 
-TIPOS POSSÍVEIS:
-- procuracao (procuração assinada pelo cliente)
-- certidao_nascimento (certidão de nascimento da criança)
-- identificacao (RG, CPF, CNH)
-- cnis (extrato do CNIS)
-- autodeclaracao_rural (declaração de atividade rural assinada)
-- documento_terra (contrato de comodato, arrendamento, ITR, CCIR, escritura de propriedade)
-- processo_administrativo (protocolo, indeferimento do INSS)
-- comprovante_residencia (conta de luz, água, telefone)
-- historico_escolar
-- declaracao_saude_ubs
-- outro (APENAS se não se encaixar em nenhum)
+**Arquivo:** "${originalFileName}"
 
-📋 EXEMPLOS:
-- "CONTRATO_DE_COMODATO.pdf" com texto sobre cessão de terra → documento_terra
-- "AUTODECLARAÇÃO RURAL.pdf" com assinatura → autodeclaracao_rural
-- "ITR 2023.pdf" → documento_terra
-- "RG.pdf" com foto → identificacao
+**TIPOS POSSÍVEIS (escolha o mais adequado):**
 
-RETORNE JSON:
+1. **procuracao** - Documento assinado autorizando advogado a representar o cliente
+   - Contém palavras: "outorga", "poderes", "advogado", "OAB"
+   
+2. **certidao_nascimento** - Certidão de nascimento de criança
+   - Contém: dados da criança, data de nascimento, nome dos pais, cartório
+   
+3. **identificacao** - RG, CPF, CNH ou outro documento de identidade
+   - Contém: foto, RG, CPF, órgão emissor
+   
+4. **cnis** - Extrato do CNIS (histórico previdenciário)
+   - Contém: "CNIS", "vínculos", "remunerações", períodos de trabalho
+   
+5. **autodeclaracao_rural** - Declaração de atividade rural ASSINADA
+   - Contém: "declaro", "atividade rural", assinatura, testemunhas
+   
+6. **documento_terra** - Contrato de comodato, arrendamento, ITR, CCIR
+   - Contém: "comodato", "arrendamento", "ITR", "propriedade rural", "hectares"
+   
+7. **processo_administrativo** - Protocolo ou indeferimento do INSS
+   - Contém: "INSS", "protocolo", "indeferimento", número de processo
+   
+8. **comprovante_residencia** - Conta de luz, água, telefone
+   - Contém: endereço, conta de consumo, valor a pagar
+   
+9. **historico_escolar** - Histórico ou declaração escolar
+   - Contém: escola, série, notas, frequência
+   
+10. **declaracao_saude_ubs** - Declaração de saúde da UBS
+    - Contém: "UBS", "unidade básica de saúde", declaração médica
+
+11. **outro** - APENAS se realmente não se encaixar em nenhum tipo acima
+
+**RETORNE JSON:**
 {
-  "documentType": "tipo_identificado",
-  "confidence": 0.0-1.0,
-  "reason": "explicação do porquê"
+  "documentType": "tipo_do_documento",
+  "confidence": 0.95,
+  "reason": "Explique brevemente por que classificou assim"
 }`;
 
     const prompt = classificationPrompt;
@@ -282,7 +316,37 @@ RETORNE JSON:
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error(`[DOC ${documentId}] Erro na resposta da IA:`, aiResponse.status, errorText);
+      console.error(`[DOC ${documentId}] ❌ Erro na resposta da IA:`, aiResponse.status, errorText);
+      
+      // ⚠️ Erro 400 geralmente é imagem corrompida ou muito grande
+      if (aiResponse.status === 400) {
+        console.error(`[DOC ${documentId}] ⚠️ Imagem pode estar corrompida ou formato inválido`);
+        
+        // Salvar erro para o usuário saber
+        await supabaseClient
+          .from('extractions')
+          .upsert({
+            document_id: documentId,
+            case_id: caseId,
+            entities: {
+              error: "Falha ao processar imagem. Arquivo pode estar corrompido.",
+              documentType: "outro",
+              status: "error"
+            },
+            extracted_at: new Date().toISOString(),
+          }, { onConflict: 'document_id' });
+        
+        return new Response(
+          JSON.stringify({ 
+            error: "Falha ao processar imagem. Arquivo pode estar corrompido.",
+            documentId,
+            shouldRetry: false
+          }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
       throw new Error(`AI API error: ${aiResponse.status} - ${errorText}`);
     }
 
