@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { caseId, selectedJurisprudencias, selectedSumulas, selectedDoutrinas } = await req.json();
+const { caseId, selectedJurisprudencias, selectedSumulas, selectedDoutrinas } = await req.json();
     
     // Extrair links das jurisprudências
     const jurisLinks = (selectedJurisprudencias || []).map((j: any) => j.link).filter(Boolean);
@@ -84,6 +84,10 @@ Deno.serve(async (req) => {
       .eq('case_id', caseId)
       .maybeSingle();
 
+    // 🆕 EXTRAIR RECOMENDAÇÕES DA ANÁLISE
+    const recomendacoes = analysis?.draft_payload?.recomendacoes || [];
+    console.log('[TESE] Recomendações da análise:', recomendacoes.length);
+
     // 🆕 BUSCAR BENEFÍCIOS MANUAIS
     const manualBenefits = caseData?.manual_benefits || [];
     console.log('[TESE] Benefícios manuais:', manualBenefits.length);
@@ -95,6 +99,27 @@ ${ESPECIALISTA_TESE_PROMPT}
 **CONTEXTO COMPLETO DO CASO:**
 
 📊 Análise: ${analysis ? `Probabilidade ${analysis.draft_payload?.probabilidade_exito?.score}%` : 'Não realizada'}
+
+## 🎯 RECOMENDAÇÕES DA ANÁLISE (CRIAR TESES ESPECÍFICAS PARA CADA):
+${recomendacoes.length > 0 
+  ? recomendacoes.map((rec: string, i: number) => `
+${i+1}. ${rec}
+   → Crie UMA tese jurídica persuasiva que atenda esta recomendação`).join('\n')
+  : 'Nenhuma recomendação específica da análise'}
+
+**EXEMPLOS DE TESES POR RECOMENDAÇÃO**:
+
+Recomendação: "Fundamentar ilegalidade do indeferimento"
+→ Tese: "DA ILEGALIDADE DO INDEFERIMENTO ADMINISTRATIVO"
+Conteúdo: Demonstrar com jurisprudências que o INSS errou ao indeferir
+
+Recomendação: "CNIS sem vínculos urbanos"
+→ Tese: "DA COMPROVAÇÃO DA ATIVIDADE RURAL PELO CNIS VAZIO"
+Conteúdo: Argumentar que ausência de vínculos comprova exclusividade rural
+
+Recomendação: "Comodato em nome de terceiro"
+→ Tese: "DA VALIDADE DE DOCUMENTOS EM NOME DO NÚCLEO FAMILIAR"
+Conteúdo: Fundamentar com jurisprudência que documentos em nome de familiares são válidos
 
 📋 Benefícios Anteriores:
 ${manualBenefits && manualBenefits.length > 0 ? `
@@ -132,12 +157,29 @@ ${JSON.stringify(selectedDoutrinas, null, 2)}
 **IMPORTANTE:** Inclua os links das jurisprudências no campo "links_jurisprudencias" do JSON de saída, mantendo a mesma ordem da fundamentação_jurisprudencial. Links disponíveis: ${JSON.stringify(jurisLinks)}
 
 **REGRAS CRÍTICAS:**
-1. Construa NO MÁXIMO 3 TESES JURÍDICAS (não 5, não 4, máximo 3)
-2. Cada tese deve ser ÚNICA - NÃO REPITA argumentos
-3. NÃO cite a mesma jurisprudência/súmula em múltiplas teses
-4. NÃO cite o mesmo autor de doutrina em múltiplas teses
-5. Priorize QUALIDADE sobre quantidade
-6. Se não houver material suficiente para 3 teses únicas, retorne menos
+1. Para cada recomendação da análise, crie UMA tese específica
+2. Máximo 3 teses, priorize as recomendações mais importantes
+3. Cada tese deve ser ÚNICA - NÃO REPITA argumentos
+4. NÃO cite a mesma jurisprudência/súmula em múltiplas teses
+5. NÃO cite o mesmo autor de doutrina em múltiplas teses
+6. Use as jurisprudências fornecidas que se aplicam a cada recomendação
+7. Conecte: recomendação → jurisprudência → tese de forma clara
+8. No JSON, indique qual recomendação cada tese atende:
+
+{
+  "teses": [
+    {
+      "titulo": "...",
+      "tese_completa": "...",
+      "atende_recomendacao": "Fundamentar ilegalidade do indeferimento", // texto da recomendação
+      "fundamentacao_legal": [...],
+      "fundamentacao_jurisprudencial": [...],
+      "links_jurisprudencias": [...],
+      "tecnica_persuasao": "...",
+      "score_persuasao": 85
+    }
+  ]
+}
 
 ⚠️⚠️⚠️ REGRAS CRÍTICAS PARA TESES ⚠️⚠️⚠️
 1. **BASE EM JURISPRUDÊNCIA REAL:** Cite apenas julgados que você conhece

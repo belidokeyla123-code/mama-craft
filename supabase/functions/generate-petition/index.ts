@@ -458,6 +458,22 @@ não o valor total do benefício ao longo do tempo.
 
 **DADOS COMPLETOS DO CASO PARA VOCÊ USAR:**
 
+**RECOMENDAÇÕES DA ANÁLISE (GARANTIR QUE TODAS ESTÃO NA PETIÇÃO):**
+${analysis?.draft_payload?.recomendacoes?.length > 0 
+  ? analysis.draft_payload.recomendacoes.map((r: string, i: number) => `
+☐ ${i+1}. ${r}`).join('\n')
+  : 'Nenhuma recomendação específica'}
+
+**REGRAS CRÍTICAS SOBRE RECOMENDAÇÕES**:
+- A petição DEVE abordar TODAS as recomendações acima
+- Para cada recomendação, crie um parágrafo ou seção específica
+- Use as teses e jurisprudências fornecidas para fundamentar cada ponto
+- Ao final, você deve indicar para cada recomendação:
+  * Se foi atendida (true/false)
+  * Onde na petição está (ex: "Seção III, parágrafo 5")
+  * Como foi atendida (breve explicação)
+  * Se não atendida, por quê
+
 **AUTORA:**
 - Nome: ${autoraNome}
 - CPF: ${autoraCPF}
@@ -521,6 +537,31 @@ Total: ${mainDocuments.length} documento(s) anexado(s)
 ✅ Seja técnica, persuasiva e completa
 ✅ Retorne em markdown bem formatado com negrito, itálico onde couber
 ✅ Numere os tópicos corretamente (I, II, III, etc.)
+
+🎯 **VALIDAÇÃO DE RECOMENDAÇÕES (OBRIGATÓRIO)**:
+Ao final da petição, você DEVE retornar um JSON separado com a validação de cada recomendação:
+
+PETIÇÃO:
+[texto completo da petição em markdown]
+
+---VALIDACAO_RECOMENDACOES---
+{
+  "recomendacoes_validacao": [
+    {
+      "id": 1,
+      "recomendacao": "texto da recomendação",
+      "atendida": true,
+      "onde": "Seção III - Do Direito, Item 3.2",
+      "como": "Criada seção específica com jurisprudência TRF1"
+    },
+    {
+      "id": 2,
+      "recomendacao": "texto da recomendação 2",
+      "atendida": false,
+      "motivo": "Documento não foi anexado ao caso"
+    }
+  ]
+}
 
 🚨 **SE VOCÊ DEIXAR QUALQUER CAMPO VAZIO OU COM PLACEHOLDER, A PETIÇÃO SERÁ REJEITADA!**
 
@@ -636,6 +677,27 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
       }
       
       console.log('[PETITION] ✅ Petition received, length:', petitionText.length);
+
+      // ✅ EXTRAIR VALIDAÇÃO DE RECOMENDAÇÕES
+      let recomendacoesValidacao = [];
+      const validacaoMatch = petitionText.match(/---VALIDACAO_RECOMENDACOES---([\s\S]*?)$/);
+      
+      if (validacaoMatch) {
+        try {
+          const validacaoJson = validacaoMatch[1].trim();
+          const validacaoData = JSON.parse(validacaoJson);
+          recomendacoesValidacao = validacaoData.recomendacoes_validacao || [];
+          
+          // Remover a seção de validação do texto da petição
+          petitionText = petitionText.replace(/---VALIDACAO_RECOMENDACOES---[\s\S]*$/, '').trim();
+          
+          console.log('[PETITION] ✅ Validação de recomendações extraída:', recomendacoesValidacao.length);
+        } catch (parseError) {
+          console.warn('[PETITION] ⚠️ Erro ao parsear validação de recomendações:', parseError);
+        }
+      } else {
+        console.warn('[PETITION] ⚠️ Validação de recomendações não encontrada na resposta');
+      }
 
       // ═══ CONTROLE DE QUALIDADE PÓS-GERAÇÃO ═══
       console.log('🔍 Executando controle de qualidade...');
@@ -813,11 +875,18 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
         .insert({
           case_id: caseId,
           markdown_content: petitionText,
-          payload: { selectedJurisprudencias, jurisdicaoValidada },
+          payload: { 
+            selectedJurisprudencias, 
+            jurisdicaoValidada,
+            recomendacoes_validacao: recomendacoesValidacao 
+          },
           is_stale: false
         });
 
-      return new Response(JSON.stringify({ petitionText }), {
+      return new Response(JSON.stringify({ 
+        petitionText,
+        recomendacoes_validacao: recomendacoesValidacao 
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (fetchError: any) {

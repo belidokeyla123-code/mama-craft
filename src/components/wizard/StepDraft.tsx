@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Zap } from "lucide-react";
+import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Zap, CheckCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
@@ -90,6 +90,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
   const [selectedBrechas, setSelectedBrechas] = useState<number[]>([]);
   const [selectedAdaptations, setSelectedAdaptations] = useState<number[]>([]);
   const [selectedAppellateAdaptations, setSelectedAppellateAdaptations] = useState<number[]>([]);
+  
+  // 🆕 VALIDAÇÃO DE RECOMENDAÇÕES DA ANÁLISE
+  const [recomendacoesValidacao, setRecomendacoesValidacao] = useState<any[]>([]);
   
   // 🆕 ESTADOS PARA SISTEMA DE CORREÇÃO CRITERIOSA
   const [tentativaAtual, setTentativaAtual] = useState(1);
@@ -425,6 +428,12 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             if (draftData.appellate_analysis) {
               setAppellateAnalysis(draftData.appellate_analysis);
               console.log('[DRAFT] ✅ Appellate Analysis carregada do payload');
+            }
+            
+            // 🆕 CARREGAR VALIDAÇÃO DE RECOMENDAÇÕES DO PAYLOAD
+            if (draftData.payload?.recomendacoes_validacao) {
+              setRecomendacoesValidacao(draftData.payload.recomendacoes_validacao);
+              console.log('[DRAFT] ✅ Validação de recomendações carregada:', draftData.payload.recomendacoes_validacao.length);
             }
             
             // ✅ Carregar relatório de qualidade
@@ -1125,6 +1134,12 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       if (petitionContent) {
         setPetition(petitionContent);
         setHasCache(true);
+        
+        // 🆕 SALVAR VALIDAÇÃO DE RECOMENDAÇÕES
+        if (result?.recomendacoes_validacao) {
+          setRecomendacoesValidacao(result.recomendacoes_validacao);
+          console.log('[DRAFT] ✅ Validação de recomendações salva:', result.recomendacoes_validacao.length);
+        }
         
         // Carregar relatório de qualidade
         await loadQualityReport();
@@ -2904,6 +2919,74 @@ ${tabelaDocumentos}
         qualityReport={qualityReport}
         loading={loading}
       />
+
+      {/* 🆕 VALIDAÇÃO DE RECOMENDAÇÕES DA ANÁLISE */}
+      {recomendacoesValidacao.length > 0 && (
+        <Card className="p-6 mt-6 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <CheckCircle2 className="h-6 w-6 text-primary" />
+            Validação de Recomendações da Análise
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Verificação automática de que todas as recomendações da análise jurídica foram refletidas na petição
+          </p>
+          
+          <div className="space-y-3">
+            {recomendacoesValidacao.map((rec, i) => (
+              <div 
+                key={i}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  rec.atendida 
+                    ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800' 
+                    : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {rec.atendida ? (
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                  )}
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm mb-1">{rec.recomendacao}</p>
+                    
+                    {rec.atendida ? (
+                      <div className="mt-2 text-xs space-y-1">
+                        <p className="text-green-700 dark:text-green-300">
+                          <strong>Onde:</strong> {rec.onde}
+                        </p>
+                        <p className="text-green-700 dark:text-green-300">
+                          <strong>Como:</strong> {rec.como}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-xs">
+                        <p className="text-red-700 dark:text-red-300">
+                          <strong>Motivo:</strong> {rec.motivo}
+                        </p>
+                        <Badge variant="destructive" className="mt-2 text-xs">
+                          Ação necessária
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 p-3 bg-primary/10 dark:bg-primary/5 rounded-lg border border-primary/20">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Target className="h-4 w-4 text-primary" />
+              <strong>Resumo:</strong> {recomendacoesValidacao.filter(r => r.atendida).length} de {recomendacoesValidacao.length} recomendações atendidas
+              {recomendacoesValidacao.filter(r => r.atendida).length === recomendacoesValidacao.length && (
+                <span className="ml-2 text-green-600 dark:text-green-400">✓ Todas atendidas!</span>
+              )}
+            </p>
+          </div>
+        </Card>
+      )}
 
       {/* Ações da Petição */}
       <div className="flex flex-wrap items-center gap-3">

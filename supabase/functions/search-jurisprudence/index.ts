@@ -149,10 +149,27 @@ ${draftPayload?.probabilidade_exito?.pontos_fracos?.length > 0
   ? draftPayload.probabilidade_exito.pontos_fracos.map((p: string) => `- ${p}`).join('\n')
   : '- Não identificados'}
 
-## RECOMENDAÇÕES DA ANÁLISE
+## 🎯 RECOMENDAÇÕES DA ANÁLISE (BUSCAR JURISPRUDÊNCIAS ESPECÍFICAS PARA CADA)
 ${draftPayload?.recomendacoes?.length > 0 
-  ? draftPayload.recomendacoes.map((r: string) => `- ${r}`).join('\n')
+  ? draftPayload.recomendacoes.map((r: string, i: number) => `
+${i+1}. ${r}
+   → Busque PELO MENOS 1 jurisprudência ESPECÍFICA sobre: "${r}"`).join('\n')
   : '- Não há recomendações'}
+
+**EXEMPLOS DE BUSCA ESPECÍFICA POR RECOMENDAÇÃO**:
+- Recomendação: "Fundamentar ilegalidade do indeferimento"
+  → Buscar: Jurisprudências sobre INSS indeferindo ilegalmente salário-maternidade
+
+- Recomendação: "Argumentar qualidade de segurada"
+  → Buscar: Jurisprudências sobre prova testemunhal, início de prova material
+
+- Recomendação: "CNIS sem vínculos urbanos"
+  → Buscar: Jurisprudências que RECONHECEM CNIS vazio como prova de atividade rural
+
+- Recomendação: "Comodato em nome de terceiro"
+  → Buscar: Jurisprudências sobre validade de documentos em nome de familiares
+
+⚠️ IMPORTANTE: CADA recomendação deve ter pelo menos 1 jurisprudência correspondente. Se não houver jurisprudência direta, buscar a mais próxima e indicar no campo "por_que_relevante" qual recomendação ela atende.
 
 ## DOCUMENTOS JUNTADOS
 ${documents && documents.length > 0 
@@ -182,9 +199,11 @@ Com base na ANÁLISE JURÍDICA COMPLETA e nas SITUAÇÕES ESPECÍFICAS acima, bu
 **IMPORTANTE**: 
 - Não busque jurisprudências genéricas de salário maternidade
 - Foque nas SITUAÇÕES ESPECÍFICAS identificadas (ex: carência não cumprida, CNIS vazio, filho falecido, etc)
+- Foque nas RECOMENDAÇÕES DA ANÁLISE - cada recomendação deve ter jurisprudência correspondente
 - Se o CNIS for vazio, busque jurisprudências que REFORÇAM isso como prova de atividade rural
 - Se a carência não foi cumprida, busque precedentes sobre reconhecimento de atividade rural
 - Se houver situações especiais (filho falecido, etc), busque jurisprudências ESPECÍFICAS disso
+- No campo "por_que_relevante", SEMPRE mencione qual recomendação a jurisprudência atende
 
 **REGRAS CRÍTICAS:**
 1. Retorne NO MÁXIMO 3 itens de cada tipo (jurisprudências, súmulas, doutrinas)

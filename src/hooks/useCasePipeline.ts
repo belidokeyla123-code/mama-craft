@@ -166,5 +166,34 @@ export const useCasePipeline = (caseId: string) => {
     }
   }, [caseId]);
 
-  return { status, isStale, runFullPipeline, checkPipelineStatus };
+  const invalidateDependentStages = async (stage: 'analysis' | 'jurisprudence' | 'tese') => {
+    if (!caseId) return;
+    
+    console.log(`[SYNC] Invalidando estágios dependentes de: ${stage}`);
+    
+    switch (stage) {
+      case 'analysis':
+        // Invalidar jurisprudência, tese e petição
+        await supabase.from('jurisprudence_results').update({ is_stale: true }).eq('case_id', caseId);
+        await supabase.from('teses_juridicas').update({ is_stale: true }).eq('case_id', caseId);
+        await supabase.from('drafts').update({ is_stale: true }).eq('case_id', caseId).eq('is_final', false);
+        toast.info('Análise atualizada. Outras abas serão reprocessadas.');
+        break;
+        
+      case 'jurisprudence':
+        // Invalidar apenas tese e petição
+        await supabase.from('teses_juridicas').update({ is_stale: true }).eq('case_id', caseId);
+        await supabase.from('drafts').update({ is_stale: true }).eq('case_id', caseId).eq('is_final', false);
+        toast.info('Jurisprudências atualizadas. Tese e petição serão reprocessadas.');
+        break;
+        
+      case 'tese':
+        // Invalidar apenas petição
+        await supabase.from('drafts').update({ is_stale: true }).eq('case_id', caseId).eq('is_final', false);
+        toast.info('Tese atualizada. Petição será reprocessada.');
+        break;
+    }
+  };
+
+  return { status, isStale, runFullPipeline, checkPipelineStatus, invalidateDependentStages };
 };
