@@ -382,12 +382,6 @@ export default function CaseDetail() {
           </div>
         </Card>
 
-        {/* Pipeline Replicate Button - Visível apenas no passo 3 (Validação) */}
-        {currentStep === 3 && id && (
-          <div className="mb-6">
-            <PipelineReplicateButton caseId={id} caseName={caseData.authorName} />
-          </div>
-        )}
 
         {/* Step Content */}
         <Card className="p-8 mb-6 relative">

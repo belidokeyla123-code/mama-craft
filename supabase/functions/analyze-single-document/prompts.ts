@@ -12,6 +12,21 @@ NÃO adicione texto explicativo antes ou depois do JSON.
 NÃO comece com "Aqui está..." ou "Segue..." ou qualquer outro texto.
 APENAS JSON PURO!
 
+🎯 **EXEMPLOS DE CLASSIFICAÇÃO INTELIGENTE (baseie-se no NOME do arquivo):**
+- "CONTRATO_DE_COMODATO.pdf" → documento_terra
+- "CONTRATO DE ARRENDAMENTO.pdf" → documento_terra
+- "ITR 2023.pdf" → documento_terra
+- "CCIR.pdf" → documento_terra
+- "AUTODECLARAÇÃO RURAL.pdf" → autodeclaracao_rural
+- "AUTODECLARAÇÃO DE SEGURADA ESPECIAL.pdf" → autodeclaracao_rural
+- "AUTO DECLARACAO RURAL.pdf" → autodeclaracao_rural
+- "RG.pdf" → identificacao
+- "CPF.pdf" → identificacao
+- "IDENTIDADE.pdf" → identificacao
+- "CERTIDÃO DE NASCIMENTO.pdf" → certidao_nascimento
+- "COMPROVANTE DE ENDEREÇO.pdf" → comprovante_residencia
+- "CONTA DE LUZ.pdf" → comprovante_residencia
+
 REGRAS GERAIS:
 - Extraia APENAS informações explícitas e legíveis no documento
 - Se um campo não estiver visível/legível, retorne null

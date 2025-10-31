@@ -274,6 +274,24 @@ Use "medium" para documentos complementares.`;
             console.log(`[VALIDATION] ✅ Documento "${doc.doc_type}" já validado, não solicitar novamente`);
             return false;
           }
+          
+          // 🆕 NOVA VERIFICAÇÃO: Buscar pelo nome do arquivo
+          const fileKeywords: Record<string, string[]> = {
+            'documento_terra': ['comodato', 'arrendamento', 'itr', 'ccir'],
+            'autodeclaracao_rural': ['autodeclaracao', 'auto declaracao']
+          };
+          
+          const keywords = fileKeywords[docTypeNormalized] || [];
+          const hasFileWithKeyword = documents.some(d => {
+            const fileNameLower = d.file_name.toLowerCase();
+            return keywords.some(kw => fileNameLower.includes(kw));
+          });
+          
+          if (hasFileWithKeyword) {
+            console.log(`[VALIDATION] ✅ Documento "${doc.doc_type}" existe com nome correto, não solicitar`);
+            return false;
+          }
+          
           return true;
         });
       }
@@ -334,6 +352,43 @@ Use "medium" para documentos complementares.`;
           
           return false;
         });
+        
+        // 🆕 Se não encontrou por document_type, buscar por nome do arquivo
+        if (!matchingDoc) {
+          const fileNameMatching = documents.find(doc => {
+            const fileNameLower = doc.file_name.toLowerCase();
+            
+            // Mapeamento de palavras-chave no nome do arquivo
+            const fileKeywords: Record<string, string[]> = {
+              'documento_terra': ['comodato', 'arrendamento', 'itr', 'ccir', 'propriedade', 'terra'],
+              'autodeclaracao_rural': ['autodeclaracao', 'auto declaracao', 'declaracao rural'],
+              'identificacao': ['rg', 'cpf', 'identidade', 'carteira de identidade'],
+              'certidao_nascimento': ['certidao', 'nascimento', 'crianca'],
+              'comprovante_residencia': ['comprovante', 'endereco', 'residencia', 'conta de luz'],
+              'processo_administrativo': ['processo', 'protocolo', 'indeferimento', 'negativa']
+            };
+            
+            // Verificar se o nome do arquivo contém keywords relevantes
+            const itemKeywords = fileKeywords[normalizedItem] || [];
+            const hasKeywordMatch = itemKeywords.some(keyword => fileNameLower.includes(keyword));
+            
+            if (hasKeywordMatch) {
+              console.log(`  ✅ Match por nome de arquivo: "${doc.file_name}" contém keyword para "${checkItem.item}"`);
+              return true;
+            }
+            
+            return false;
+          });
+          
+          if (fileNameMatching) {
+            console.log(`  🎯 Documento encontrado por nome: ID=${fileNameMatching.id} nome=${fileNameMatching.file_name}`);
+            return {
+              ...checkItem,
+              document_id: fileNameMatching.id,
+              document_name: fileNameMatching.file_name
+            };
+          }
+        }
         
         if (matchingDoc) {
           console.log(`  🎯 Documento encontrado: ID=${matchingDoc.id} tipo=${matchingDoc.document_type}`);
