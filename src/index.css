@@ -124,3 +124,117 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* ================================
+   ESTILOS PARA EDITOR REACTQUILL
+   ================================ */
+
+/* Container do editor */
+.quill-editor {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Container de conteúdo */
+.quill-editor .ql-container {
+  border: none;
+  font-family: 'Times New Roman', serif;
+  font-size: 12pt;
+  line-height: 1.5;
+}
+
+/* Área de edição */
+.quill-editor .ql-editor {
+  min-height: 600px;
+  max-height: 800px;
+  overflow-y: auto;
+  padding: 30mm;
+  text-align: justify;
+}
+
+/* Placeholder */
+.quill-editor .ql-editor.ql-blank::before {
+  color: #9ca3af;
+  font-style: italic;
+  left: 30mm;
+}
+
+/* Barra de ferramentas */
+.quill-editor .ql-toolbar {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: none;
+  border-bottom: 2px solid #B8860B;
+  border-radius: 8px 8px 0 0;
+  padding: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Botões da barra de ferramentas */
+.quill-editor .ql-toolbar button {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.quill-editor .ql-toolbar button:hover {
+  background: rgba(184, 134, 11, 0.1);
+  transform: translateY(-1px);
+}
+
+.quill-editor .ql-toolbar button.ql-active {
+  background: rgba(184, 134, 11, 0.2);
+  color: #B8860B;
+}
+
+/* Dropdowns da toolbar */
+.quill-editor .ql-toolbar select {
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  transition: border-color 0.2s ease;
+}
+
+.quill-editor .ql-toolbar select:hover {
+  border-color: #B8860B;
+}
+
+/* Separadores da toolbar */
+.quill-editor .ql-toolbar .ql-formats {
+  margin-right: 15px;
+}
+
+/* Scrollbar customizada */
+.quill-editor .ql-editor::-webkit-scrollbar {
+  width: 8px;
+}
+
+.quill-editor .ql-editor::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.quill-editor .ql-editor::-webkit-scrollbar-thumb {
+  background: #B8860B;
+  border-radius: 4px;
+}
+
+.quill-editor .ql-editor::-webkit-scrollbar-thumb:hover {
+  background: #9a7109;
+}
+
+/* Modo somente leitura */
+.quill-editor .ql-editor[contenteditable="false"] {
+  background: #f9fafb;
+  cursor: not-allowed;
+}
+
+.quill-editor .ql-toolbar.ql-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}

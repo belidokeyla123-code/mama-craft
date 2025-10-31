@@ -8,8 +8,11 @@ import { Progress } from "@/components/ui/progress";
 import { FileText, Download, Copy, CheckCheck, Loader2, AlertTriangle, Target, MapPin, Sparkles, X, CheckCircle2, Shield, AlertCircle, Lightbulb, Check, Trash2, RefreshCw, Zap, CheckCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, ImageRun, Header, Footer, BorderStyle } from "docx";
 import jsPDF from 'jspdf';
+import advocaciaBelido from '@/assets/advocacia-belido-logo.png';
+import whatsappIcon from '@/assets/whatsapp-icon.png';
+import emailIcon from '@/assets/email-icon.png';
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -1441,6 +1444,143 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     if (!petition) return;
     
     try {
+      // Função auxiliar para converter imagem em base64
+      const imageToBase64 = async (imageUrl: string): Promise<string> => {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      };
+
+      // Converter assets para base64
+      const logoBase64 = await imageToBase64(advocaciaBelido);
+      const whatsappBase64 = await imageToBase64(whatsappIcon);
+      const emailBase64 = await imageToBase64(emailIcon);
+
+      // CABEÇALHO com logo "Advocacia Belido"
+      const header = new Header({
+        children: [
+          // Logo centralizado
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [
+              new ImageRun({
+                type: 'png',
+                data: logoBase64,
+                transformation: {
+                  width: 220,
+                  height: 73
+                }
+              })
+            ],
+            spacing: { after: 200 }
+          }),
+          // Linha separadora dourada
+          new Paragraph({
+            border: {
+              bottom: {
+                color: "B8860B",
+                space: 1,
+                style: BorderStyle.SINGLE,
+                size: 12
+              }
+            },
+            spacing: { after: 300 }
+          })
+        ]
+      });
+
+      // RODAPÉ com informações de contato
+      const footer = new Footer({
+        children: [
+          // Linha separadora dourada superior
+          new Paragraph({
+            border: {
+              top: {
+                color: "B8860B",
+                space: 1,
+                style: BorderStyle.SINGLE,
+                size: 12
+              }
+            },
+            spacing: { before: 100, after: 150 }
+          }),
+          // CUIABÁ/MT
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Cuiabá/MT: ', bold: true, size: 18 }),
+              new TextRun({ 
+                text: 'Travessa Desembargador Ferreira Mendes, 233, 8º andar, sala 81, Master Center, Centro Sul, CEP: 78.020-200', 
+                size: 18 
+              })
+            ],
+            spacing: { after: 100 }
+          }),
+          // Telefones Cuiabá com ícones WhatsApp
+          new Paragraph({
+            children: [
+              new ImageRun({
+                type: 'png',
+                data: whatsappBase64,
+                transformation: { width: 14, height: 14 }
+              }),
+              new TextRun({ text: ' (65) 9.8134-0174   ', size: 18 }),
+              new ImageRun({
+                type: 'png',
+                data: whatsappBase64,
+                transformation: { width: 14, height: 14 }
+              }),
+              new TextRun({ text: ' (65) 3623-5561', size: 18 })
+            ],
+            spacing: { after: 150 }
+          }),
+          // BOA VISTA/RR
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Boa Vista/RR: ', bold: true, size: 18 }),
+              new TextRun({ 
+                text: 'Rua Jair Alves dos Reis, 118, sala 1, Bairro: Jardim Floresta, CEP: 69.312-148', 
+                size: 18 
+              })
+            ],
+            spacing: { after: 100 }
+          }),
+          // Telefones Boa Vista com ícones WhatsApp
+          new Paragraph({
+            children: [
+              new ImageRun({
+                type: 'png',
+                data: whatsappBase64,
+                transformation: { width: 14, height: 14 }
+              }),
+              new TextRun({ text: ' (95) 3626-1438   ', size: 18 }),
+              new ImageRun({
+                type: 'png',
+                data: whatsappBase64,
+                transformation: { width: 14, height: 14 }
+              }),
+              new TextRun({ text: ' (95) 99158-3636', size: 18 })
+            ],
+            spacing: { after: 150 }
+          }),
+          // E-mail com ícone
+          new Paragraph({
+            children: [
+              new ImageRun({
+                type: 'png',
+                data: emailBase64,
+                transformation: { width: 14, height: 14 }
+              }),
+              new TextRun({ text: ' advbelido@gmail.com', size: 18 })
+            ],
+            spacing: { after: 100 }
+          })
+        ]
+      });
+
       // Converter markdown para DOCX com formatação ABNT
       const lines = petition.split('\n');
       const paragraphs = lines.map(line => {
@@ -1472,12 +1612,18 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           properties: {
             page: {
               margin: {
-                top: 1134, // 2cm (ABNT)
-                right: 1134,
-                bottom: 1134,
-                left: 1134
+                top: 1700,    // ~3cm (espaço para cabeçalho)
+                bottom: 2200, // ~3.9cm (espaço para rodapé)
+                left: 1134,   // ~2cm
+                right: 1134   // ~2cm
               }
             }
+          },
+          headers: {
+            default: header
+          },
+          footers: {
+            default: footer
           },
           children: paragraphs
         }]
@@ -1507,24 +1653,121 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         unit: 'mm'
       });
 
-      // Configurar fonte e margens ABNT
+      // Função para adicionar cabeçalho
+      const addHeader = () => {
+        const pageWidth = doc.internal.pageSize.getWidth();
+        
+        // Logo "Advocacia Belido" centralizado
+        const logoWidth = 70;
+        const logoHeight = 23;
+        const centerX = (pageWidth - logoWidth) / 2;
+        
+        doc.addImage(advocaciaBelido, 'PNG', centerX, 10, logoWidth, logoHeight);
+        
+        // Linha dourada separadora
+        doc.setDrawColor(184, 134, 11);
+        doc.setLineWidth(0.5);
+        doc.line(20, 38, pageWidth - 20, 38);
+      };
+
+      // Função para adicionar rodapé
+      const addFooter = (pageNumber: number, totalPages: number) => {
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const footerStartY = pageHeight - 40;
+        
+        // Linha dourada separadora superior
+        doc.setDrawColor(184, 134, 11);
+        doc.setLineWidth(0.5);
+        doc.line(20, footerStartY, pageWidth - 20, footerStartY);
+        
+        // Configuração de fonte
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+        
+        let currentY = footerStartY + 5;
+        
+        // CUIABÁ/MT
+        doc.setFont('helvetica', 'bold');
+        doc.text('Cuiabá/MT:', 20, currentY);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Travessa Desembargador Ferreira Mendes, 233, 8º andar, sala 81, Master Center, Centro Sul, CEP: 78.020-200', 38, currentY, { maxWidth: pageWidth - 58 });
+        
+        currentY += 4;
+        
+        // Telefones Cuiabá com ícones WhatsApp
+        doc.addImage(whatsappIcon, 'PNG', 20, currentY - 2.5, 3, 3);
+        doc.text('(65) 9.8134-0174', 24, currentY);
+        doc.addImage(whatsappIcon, 'PNG', 55, currentY - 2.5, 3, 3);
+        doc.text('(65) 3623-5561', 59, currentY);
+        
+        currentY += 6;
+        
+        // BOA VISTA/RR
+        doc.setFont('helvetica', 'bold');
+        doc.text('Boa Vista/RR:', 20, currentY);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Rua Jair Alves dos Reis, 118, sala 1, Bairro: Jardim Floresta, CEP: 69.312-148', 38, currentY, { maxWidth: pageWidth - 58 });
+        
+        currentY += 4;
+        
+        // Telefones Boa Vista com ícones WhatsApp
+        doc.addImage(whatsappIcon, 'PNG', 20, currentY - 2.5, 3, 3);
+        doc.text('(95) 3626-1438', 24, currentY);
+        doc.addImage(whatsappIcon, 'PNG', 55, currentY - 2.5, 3, 3);
+        doc.text('(95) 99158-3636', 59, currentY);
+        
+        currentY += 6;
+        
+        // E-MAIL com ícone
+        doc.addImage(emailIcon, 'PNG', 20, currentY - 2.5, 3, 3);
+        doc.text('advbelido@gmail.com', 24, currentY);
+        
+        // Número da página (canto direito)
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text(`Página ${pageNumber} de ${totalPages}`, pageWidth - 40, currentY);
+      };
+
+      // Adicionar cabeçalho na primeira página
+      addHeader();
+
+      // Configurar fonte e margens
       doc.setFontSize(12);
+      doc.setFont('times', 'normal');
+      doc.setTextColor(0, 0, 0);
+      
       const pageWidth = doc.internal.pageSize.getWidth();
-      const margins = { top: 20, left: 30, right: 20 };
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margins = { 
+        top: 45,  // Depois do cabeçalho
+        left: 30, 
+        right: 20,
+        bottom: 45 // Antes do rodapé
+      };
       const maxWidth = pageWidth - margins.left - margins.right;
+      const usableHeight = pageHeight - margins.top - margins.bottom;
 
       // Adicionar texto com quebra de linha
       const lines = doc.splitTextToSize(petition, maxWidth);
       let y = margins.top;
 
       lines.forEach((line: string) => {
-        if (y > 280) {
+        if (y > pageHeight - margins.bottom) {
           doc.addPage();
+          addHeader();
           y = margins.top;
         }
         doc.text(line, margins.left, y);
         y += 7; // Espaçamento 1.5 linhas
       });
+
+      // Adicionar rodapé em TODAS as páginas
+      const totalPages = doc.internal.pages.length - 1;
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        addFooter(i, totalPages);
+      }
 
       doc.save(`peticao_${data.authorName || 'caso'}.pdf`);
       toast.success('✅ PDF baixado com sucesso!');
