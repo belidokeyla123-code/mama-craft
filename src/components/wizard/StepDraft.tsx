@@ -20,6 +20,7 @@ import { CorrectionHistory } from "@/components/correction/CorrectionHistory";
 import { DiffDialog } from "@/components/wizard/DiffDialog";
 import { ProgressCard } from "@/components/wizard/ProgressCard";
 import { useTabSync } from "@/hooks/useTabSync";
+import { QualityReportCard } from "@/components/petition/QualityReportCard";
 
 interface StepDraftProps {
   data: CaseData;
@@ -2865,178 +2866,16 @@ ${tabelaDocumentos}
       </div>
 
       {/* ✅ CONTROLE DE QUALIDADE */}
-      {qualityReport && (
-        <Card className="border-2 border-primary/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              🤖 Controle de Qualidade
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Status Geral</span>
-                <Badge variant={
-                  qualityReport.status === 'aprovado' ? 'default' :
-                  qualityReport.status === 'corrigido_automaticamente' ? 'secondary' :
-                  'destructive'
-                }>
-                  {qualityReport.status === 'aprovado' ? '✅ Aprovado' :
-                   qualityReport.status === 'corrigido_automaticamente' ? '⚡ Corrigido Automaticamente' :
-                   '⚠️ Requer Revisão'}
-                </Badge>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Endereçamento</span>
-                {qualityReport.enderecamento_ok ? (
-                  <Badge variant="default" className="bg-green-600">✅ Correto</Badge>
-                ) : (
-                  <Badge variant="destructive">❌ Corrigido pela IA</Badge>
-                )}
-              </div>
-              
-              <div className="flex flex-col gap-2 p-3 bg-muted rounded-lg">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Valor da Causa Validado</span>
-                  {qualityReport.valor_causa_validado ? (
-                    <Badge variant="default" className="bg-green-600">✅ Validado</Badge>
-                  ) : (
-                    <Badge variant="secondary">⚠️ Revisar</Badge>
-                  )}
-                </div>
-                
-                {/* ✅ MOSTRAR CÁLCULO DETALHADO */}
-                {qualityReport.valor_causa_validado && qualityReport.valor_causa_referencia && (
-                  <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 mt-1">
-                    <p>
-                      <strong>Competência:</strong> {qualityReport.competencia === 'juizado' ? 'Juizado Especial Federal' : 'Vara Federal'}
-                    </p>
-                    <p>
-                      <strong>Cálculo:</strong> 60 salários × R$ {(qualityReport.valor_causa_referencia / 60).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = 
-                      <span className="font-bold text-green-600 ml-1">
-                        R$ {qualityReport.valor_causa_referencia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Jurisdição</span>
-                {qualityReport.jurisdicao_ok ? (
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge variant="default" className="bg-green-600">✅ Correta</Badge>
-                    {qualityReport.jurisdicao_validada && (
-                      <span className="text-xs text-muted-foreground">
-                        {qualityReport.jurisdicao_validada.subsecao}/{qualityReport.jurisdicao_validada.uf} - {qualityReport.jurisdicao_validada.trf}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <Badge variant="destructive">❌ Incorreta</Badge>
-                )}
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Dados Completos</span>
-                {qualityReport.dados_completos ? (
-                  <Badge variant="default" className="bg-green-600">✅ Todos preenchidos</Badge>
-                ) : (
-                  <Badge variant="secondary">⚠️ {qualityReport.campos_faltantes?.length || 0} campos faltando</Badge>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Português e Sintaxe</span>
-                {qualityReport.portugues_ok ? (
-                  <Badge variant="default" className="bg-green-600">✅ Corrigido</Badge>
-                ) : (
-                  <Badge variant="secondary">⏳ Em análise</Badge>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Documentos Validados</span>
-                {qualityReport.documentos_validados ? (
-                  <Badge variant="default" className="bg-green-600">✅ Validados</Badge>
-                ) : (
-                  <Badge variant="secondary">⏳ Em análise</Badge>
-                )}
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Competência</span>
-                <span className="text-xs text-muted-foreground">
-                  {qualityReport.competencia === 'juizado' 
-                    ? '📋 Juizado Especial Federal (≤ 60 SM)'
-                    : '⚖️ Vara Federal (> 60 SM)'}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="font-medium">Confiança da Validação</span>
-                <Badge variant={
-                  qualityReport.jurisdicao_confianca === 'alta' ? 'default' :
-                  qualityReport.jurisdicao_confianca === 'media' ? 'secondary' :
-                  'outline'
-                }>
-                  {qualityReport.jurisdicao_confianca === 'alta' ? '✅ Alta confiança' :
-                   qualityReport.jurisdicao_confianca === 'media' ? '⚠️ Média confiança' :
-                   '📍 Baixa confiança'}
-                </Badge>
-              </div>
-              
-              {qualityReport.jurisdicao_validada && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm font-semibold text-blue-900 mb-1">
-                    Jurisdição Validada:
-                  </p>
-                  <p className="text-sm text-blue-800">
-                    <strong>Subseção:</strong> {qualityReport.jurisdicao_validada.subsecao}/{qualityReport.jurisdicao_validada.uf}
-                  </p>
-                  {qualityReport.jurisdicao_validada.observacao && (
-                    <p className="text-sm text-blue-800 mt-1">
-                      <strong>Observação:</strong> {qualityReport.jurisdicao_validada.observacao}
-                    </p>
-                  )}
-                  {qualityReport.fonte && qualityReport.fonte !== 'dados do caso' && (
-                    <p className="text-xs text-blue-600 mt-2">
-                      <strong>Fonte:</strong>{' '}
-                      <a 
-                        href={qualityReport.fonte} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="underline"
-                      >
-                        {qualityReport.fonte}
-                      </a>
-                    </p>
-                  )}
-                </div>
-              )}
-              
-              {qualityReport.issues && qualityReport.issues.length > 0 && (
-                <Alert variant={qualityReport.issues.some((i: any) => i.gravidade === 'CRÍTICO') ? 'destructive' : 'default'}>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Problemas Detectados e Corrigidos</AlertTitle>
-                  <AlertDescription>
-                    <ul className="list-disc ml-4 mt-2 text-sm">
-                      {qualityReport.issues.map((issue: any, idx: number) => (
-                        <li key={idx}>
-                          <strong>{issue.tipo}:</strong> {issue.problema}
-                          {issue.acao && <span className="text-green-600 ml-2">({issue.acao})</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <QualityReportCard
+        qualityReport={qualityReport}
+        onRevalidate={revalidateQualityReport}
+        onRecalculate={async () => {
+          toast.info('Recalculando qualidade...');
+          await loadQualityReport();
+          toast.success('✅ Qualidade recalculada');
+        }}
+        loading={loading}
+      />
 
       {/* Ações da Petição */}
       <div className="flex flex-wrap items-center gap-3">
