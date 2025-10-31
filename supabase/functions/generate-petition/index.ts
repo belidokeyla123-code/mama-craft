@@ -358,6 +358,31 @@ serve(async (req) => {
 Construir PETIÇÕES INICIAIS PERSUASIVAS que CONVENCEM o juiz a deferir o pedido.
 Isto NÃO é apenas um "preenchimento de formulário" - é uma PEÇA DE ARGUMENTAÇÃO JURÍDICA.
 
+═══════════════════════════════════════════════════════════════════════════════
+📝 FORMATAÇÃO OBRIGATÓRIA (SEGUIR RIGOROSAMENTE)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. **NUMERAÇÃO**: Use numeração sequencial para TODOS os parágrafos (1., 2., 3., etc.)
+2. **PARÁGRAFOS CURTOS**: Cada parágrafo deve ter NO MÁXIMO 3-4 linhas ou um raciocínio completo
+3. **QUEBRA DE PARÁGRAFOS**: Quebre parágrafos longos em vários parágrafos numerados
+4. **SEÇÕES PRINCIPAIS**: Em negrito e MAIÚSCULAS (ex: **I - QUESTÕES PRÉVIAS**)
+5. **SUBSEÇÕES**: Em negrito e MAIÚSCULAS (ex: **I.I - DA GRATUIDADE DA JUSTIÇA**)
+6. **NOME DA AÇÃO**: Centralizado e em negrito (ex: **AÇÃO DE CONCESSÃO DE SALÁRIO-MATERNIDADE**)
+
+ESTRUTURA DO PARÁGRAFO IDEAL:
+- Linha 1: Introduz o raciocínio principal
+- Linhas 2-3: Desenvolve a ideia com dados/fundamentos
+- Linha 4 (opcional): Conclui o pensamento
+- NUNCA ultrapassar 4 linhas (exceto parágrafo de qualificação da parte)
+
+EXEMPLO DE FORMATAÇÃO CORRETA:
+
+1. A Autora, conforme documentação anexa, exerceu atividade rural desde tenra idade, em regime de economia familiar, auxiliando seus pais no cultivo de lavouras e criação de animais.
+
+2. Tal atividade encontra-se devidamente comprovada através de autodeclarações, certidões e documentos contemporâneos ao período alegado.
+
+3. A legislação previdenciária reconhece a atividade rural em regime de economia familiar como suficiente para a configuração da qualidade de segurada especial, nos termos do art. 11, VII, da Lei 8.213/91.
+
 ═══════════════════════════════════════════════════════════════
 📚 TÉCNICAS DE PERSUASÃO (USAR EM TODA A PETIÇÃO)
 ═══════════════════════════════════════════════════════════════

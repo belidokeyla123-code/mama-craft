@@ -1601,33 +1601,64 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         ]
       });
 
-      // Converter markdown para DOCX com formatação ABNT
+      // Converter markdown para DOCX com formatação do modelo
       const lines = petition.split('\n');
       const paragraphs = lines.map(line => {
+        const isNumberedParagraph = /^\d+\./.test(line.trim());
+        const isBold = line.match(/^(\*\*|__|[IVX]+\s*-)/);
+        const isCenter = line.match(/^(AÇÃO|PEDIDO DE|INICIAL)/i);
+        
         if (line.startsWith('# ')) {
           return new Paragraph({
             text: line.replace('# ', ''),
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER,
-            spacing: { before: 240, after: 120 }
+            spacing: { before: 240, after: 120, line: 360 }
           });
         } else if (line.startsWith('## ')) {
           return new Paragraph({
             text: line.replace('## ', ''),
             heading: HeadingLevel.HEADING_2,
             alignment: AlignmentType.LEFT,
-            spacing: { before: 200, after: 100 }
+            spacing: { before: 200, after: 100, line: 360 }
           });
         } else {
           return new Paragraph({
             text: line,
-            spacing: { line: 360 }, // 1.5 linhas (ABNT)
-            alignment: AlignmentType.JUSTIFIED
+            style: 'Normal',
+            spacing: {
+              before: 180, // 6pt antes
+              after: 180,  // 6pt depois
+              line: 360    // 1.5 linhas
+            },
+            indent: {
+              firstLine: isNumberedParagraph && !isBold ? 472 : 0 // 1.25cm para parágrafos numerados
+            },
+            alignment: isCenter ? AlignmentType.CENTER : AlignmentType.JUSTIFIED,
           });
         }
       });
 
       const doc = new Document({
+        styles: {
+          paragraphStyles: [
+            {
+              id: 'Normal',
+              name: 'Normal',
+              run: {
+                font: 'Arial',
+                size: 24, // 12pt = 24 half-points
+              },
+              paragraph: {
+                spacing: {
+                  line: 360, // 1.5 line spacing
+                  before: 180, // 6pt antes
+                  after: 180,  // 6pt depois
+                },
+              },
+            }
+          ]
+        },
         sections: [{
           properties: {
             page: {
@@ -1752,9 +1783,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       // Adicionar cabeçalho na primeira página
       addHeader();
 
-      // Configurar fonte e margens
+      // Configurar fonte Arial (Helvetica) e margens
       doc.setFontSize(12);
-      doc.setFont('times', 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.setTextColor(0, 0, 0);
       
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -1766,20 +1797,72 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         bottom: 45 // Antes do rodapé
       };
       const maxWidth = pageWidth - margins.left - margins.right;
-      const usableHeight = pageHeight - margins.top - margins.bottom;
+      const lineHeight = 7; // ~1.5 de 12pt
+      const firstLineIndent = 12; // ~1.25cm
 
-      // Adicionar texto com quebra de linha
-      const lines = doc.splitTextToSize(petition, maxWidth);
+      // Processar cada linha com formatação especial
+      const petitionLines = petition.split('\n');
       let y = margins.top;
 
-      lines.forEach((line: string) => {
+      petitionLines.forEach((line: string) => {
         if (y > pageHeight - margins.bottom) {
           doc.addPage();
           addHeader();
           y = margins.top;
         }
-        doc.text(line, margins.left, y);
-        y += 7; // Espaçamento 1.5 linhas
+
+        // Detectar tipo de linha e aplicar formatação
+        let isBold = false;
+        let isCenter = false;
+        let hasIndent = false;
+
+        // Endereçamento (negrito)
+        if (line.match(/^(EXCELENTÍSSIM|ILUSTRÍSSIM|AO JUIZADO|À VARA)/i)) {
+          isBold = true;
+        }
+        // Nome da ação (centralizado e negrito)
+        else if (line.match(/^(AÇÃO|PEDIDO DE|INICIAL)/i)) {
+          isBold = true;
+          isCenter = true;
+        }
+        // Seções principais (negrito)
+        else if (line.match(/^[IVX]+\s*-/)) {
+          isBold = true;
+        }
+        // Parágrafos numerados (com recuo de primeira linha)
+        else if (line.match(/^\d+\./)) {
+          hasIndent = true;
+        }
+
+        doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+        
+        const splitLines = doc.splitTextToSize(line, maxWidth - (hasIndent ? firstLineIndent : 0));
+        
+        splitLines.forEach((textLine: string, index: number) => {
+          if (y > pageHeight - margins.bottom) {
+            doc.addPage();
+            addHeader();
+            y = margins.top;
+          }
+
+          const xPos = index === 0 && hasIndent ? margins.left + firstLineIndent : margins.left;
+          
+          if (isCenter) {
+            const textWidth = doc.getTextWidth(textLine);
+            const xCenter = (pageWidth - textWidth) / 2;
+            doc.text(textLine, xCenter, y);
+          } else {
+            doc.text(textLine, xPos, y, { 
+              align: 'justify', 
+              maxWidth: maxWidth - (index === 0 && hasIndent ? firstLineIndent : 0) 
+            });
+          }
+
+          y += lineHeight;
+        });
+        
+        // Espaçamento extra entre parágrafos
+        y += 2;
       });
 
       // Adicionar rodapé em TODAS as páginas
