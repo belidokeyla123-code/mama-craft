@@ -147,6 +147,8 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   const loadCachedAnalysis = async () => {
     if (!data.caseId) return;
     
+    console.log('[ANALYSIS] 🔍 Carregando análise do banco...');
+    
     try {
       const { data: analysisData, error } = await supabase
         .from('case_analysis')
@@ -175,10 +177,14 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
           toast.info('Novos documentos detectados. Clique em "Reanalisar" para atualizar.');
         }
         
-        console.log('[ANALYSIS] Carregado do cache');
+        console.log('[ANALYSIS] ✅ Análise carregada do cache');
+      } else {
+        console.log('[ANALYSIS] ℹ️ Nenhuma análise em cache, análise será executada');
+        setHasCache(false);
       }
     } catch (error) {
-      console.error('Erro ao carregar cache:', error);
+      console.error('[ANALYSIS] ❌ Erro ao carregar cache:', error);
+      setHasCache(false);
     }
   };
 

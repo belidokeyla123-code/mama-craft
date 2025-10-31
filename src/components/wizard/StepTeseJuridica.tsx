@@ -64,6 +64,8 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
   const loadCachedTeses = async () => {
     if (!data.caseId) return;
     
+    console.log('[TESES] 🔍 Carregando teses do banco...');
+    
     try {
       const { data: cached, error } = await supabase
         .from('teses_juridicas')
@@ -79,10 +81,17 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
         setTeses(cached.teses as any);
         setSelectedTitles(new Set(cached.selected_ids || []));
         setHasCache(true);
-        console.log('[TESES] Carregado do cache');
+        console.log('[TESES] ✅ Teses carregadas do cache:', {
+          total: (cached.teses as any[]).length,
+          selected: cached.selected_ids?.length || 0
+        });
+      } else {
+        console.log('[TESES] ℹ️ Nenhuma tese em cache, geração será executada');
+        setHasCache(false);
       }
     } catch (error) {
-      console.error('Erro ao carregar cache:', error);
+      console.error('[TESES] ❌ Erro ao carregar cache:', error);
+      setHasCache(false);
     }
   };
 

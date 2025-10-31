@@ -45,8 +45,9 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   });
 
   useEffect(() => {
-    if (data.caseId && !validationResult) {
-      handleValidate();
+    if (data.caseId) {
+      // Carregar validação do banco primeiro
+      loadValidationFromDB();
     }
 
     const handleRevalidate = () => {
@@ -59,6 +60,31 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       window.removeEventListener('revalidate-documents', handleRevalidate);
     };
   }, [data.caseId]);
+
+  const loadValidationFromDB = async () => {
+    if (!data.caseId) return;
+    
+    try {
+      const { data: validation, error } = await supabase
+        .from('document_validation')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('validated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (!error && validation) {
+        setValidationResult(validation);
+        console.log('[StepValidation] ✅ Validação carregada do banco:', validation);
+      } else if (!validation) {
+        // Se não há validação salva, executar validação
+        handleValidate();
+      }
+    } catch (error) {
+      console.error('[StepValidation] Erro ao carregar validação:', error);
+      handleValidate();
+    }
+  };
 
   const handleValidate = async () => {
     if (!data.caseId) return;
