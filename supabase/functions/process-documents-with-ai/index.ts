@@ -477,6 +477,12 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     if (extractedData.ruralActivitiesPlanting) updateData.rural_activities_planting = extractedData.ruralActivitiesPlanting;
     if (extractedData.ruralActivitiesBreeding) updateData.rural_activities_breeding = extractedData.ruralActivitiesBreeding;
 
+    // Declaração de Saúde UBS
+    if (extractedData.health_declaration_ubs && typeof extractedData.health_declaration_ubs === 'object') {
+      updateData.health_declaration_ubs = extractedData.health_declaration_ubs;
+      console.log('[UBS] ✅ Declaração de saúde UBS extraída:', extractedData.health_declaration_ubs);
+    }
+
     // Grupo familiar detalhado
     if (extractedData.familyMembersDetailed && extractedData.familyMembersDetailed.length > 0) {
       updateData.family_members = extractedData.familyMembersDetailed;
