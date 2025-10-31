@@ -10,7 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
-import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 import { useTabSync } from "@/hooks/useTabSync";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 
@@ -24,13 +23,6 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const [validationResult, setValidationResult] = useState<any>(null);
   const { toast } = useToast();
   const { triggerFullPipeline } = useCaseOrchestration({ caseId: data.caseId || '', enabled: true });
-
-  // Invalidar caches quando revalidar manualmente
-  useCacheInvalidation({
-    caseId: data.caseId || '',
-    triggerType: 'validation',
-    watchFields: [isValidating],
-  });
 
   // ✅ FASE 3: Sincronização em tempo real
   useTabSync({

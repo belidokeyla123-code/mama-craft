@@ -211,6 +211,7 @@ AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes
           case_id: caseId,
           teses: tesesData.teses,
           selected_ids: [], // Inicialmente vazio, usuário seleciona depois
+          is_stale: false,
           created_at: new Date().toISOString()
         }, {
           onConflict: 'case_id'

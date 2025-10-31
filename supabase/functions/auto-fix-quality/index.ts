@@ -124,7 +124,8 @@ serve(async (req) => {
         await supabase.from('drafts').insert({
           case_id: caseId,
           markdown_content: petitionCorrigida,
-          payload: { auto_fixed_enderecamento: true, subsecao, uf }
+          payload: { auto_fixed_enderecamento: true, subsecao, uf },
+          is_stale: false
         });
         
         // Registrar em correction_history
@@ -248,7 +249,8 @@ serve(async (req) => {
       await supabase.from('drafts').insert({
         case_id: caseId,
         markdown_content: petitionComDados,
-        payload: { auto_filled_fields: camposFaltantes }
+        payload: { auto_filled_fields: camposFaltantes },
+        is_stale: false
       });
 
       corrections.push({
@@ -403,7 +405,8 @@ RETORNE JSON:
         payload: { 
           auto_fixed_portugues: true,
           erros_corrigidos: analisePortugues.errosEncontrados
-        }
+        },
+        is_stale: false
       });
 
       corrections.push({
@@ -453,7 +456,8 @@ RETORNE JSON:
         payload: { 
           auto_fixed_documentos: true,
           problemas_corrigidos: analiseDocumentos.problemas
-        }
+        },
+        is_stale: false
       });
 
       corrections.push({

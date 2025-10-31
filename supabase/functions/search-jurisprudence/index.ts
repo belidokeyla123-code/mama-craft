@@ -355,6 +355,7 @@ Retorne JSON com NO MÁXIMO 3 de cada tipo:
           results: results,
           selected_ids: [], // Inicialmente vazio, usuário seleciona depois
           last_case_hash: cacheKey,
+          is_stale: false,
           created_at: new Date().toISOString()
         }, {
           onConflict: 'case_id'

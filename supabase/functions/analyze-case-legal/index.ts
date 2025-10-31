@@ -330,6 +330,7 @@ Considere:
           rmi: analysisResult.rmi,
           valor_causa: analysisResult.valor_causa,
           draft_payload: analysisResult,
+          is_stale: false,
           analyzed_at: new Date().toISOString()
         }, { onConflict: 'case_id' });
 

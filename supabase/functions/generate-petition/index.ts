@@ -813,7 +813,8 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
         .insert({
           case_id: caseId,
           markdown_content: petitionText,
-          payload: { selectedJurisprudencias, jurisdicaoValidada }
+          payload: { selectedJurisprudencias, jurisdicaoValidada },
+          is_stale: false
         });
 
       return new Response(JSON.stringify({ petitionText }), {
