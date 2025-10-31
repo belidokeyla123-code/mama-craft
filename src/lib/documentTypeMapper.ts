@@ -102,11 +102,13 @@ export const mapDocumentTypeToEnum = (docType: string): string => {
   return mapping[normalized] || "outro";
 };
 
-// Sanitizar nome do arquivo (remover caracteres inválidos do Windows)
+// Sanitizar nome do arquivo (remover caracteres inválidos e acentos)
 export const sanitizeFileName = (name: string): string => {
   return name
-    .replace(/~/g, '_')        // ~ → _
-    .replace(/[<>:"|?*]/g, '') // Caracteres inválidos do Windows
-    .replace(/\s+/g, '_')      // Espaços → _
+    .normalize('NFD')           // Decompor caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, '') // Remover diacríticos (acentos)
+    .replace(/~/g, '_')         // ~ → _
+    .replace(/[<>:"|?*]/g, '')  // Caracteres inválidos do Windows
+    .replace(/\s+/g, '_')       // Espaços → _
     .trim();
 };
