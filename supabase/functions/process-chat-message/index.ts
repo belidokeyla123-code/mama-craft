@@ -273,6 +273,27 @@ Analise a mensagem/áudio e extraia TODAS as informações mencionadas, incluind
       const extracted = JSON.parse(toolCall.function.arguments);
       console.log('[PROCESS-CHAT] 📊 Dados extraídos:', JSON.stringify(extracted, null, 2));
 
+      // 🆕 Disparar reclassificação de documentos não classificados após processar
+      const { data: pendingDocs } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('case_id', caseId)
+        .in('document_type', ['OUTROS', 'outro']);
+
+      if (pendingDocs && pendingDocs.length > 0) {
+        console.log(`[PROCESS-CHAT] 🔄 Reclassificando ${pendingDocs.length} documento(s) pendente(s)...`);
+        
+        for (const doc of pendingDocs) {
+          await supabase.functions.invoke('analyze-single-document', {
+            body: { 
+              documentId: doc.id, 
+              caseId, 
+              forceReprocess: true 
+            }
+          });
+        }
+      }
+
       // ✅ CORREÇÃO: Validar campos existentes e salvar corretamente
       let updates: any = {};
       let insertions: any[] = [];

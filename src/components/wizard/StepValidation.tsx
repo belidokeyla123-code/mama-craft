@@ -25,7 +25,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   // ✅ FASE 3: Sincronização em tempo real
   useTabSync({
     caseId: data.caseId || '',
-    events: ['validation-updated', 'documents-updated', 'processing-completed'],
+    events: ['validation-updated', 'documents-updated', 'documents-classified', 'processing-completed'],  // 🆕 NOVO
     onSync: (detail) => {
       console.log('[StepValidation] 🔄 Validação ou documentos atualizados, recarregando...');
       if (detail.timestamp && !isValidating) {

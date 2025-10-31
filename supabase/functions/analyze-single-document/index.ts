@@ -206,13 +206,45 @@ serve(async (req) => {
     console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64.`);
 
     // ==================================================================
-    // 4. Chamar IA para análise com prompt específico
+    // 4. ETAPA 1: CLASSIFICAR PRIMEIRO (não confiar no tipo atual)
     // ==================================================================
-    console.log(`[DOC ${documentId}] 🤖 Chamando IA para extrair dados do tipo: ${currentType}`);
+    console.log(`[DOC ${documentId}] 🎯 ETAPA 1: Classificando documento pelo CONTEÚDO...`);
     
-    // Usar prompt específico por tipo de documento
-    const prompt = buildPromptForDocType(currentType, originalFileName);
-    console.log(`[DOC ${documentId}] 📋 Prompt gerado (${prompt.length} caracteres)`);
+    const classificationPrompt = `Você é um especialista em análise documental jurídica para processos previdenciários.
+Analise o documento "${originalFileName}" e identifique o tipo baseando-se NO CONTEÚDO, não apenas no nome.
+
+⚠️ CRÍTICO: RETORNE APENAS JSON VÁLIDO!
+
+🎯 **BASEIE-SE NO CONTEÚDO DO DOCUMENTO, NÃO APENAS NO NOME!**
+
+TIPOS POSSÍVEIS:
+- procuracao (procuração assinada pelo cliente)
+- certidao_nascimento (certidão de nascimento da criança)
+- identificacao (RG, CPF, CNH)
+- cnis (extrato do CNIS)
+- autodeclaracao_rural (declaração de atividade rural assinada)
+- documento_terra (contrato de comodato, arrendamento, ITR, CCIR, escritura de propriedade)
+- processo_administrativo (protocolo, indeferimento do INSS)
+- comprovante_residencia (conta de luz, água, telefone)
+- historico_escolar
+- declaracao_saude_ubs
+- outro (APENAS se não se encaixar em nenhum)
+
+📋 EXEMPLOS:
+- "CONTRATO_DE_COMODATO.pdf" com texto sobre cessão de terra → documento_terra
+- "AUTODECLARAÇÃO RURAL.pdf" com assinatura → autodeclaracao_rural
+- "ITR 2023.pdf" → documento_terra
+- "RG.pdf" com foto → identificacao
+
+RETORNE JSON:
+{
+  "documentType": "tipo_identificado",
+  "confidence": 0.0-1.0,
+  "reason": "explicação do porquê"
+}`;
+
+    const prompt = classificationPrompt;
+    console.log(`[DOC ${documentId}] 📋 Prompt de classificação gerado`);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -267,9 +299,72 @@ serve(async (req) => {
       confidence: 0.0
     });
 
-    console.log(`[DOC ${documentId}] Resposta da IA recebida e parseada.`);
+    console.log(`[DOC ${documentId}] ✅ ETAPA 1 CONCLUÍDA: Tipo identificado = ${analysisResult.documentType}`);
     
-    // ✅ FALLBACK INTELIGENTE: Se não conseguiu classificar ou classificou como "outro"
+    // ==================================================================
+    // 5. ETAPA 2: Se classificou corretamente, extrair dados detalhados
+    // ==================================================================
+    if (analysisResult.documentType && analysisResult.documentType !== 'outro' && analysisResult.documentType !== 'OUTRO') {
+      console.log(`[DOC ${documentId}] 🎯 ETAPA 2: Extraindo dados detalhados para tipo: ${analysisResult.documentType}`);
+      
+      // Atualizar tipo no banco IMEDIATAMENTE
+      await supabaseClient
+        .from('documents')
+        .update({ document_type: analysisResult.documentType })
+        .eq('id', documentId);
+      
+      // Usar prompt específico para extrair dados detalhados
+      const detailedPrompt = buildPromptForDocType(analysisResult.documentType, originalFileName);
+      console.log(`[DOC ${documentId}] 📋 Prompt detalhado gerado (${detailedPrompt.length} caracteres)`);
+      
+      const detailedRequest = {
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: detailedPrompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/png;base64,${fileBase64}`,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 2048,
+        temperature: 0.3,
+      };
+
+      const detailedResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        },
+        body: JSON.stringify(detailedRequest),
+      });
+
+      if (detailedResponse.ok) {
+        const detailedData = await detailedResponse.json();
+        const detailedRawContent = detailedData.choices[0].message.content;
+        const detailedResult = parseJSONResponse(detailedRawContent, analysisResult);
+        
+        // Mesclar dados detalhados com classificação
+        analysisResult = {
+          ...analysisResult,
+          ...detailedResult,
+          documentType: analysisResult.documentType // Manter tipo da classificação
+        };
+        
+        console.log(`[DOC ${documentId}] ✅ ETAPA 2 CONCLUÍDA: Dados detalhados extraídos`);
+      } else {
+        console.log(`[DOC ${documentId}] ⚠️ ETAPA 2 FALHOU: Mantendo apenas classificação`);
+      }
+    }
+    
+    // ✅ FALLBACK: Se não conseguiu classificar ou classificou como "outro"
     if (!analysisResult.documentType || analysisResult.documentType === 'outro' || analysisResult.documentType === 'OUTRO') {
       console.log(`[DOC ${documentId}] ⚠️ Não conseguiu classificar corretamente. Tentando novamente com prompt genérico...`);
       

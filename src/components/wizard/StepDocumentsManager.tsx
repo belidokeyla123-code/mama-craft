@@ -424,7 +424,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             file_path: fileName,
             file_size: file.size,
             mime_type: file.type,
-            document_type: "OUTROS",
+            document_type: "outro",  // ✅ Aguardar IA classificar (será reclassificado automaticamente)
           })
           .select()
           .single();
@@ -475,12 +475,20 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         description: "Validação, análise, jurisprudência e tese atualizadas!"
       });
 
-      // ✅ Disparar evento global para sincronizar todas as abas
+      // ✅ Disparar eventos globais para sincronizar todas as abas
       window.dispatchEvent(new CustomEvent('documents-updated', {
         detail: { 
           caseId,
           timestamp: Date.now(),
           action: 'upload'
+        }
+      }));
+      
+      // 🆕 Disparar evento de classificação concluída
+      window.dispatchEvent(new CustomEvent('documents-classified', {
+        detail: { 
+          caseId,
+          timestamp: Date.now()
         }
       }));
 
