@@ -115,8 +115,13 @@ Se a petição mencionar valores baseados em salário mínimo incorreto, VOCÊ D
       return `
 ### BRECHA ${i + 1} - ${brecha.tipo.toUpperCase()} (Gravidade: ${brecha.gravidade})
 **Localização:** ${brecha.localizacao}
-**Problema:** ${brecha.descricao}
+**Problema:** ${brecha.problema || brecha.descricao}
+${brecha.impacto ? `**Impacto:** ${brecha.impacto}` : ''}
 **AÇÃO OBRIGATÓRIA:** ${brecha.sugestao}
+${brecha.paragrafo_corrigido ? `
+**PARÁGRAFO CORRIGIDO (USE EXATAMENTE ESTE TEXTO):**
+"${brecha.paragrafo_corrigido}"
+` : ''}
 ${brecha.documento_necessario ? `**DOCUMENTO NECESSÁRIO:** ${brecha.documento_necessario}` : ''}
 `;
     }).join('\n---\n') || '';

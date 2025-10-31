@@ -47,10 +47,10 @@ export const QualityReportCard = ({
       <CardContent className="space-y-4">
         {/* Status Grid */}
         <div className="grid gap-3">
-          {/* Endereçamento */}
+          {/* Jurisdição */}
           <div className="p-3 bg-muted rounded-lg space-y-1">
             <div className="flex items-center justify-between">
-              <span className="font-medium">Endereçamento</span>
+              <span className="font-medium">Jurisdição</span>
               {qualityReport.enderecamento_ok ? (
                 <Badge variant="default" className="bg-green-600">✅ Correto</Badge>
               ) : (
@@ -61,9 +61,11 @@ export const QualityReportCard = ({
               <p className="text-xs text-muted-foreground mt-1">
                 {typeof qualityReport.jurisdicao_validada === 'string' 
                   ? qualityReport.jurisdicao_validada 
-                  : typeof qualityReport.jurisdicao_validada === 'object'
-                    ? `${qualityReport.jurisdicao_validada.endereco || qualityReport.jurisdicao_validada.city || ''} - ${qualityReport.jurisdicao_validada.uf || ''}`
-                    : 'Jurisdição validada'}
+                  : typeof qualityReport.jurisdicao_validada === 'object' && qualityReport.jurisdicao_validada.endereco
+                    ? qualityReport.jurisdicao_validada.endereco
+                    : typeof qualityReport.jurisdicao_validada === 'object'
+                      ? `${qualityReport.competencia === 'juizado' ? 'Juizado Especial Federal' : 'Vara Federal'} ${qualityReport.jurisdicao_validada.city ? 'de ' + qualityReport.jurisdicao_validada.city : ''} - ${qualityReport.jurisdicao_validada.uf || ''}`
+                      : 'Jurisdição validada'}
               </p>
             )}
           </div>
@@ -81,40 +83,31 @@ export const QualityReportCard = ({
           </div>
 
           {/* Valor da Causa */}
-          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <span className="font-medium">Valor da Causa</span>
-            {qualityReport.valor_causa_validado ? (
-              <div className="flex flex-col items-end gap-1">
+          <div className="p-3 bg-muted rounded-lg space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Valor da Causa</span>
+              {qualityReport.valor_causa_validado ? (
                 <Badge variant="default" className="bg-green-600">
                   ✅ R$ {qualityReport.valor_causa_referencia?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </Badge>
-                <span className="text-xs text-muted-foreground">
+              ) : (
+                <Badge variant="destructive">❌ Valor incorreto</Badge>
+              )}
+            </div>
+            {qualityReport.valor_causa_validado && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
                   {qualityReport.competencia === 'juizado' 
                     ? '📋 Juizado Especial Federal'
                     : '⚖️ Vara Federal'}
-                </span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  4 salários maternidade desde a época do parto + juros e correção monetária
+                </p>
               </div>
-            ) : (
-              <Badge variant="destructive">❌ Valor incorreto</Badge>
             )}
           </div>
 
-          {/* Jurisdição */}
-          <div className="p-3 bg-muted rounded-lg space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">Jurisdição</span>
-              {qualityReport.jurisdicao_ok ? (
-                <Badge variant="default" className="bg-green-600">✅ Correta</Badge>
-              ) : (
-                <Badge variant="destructive">❌ Incorreta</Badge>
-              )}
-            </div>
-            {qualityReport.jurisdicao_ok && qualityReport.trf && typeof qualityReport.trf === 'object' && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {qualityReport.trf.trf || 'TRF'} - {qualityReport.trf.city || qualityReport.trf.uf || ''}
-              </p>
-            )}
-          </div>
         </div>
 
         {/* Análise Completa da IA */}

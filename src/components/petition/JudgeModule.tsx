@@ -12,10 +12,12 @@ import { toast } from "sonner";
 interface JudgeAnalysis {
   brechas: Array<{
     tipo: string;
-    descricao: string;
+    problema: string;
     gravidade: string;
     localizacao: string;
+    impacto: string;
     sugestao: string;
+    paragrafo_corrigido: string;
   }>;
   pontos_fortes: string[];
   pontos_fracos: string[];
@@ -154,15 +156,32 @@ export const JudgeModule = ({
                             <div className="flex-1 space-y-2">
                               <div className="flex items-center gap-2">
                                 <Badge variant={getSeverityVariant(brecha.gravidade)}>
-                                  {brecha.tipo}
+                                  [{brecha.gravidade.toUpperCase()}] {brecha.tipo}
                                 </Badge>
-                                <Badge variant="outline">{brecha.gravidade}</Badge>
                               </div>
-                              <p className="text-sm font-medium">{brecha.descricao}</p>
-                              <p className="text-xs text-muted-foreground">📍 {brecha.localizacao}</p>
-                              <div className="p-2 bg-green-50 rounded text-xs">
-                                <strong>Sugestão:</strong> {brecha.sugestao}
+                              
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium">{brecha.problema}</p>
+                                <p className="text-xs text-muted-foreground">📍 {brecha.localizacao}</p>
+                                
+                                {brecha.impacto && (
+                                  <div className="p-2 bg-red-50 rounded text-xs">
+                                    <strong>⚠️ Impacto:</strong> {brecha.impacto}
+                                  </div>
+                                )}
+                                
+                                <div className="p-2 bg-blue-50 rounded text-xs">
+                                  <strong>💡 Sugestão:</strong> {brecha.sugestao}
+                                </div>
+                                
+                                {brecha.paragrafo_corrigido && (
+                                  <div className="p-2 bg-green-50 rounded text-xs">
+                                    <strong>✅ Parágrafo Corrigido:</strong>
+                                    <p className="mt-1 italic">{brecha.paragrafo_corrigido}</p>
+                                  </div>
+                                )}
                               </div>
+                              
                               <Button
                                 onClick={() => onApplySingle(index)}
                                 variant="outline"

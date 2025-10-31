@@ -21,20 +21,25 @@ serve(async (req) => {
     const { petition, caseInfo, documents, analysis, jurisprudence, tese } = body;
 
     // Log detalhado para debug
-    console.log('[JUDGE-MODULE] Data validation:', {
+    console.log('[JUDGE-MODULE] 📋 ANÁLISE PROFUNDA - Data validation:', {
       hasPetition: !!petition,
       petitionLength: petition?.length || 0,
       hasCaseInfo: !!caseInfo,
       hasDocuments: !!documents,
       documentsCount: documents?.length || 0,
-      hasManualBenefits: !!caseInfo?.manual_benefits,
-      manualBenefitsCount: caseInfo?.manual_benefits?.length || 0
+      hasAnalysis: !!analysis,
+      hasJurisprudence: !!jurisprudence,
+      hasTese: !!tese,
+      documentTypes: documents?.map((d: any) => d.document_type) || []
     });
     
-    // ═══ FASE 6: CRIAR LISTA DETALHADA DE DOCUMENTOS PARA O JUIZ ═══
-    const documentosInfo = documents?.map((doc: any, i: number) => 
-      `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name} (${doc.document_type})`
-    ).join('\n') || 'Nenhum documento anexado';
+    // ═══ CRIAR LISTA DETALHADA DE DOCUMENTOS COM EXTRAÇÕES ═══
+    const documentosInfo = documents?.map((doc: any, i: number) => {
+      const extraction = doc.extractions?.[0];
+      return `Doc. ${String(i + 1).padStart(2, '0')}: ${doc.file_name}
+   Tipo: ${doc.document_type || 'não classificado'}
+   Conteúdo extraído: ${extraction?.extracted_text ? extraction.extracted_text.substring(0, 500) + '...' : 'Não extraído'}`;
+    }).join('\n\n') || 'Nenhum documento anexado';
 
     // Validação básica
     if (!petition || typeof petition !== 'string' || petition.trim().length === 0) {
@@ -42,74 +47,143 @@ serve(async (req) => {
       throw new Error('Petição não fornecida ou inválida');
     }
 
-    const prompt = `Você é um JUIZ FEDERAL fazendo CONTROLE DE QUALIDADE FINAL.
+    const prompt = `Você é um JUIZ FEDERAL fazendo ANÁLISE CRÍTICA PROFUNDA da petição inicial.
 
-⚠️ IMPORTANTE: A petição JÁ passou por análise preliminar que corrigiu:
-✅ Endereçamento, jurisdição, valor da causa
-✅ Dados completos, português, sintaxe
-✅ Documentos validados e citados corretamente
+📋 CONTEXTO COMPLETO DO CASO:
 
-📁 DADOS DO CASO:
+**INFORMAÇÕES DO CASO:**
 ${JSON.stringify(caseInfo, null, 2)}
 
-**PETIÇÃO:**
+**ANÁLISE JURÍDICA REALIZADA:**
+${JSON.stringify(analysis, null, 2)}
+
+**JURISPRUDÊNCIAS ENCONTRADAS:**
+${JSON.stringify(jurisprudence, null, 2)}
+
+**TESE JURÍDICA CONSTRUÍDA:**
+${JSON.stringify(tese, null, 2)}
+
+**DOCUMENTOS ANEXADOS (COM CONTEÚDO):**
+${documentosInfo}
+
+**PETIÇÃO INICIAL:**
 ${petition}
 
 ---
 
-⚖️ TAREFA: ANÁLISE CRÍTICA DE MÉRITO
+⚖️ ANÁLISE JUDICIAL COMPLETA
 
-Foque EXCLUSIVAMENTE em:
+Verifique RIGOROSAMENTE:
 
-1. **TESE JURÍDICA**
-   - A tese é sólida e bem fundamentada?
-   - Há precedentes suficientes para sustentá-la?
-   - A argumentação está alinhada com a jurisprudência atual?
+1. **REQUISITOS LEGAIS PREVIDENCIÁRIOS**
+   - ✅ Carência de 10 meses cumprida? (verificar CNIS + autodeclaração)
+   - ✅ Qualidade de segurada mantida? (último recolhimento + período de graça)
+   - ✅ Parto/adoção comprovada? (certidão de nascimento + prontuário médico)
+   - ✅ Autodeclaração vs CNIS: informações conferem?
 
-2. **PODER DE CONVENCIMENTO**
-   - A petição convence um juiz neutro?
-   - A narrativa dos fatos é clara e persuasiva?
-   - Os argumentos estão bem encadeados?
+2. **CONSISTÊNCIA DOCUMENTOS ↔ PETIÇÃO**
+   - A petição menciona "conforme Doc. X anexo"? O Doc. X existe e é do tipo correto?
+   - Dados citados na petição (datas, valores) conferem com extrações dos documentos?
+   - Certidão de nascimento anexada? Data do parto mencionada na petição confere?
+   - CNIS anexado? Períodos de contribuição mencionados conferem?
+   - Há menção a documentos que não estão anexados?
 
-3. **RISCO DE IMPROCEDÊNCIA**
-   - Quais as chances de procedência total? (0-100%)
-   - Existem brechas críticas que o réu pode explorar?
-   - Há contradições ou fragilidades argumentativas?
+3. **JURISPRUDÊNCIAS**
+   - As jurisprudências citadas são do TRF correto (${caseInfo.trf || 'verificar'})?
+   - As teses das jurisprudências são ESPECÍFICAS para salário-maternidade?
+   - Faltam precedentes importantes que deveriam estar citados?
+   - As ementas citadas são atuais e relevantes?
 
-4. **FUNDAMENTO LEGAL**
-   - As leis citadas são apropriadas?
-   - Faltam normas importantes?
-   - Os artigos estão atualizados?
+4. **TESE JURÍDICA**
+   - A tese é sólida e alinhada com jurisprudência dominante?
+   - Há fundamentação legal robusta (Lei 8.213/91, art. 71-73)?
+   - A argumentação é convincente e bem estruturada?
+   - Há precedentes do STF/STJ/TRF citados adequadamente?
 
-🚫 NÃO ANALISE (já verificado):
-- Português/sintaxe/gramática
-- Documentos citados
-- Endereçamento/competência
-- Dados completos/placeholders
+5. **BRECHAS CRÍTICAS QUE O RÉU (INSS) PODE EXPLORAR**
+   - Inconsistências entre autodeclaração e CNIS
+   - Falta de documentos essenciais
+   - Erros de datas, cálculos ou valores
+   - Argumentação fraca ou contraditória
+   - Referências documentais incorretas
+   - Falhas na demonstração de requisitos legais
 
-RETORNE JSON:
+---
+
+RETORNE JSON ESTRUTURADO:
+
 {
   "status_geral": "APROVADO" | "REVISAR" | "REFAZER",
   "risco_improcedencia": 15,
   "chance_procedencia_total": 85,
-  "brechas_criticas": [
+  "brechas": [
     {
-      "tipo": "tese" | "fundamentacao" | "convencimento",
-      "descricao": "Descrição específica da brecha",
+      "tipo": "requisito_legal" | "documento" | "jurisprudencia" | "tese" | "fundamentacao" | "calculo",
+      "problema": "Descrição específica e detalhada da brecha encontrada",
       "gravidade": "alta" | "media" | "baixa",
-      "sugestao": "Como corrigir de forma prática"
+      "localizacao": "Em qual parte da petição está o problema (ex: 'Seção II - Dos Fatos, parágrafo 3')",
+      "impacto": "Como isso pode prejudicar o caso judicialmente",
+      "sugestao": "Como corrigir de forma prática e objetiva",
+      "paragrafo_corrigido": "O parágrafo completo já corrigido, pronto para substituir na petição"
     }
   ],
-  "pontos_fortes": ["Máximo 3 pontos"],
-  "pontos_fracos": ["Máximo 3 pontos"],
-  "recomendacao_final": "Recomendação em 1-2 frases"
+  "pontos_fortes": [
+    "Máximo 3 pontos fortes identificados"
+  ],
+  "pontos_fracos": [
+    "Máximo 3 pontos fracos identificados"
+  ],
+  "recomendacoes": [
+    "Até 3 recomendações práticas para melhorar a petição"
+  ]
 }
 
-DIRETRIZES:
-- Seja RÁPIDO (não repita análises já feitas)
-- Foque em ARGUMENTAÇÃO e MÉRITO
-- Se está perfeito, deixe brechas_criticas vazio
-- Seja objetivo e prático nas sugestões`;
+**EXEMPLOS DE BRECHAS ESPECÍFICAS:**
+
+❌ **Brecha Grave - Documento Inconsistente:**
+{
+  "tipo": "documento",
+  "problema": "A petição menciona 'conforme autodeclaração anexa (Doc. 05)' mas o Doc. 05 é na verdade o CNIS, não a autodeclaração. A autodeclaração é o Doc. 03.",
+  "gravidade": "alta",
+  "localizacao": "Seção II - Dos Fatos, parágrafo 4",
+  "impacto": "O juiz pode rejeitar o pedido por falta de prova adequada ou desorganização processual",
+  "sugestao": "Corrigir a numeração do documento citado para Doc. 03",
+  "paragrafo_corrigido": "A autora declarou que exerce atividade rural em regime de economia familiar desde 01/01/2020, conforme autodeclaração anexa (Doc. 03), sendo que o CNIS (Doc. 05) confirma os períodos de contribuição como segurada individual."
+}
+
+❌ **Brecha Grave - Requisito Legal:**
+{
+  "tipo": "requisito_legal",
+  "problema": "A petição não demonstra claramente o cumprimento da carência de 10 meses. O CNIS anexo mostra contribuições apenas de 03/2024 a 11/2024 (8 meses), mas a petição afirma que há carência suficiente sem explicar como.",
+  "gravidade": "alta",
+  "localizacao": "Seção III - Do Direito, requisitos para concessão",
+  "impacto": "O INSS contestará alegando falta de carência, o que pode levar à improcedência",
+  "sugestao": "Incluir períodos anteriores de contribuição ou demonstrar trabalho rural anterior que complemente a carência",
+  "paragrafo_corrigido": "A autora cumpriu a carência de 10 meses necessária para a concessão do salário-maternidade, considerando: (i) 8 meses de contribuições como segurada individual de 03/2024 a 11/2024, conforme CNIS (Doc. 05); e (ii) 4 meses de trabalho rural em regime de economia familiar de 11/2023 a 02/2024, conforme autodeclaração e início de prova material (Doc. 03 e Doc. 06), totalizando 12 meses de carência cumpridos antes do parto ocorrido em 15/12/2024."
+}
+
+❌ **Brecha Média - Jurisprudência:**
+{
+  "tipo": "jurisprudencia",
+  "problema": "A petição cita jurisprudência do TRF-3, mas o caso será julgado no TRF-1 (Rondônia). Embora não seja um erro fatal, citar precedentes do próprio TRF aumenta a força persuasiva.",
+  "gravidade": "media",
+  "localizacao": "Seção IV - Jurisprudência",
+  "impacto": "Argumentação menos persuasiva; perda de oportunidade de usar precedentes vinculantes do TRF-1",
+  "sugestao": "Substituir ou complementar com jurisprudências específicas do TRF-1 sobre salário-maternidade",
+  "paragrafo_corrigido": "Nesse sentido, o TRF-1 já decidiu reiteradamente pela concessão do salário-maternidade à segurada especial em regime de economia familiar, conforme: 'PREVIDENCIÁRIO. SALÁRIO-MATERNIDADE. SEGURADA ESPECIAL. REGIME DE ECONOMIA FAMILIAR. INÍCIO DE PROVA MATERIAL. CARÊNCIA CUMPRIDA. CONCESSÃO DO BENEFÍCIO. (TRF-1, AC 1001234-56.2024.4.01.4100, Rel. Des. João Silva, DJe 10/05/2024)'."
+}
+
+DIRETRIZES PARA ANÁLISE:
+- Seja EXTREMAMENTE RIGOROSO e DETALHISTA
+- Identifique TODAS as brechas, mesmo pequenas
+- Para cada brecha, forneça o PARÁGRAFO CORRIGIDO completo e pronto para uso
+- Verifique a CONSISTÊNCIA entre documentos anexados e citações na petição
+- Analise se os REQUISITOS LEGAIS estão claramente demonstrados
+- Verifique se as JURISPRUDÊNCIAS são do TRF correto e específicas
+- Se não houver brechas, deixe o array vazio
+- Foque em problemas que o INSS ou o juiz REALMENTE apontariam
+
+IMPORTANTE: Retorne APENAS o JSON, sem texto adicional ou markdown.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
