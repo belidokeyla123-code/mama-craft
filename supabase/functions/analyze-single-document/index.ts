@@ -395,17 +395,36 @@ RETORNE JSON com análise detalhada:
       console.log(`[DOC ${documentId}] Renomeando arquivo no storage para: ${newFileName}`);
       const newPath = filePath.substring(0, filePath.lastIndexOf('/') + 1) + newFileName;
 
-      const { data: moveData, error: moveError } = await supabaseClient.storage
+      // Verificar se o arquivo já existe no caminho de destino
+      const { data: existingFile } = await supabaseClient.storage
         .from('case-documents')
-        .move(filePath, newPath);
+        .list(newPath.substring(0, newPath.lastIndexOf('/')), {
+          search: newFileName
+        });
 
-      if (moveError) {
-        console.error(`[DOC ${documentId}] Erro ao renomear arquivo no storage:`, moveError);
-        throw new Error(moveError.message);
+      if (existingFile && existingFile.length > 0) {
+        console.log(`[DOC ${documentId}] Arquivo já existe no caminho de destino. Atualizando apenas o banco de dados.`);
+        newFilePath = newPath;
+      } else {
+        // Tentar renomear apenas se o arquivo de origem ainda existir
+        const { data: moveData, error: moveError } = await supabaseClient.storage
+          .from('case-documents')
+          .move(filePath, newPath);
+
+        if (moveError) {
+          // Se o arquivo não foi encontrado, pode já ter sido renomeado anteriormente
+          if (moveError.message.includes('Object not found')) {
+            console.warn(`[DOC ${documentId}] Arquivo de origem não encontrado. Pode já ter sido renomeado. Continuando...`);
+            newFilePath = newPath;
+          } else {
+            console.error(`[DOC ${documentId}] Erro ao renomear arquivo no storage:`, moveError);
+            throw new Error(moveError.message);
+          }
+        } else {
+          newFilePath = newPath;
+          console.log(`[DOC ${documentId}] Arquivo renomeado no storage para: ${newPath}`);
+        }
       }
-
-      newFilePath = newPath;
-      console.log(`[DOC ${documentId}] Arquivo renomeado no storage para: ${newPath}`);
     }
 
     // ==================================================================
