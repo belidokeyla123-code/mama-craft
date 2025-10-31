@@ -25,6 +25,7 @@ import { ProgressCard } from "@/components/wizard/ProgressCard";
 import { useTabSync } from "@/hooks/useTabSync";
 import { QualityReportCard } from "@/components/petition/QualityReportCard";
 import { PetitionViewer } from "@/components/petition/PetitionViewer";
+import { useFullPipelineOrchestration } from "@/hooks/useFullPipelineOrchestration";
 
 interface StepDraftProps {
   data: CaseData;
@@ -121,6 +122,9 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
 
   // 🆕 Hook de Auto-Correção
   const autoCorrection = useAutoCorrection(data.caseId || '');
+  
+  // 🆕 Hook de Pipeline Completo
+  const { runFullPipeline, isRunning: isPipelineRunning, progress: pipelineProgress } = useFullPipelineOrchestration();
 
   // ✅ FASE 3: Sincronização em tempo real
   useTabSync({
@@ -3263,7 +3267,37 @@ ${tabelaDocumentos}
         <h2 className="text-2xl font-bold flex items-center gap-3">
           <FileText className="h-7 w-7 text-primary" />
           Petição Inicial Completa
-          <Button onClick={generatePetition} disabled={loading} className="gap-2 ml-4">
+        </h2>
+        
+        <div className="flex items-center gap-3">
+          {/* Botão Pipeline */}
+          <Button 
+            onClick={async () => {
+              if (!data.caseId) return;
+              const result = await runFullPipeline(data.caseId, true, true);
+              if (result?.success) {
+                toast.success('Pipeline concluído! Agora você pode gerar uma nova versão.');
+              }
+            }} 
+            disabled={isPipelineRunning || !data.caseId}
+            variant="outline"
+            className="gap-2"
+          >
+            {isPipelineRunning ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Pipeline ({Math.round(pipelineProgress)}%)
+              </>
+            ) : (
+              <>
+                <Zap className="h-4 w-4" />
+                Executar Pipeline
+              </>
+            )}
+          </Button>
+          
+          {/* Botão Gerar Nova Versão */}
+          <Button onClick={generatePetition} disabled={loading || isPipelineRunning} className="gap-2">
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -3281,7 +3315,7 @@ ${tabelaDocumentos}
               </>
             )}
           </Button>
-        </h2>
+        </div>
       </div>
 
       {/* ✅ CONTROLE DE QUALIDADE */}

@@ -125,14 +125,9 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
           : "Adicione mais documentos",
       });
 
-      // Auto-disparar análise se documentos suficientes
+      // Pipeline agora é manual na aba Minuta
       if (result.is_sufficient) {
-        sonnerToast.success('✅ Documentos suficientes! Iniciando pipeline completo...');
-        
-        // Disparar pipeline completo após 3 segundos
-        setTimeout(() => {
-          triggerFullPipeline('Validação aprovada com documentos suficientes');
-        }, 3000);
+        sonnerToast.success('✅ Documentos suficientes! Vá para a aba Minuta e execute o Pipeline.');
       }
     } catch (error: any) {
       console.error('Erro na validação:', error);
