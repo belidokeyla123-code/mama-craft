@@ -881,7 +881,7 @@ export type Database = {
           {
             foreignKeyName: "extractions_document_id_fkey"
             columns: ["document_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "documents"
             referencedColumns: ["id"]
           },
@@ -1270,7 +1270,7 @@ export type Database = {
           {
             foreignKeyName: "teses_juridicas_case_id_fkey"
             columns: ["case_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },
