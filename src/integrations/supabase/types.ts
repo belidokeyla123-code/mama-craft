@@ -735,6 +735,7 @@ export type Database = {
       }
       drafts: {
         Row: {
+          appellate_analysis: Json | null
           case_id: string
           docx_path: string | null
           finalized_at: string | null
@@ -744,12 +745,15 @@ export type Database = {
           id: string
           is_final: boolean | null
           is_stale: boolean | null
+          judge_analysis: Json | null
           last_analysis_hash: string | null
           markdown_content: string | null
           payload: Json
+          regional_adaptation: Json | null
           version: number
         }
         Insert: {
+          appellate_analysis?: Json | null
           case_id: string
           docx_path?: string | null
           finalized_at?: string | null
@@ -759,12 +763,15 @@ export type Database = {
           id?: string
           is_final?: boolean | null
           is_stale?: boolean | null
+          judge_analysis?: Json | null
           last_analysis_hash?: string | null
           markdown_content?: string | null
           payload: Json
+          regional_adaptation?: Json | null
           version?: number
         }
         Update: {
+          appellate_analysis?: Json | null
           case_id?: string
           docx_path?: string | null
           finalized_at?: string | null
@@ -774,9 +781,11 @@ export type Database = {
           id?: string
           is_final?: boolean | null
           is_stale?: boolean | null
+          judge_analysis?: Json | null
           last_analysis_hash?: string | null
           markdown_content?: string | null
           payload?: Json
+          regional_adaptation?: Json | null
           version?: number
         }
         Relationships: [

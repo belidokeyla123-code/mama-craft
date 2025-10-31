@@ -360,7 +360,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         // Buscar petição do cache com payload completo
         const { data: draft } = await supabase
           .from('drafts')
-          .select('markdown_content, generated_at, payload, judge_analysis, regional_adaptation, appellate_analysis')
+          .select('*')
           .eq('case_id', data.caseId)
           .order('generated_at', { ascending: false })
           .limit(1)
@@ -411,18 +411,19 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             console.log('[DRAFT] ✅ Carregado do cache (sem placeholders)');
             
             // ✅ CARREGAR ANÁLISES SALVAS DO PAYLOAD
-            if (draft.judge_analysis) {
-              setJudgeAnalysis(draft.judge_analysis as JudgeAnalysis);
+            const draftData = draft as any;
+            if (draftData.judge_analysis) {
+              setJudgeAnalysis(draftData.judge_analysis as JudgeAnalysis);
               console.log('[DRAFT] ✅ Judge Analysis carregada do payload');
             }
             
-            if (draft.regional_adaptation) {
-              setRegionalAdaptation(draft.regional_adaptation as RegionalAdaptation);
+            if (draftData.regional_adaptation) {
+              setRegionalAdaptation(draftData.regional_adaptation as RegionalAdaptation);
               console.log('[DRAFT] ✅ Regional Adaptation carregada do payload');
             }
             
-            if (draft.appellate_analysis) {
-              setAppellateAnalysis(draft.appellate_analysis);
+            if (draftData.appellate_analysis) {
+              setAppellateAnalysis(draftData.appellate_analysis);
               console.log('[DRAFT] ✅ Appellate Analysis carregada do payload');
             }
             
@@ -1291,6 +1292,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                 await supabase.from('drafts').insert([{
                   case_id: data.caseId,
                   markdown_content: correctionResult.petition_corrigida,
+                  judge_analysis: result as any,
                   payload: { 
                     corrected_by_judge: true, 
                     judge_analysis: result,
@@ -1721,6 +1723,11 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         .insert({
           case_id: data.caseId,
           markdown_content: currentPetition,
+          judge_analysis: {
+            ...judgeAnalysis,
+            brechas: brechasRestantes,
+            risco_improcedencia: riscoAtual
+          } as any,
           payload: { 
             selected_corrections: selectedBrechasData.map(b => b.descricao),
             corrections_applied: true,
@@ -1885,6 +1892,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       const { error: saveError } = await supabase.from('drafts').insert([{
         case_id: data.caseId,
         markdown_content: result.petition_corrigida,
+        judge_analysis: judgeAnalysis as any,
         payload: { 
           corrected_by_judge: true,
           judge_analysis: judgeAnalysis,
@@ -2482,6 +2490,7 @@ ${tabelaDocumentos}
         await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
+          regional_adaptation: regionalAdaptation as any,
           payload: { regional_adaptation: adaptacao.tipo }
         });
       }
@@ -2535,6 +2544,10 @@ ${tabelaDocumentos}
           .insert({
             case_id: data.caseId,
             markdown_content: result.petition_corrigida,
+            regional_adaptation: {
+              ...regionalAdaptation,
+              adaptacoes_sugeridas: [] // Lista vazia = tudo aplicado
+            } as any,
             payload: { 
               corrected_by_judge: hasJudgeCorrections,
               regional_adaptations_applied: true,
@@ -2607,6 +2620,7 @@ ${tabelaDocumentos}
         await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
+          appellate_analysis: appellateAnalysis as any,
           payload: { appellate_adaptation: adaptacao.tipo }
         });
         
@@ -2660,6 +2674,10 @@ ${tabelaDocumentos}
         await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
+          appellate_analysis: {
+            ...appellateAnalysis,
+            adaptacoes_regionais: [] // Lista vazia = tudo aplicado
+          } as any,
           payload: { 
             corrected_by_judge: hasJudgeCorrections,
             regional_adaptations_applied: hasRegionalAdaptations,
