@@ -1078,8 +1078,8 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
         confianca: jurisdicaoValidada.confianca
       });
 
-      // Salvar draft no banco
-      await supabase
+      // Salvar draft no banco e retornar ID
+      const { data: savedDraft, error: draftError } = await supabase
         .from('drafts')
         .insert({
           case_id: caseId,
@@ -1090,11 +1090,20 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
             recomendacoes_validacao: recomendacoesValidacao 
           },
           is_stale: false
-        });
+        })
+        .select()
+        .single();
+
+      if (draftError) {
+        console.error('❌ Erro ao salvar draft:', draftError);
+      } else {
+        console.log('✅ Draft salvo com ID:', savedDraft?.id);
+      }
 
       return new Response(JSON.stringify({ 
         petitionText,
-        recomendacoes_validacao: recomendacoesValidacao 
+        recomendacoes_validacao: recomendacoesValidacao,
+        draftId: savedDraft?.id
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

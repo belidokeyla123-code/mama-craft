@@ -788,7 +788,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         setPetition(petitionCorrigida);
         
         // Salvar no banco
-        await supabase.from('drafts').insert([{
+        const { data: savedDraft } = await supabase.from('drafts').insert([{
           case_id: data.caseId,
           markdown_content: petitionCorrigida,
           payload: { 
@@ -797,7 +797,11 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
             new_salario: salarioMinimoCorreto,
             timestamp: new Date().toISOString() 
           } as any
-        }]);
+        }]).select().single();
+        
+        if (savedDraft) {
+          setCurrentDraftId(savedDraft.id);
+        }
       }
       
       toast.success(`✅ Valor da causa recalculado! Ano base: ${fatoGeradorYear}, Salário: R$ ${salarioMinimoCorreto.toFixed(2)}`, {
@@ -1144,6 +1148,12 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         setPetition(petitionContent);
         setHasCache(true);
         
+        // 🆕 SETAR DRAFT ID se retornado pela edge function
+        if (result?.draftId) {
+          setCurrentDraftId(result.draftId);
+          console.log('[DRAFT] ✅ Draft ID setado:', result.draftId);
+        }
+        
         // 🆕 SALVAR VALIDAÇÃO DE RECOMENDAÇÕES
         if (result?.recomendacoes_validacao) {
           setRecomendacoesValidacao(result.recomendacoes_validacao);
@@ -1313,7 +1323,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                 setPetition(correctionResult.petition_corrigida);
                 
                 // Salvar no banco
-                await supabase.from('drafts').insert([{
+                const { data: savedDraft } = await supabase.from('drafts').insert([{
                   case_id: data.caseId,
                   markdown_content: correctionResult.petition_corrigida,
                   judge_analysis: result as any,
@@ -1324,7 +1334,11 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
                     auto_applied: true,
                     timestamp: new Date().toISOString() 
                   } as any
-                }]);
+                }]).select().single();
+                
+                if (savedDraft) {
+                  setCurrentDraftId(savedDraft.id);
+                }
                 
                 // Limpar problemas após aplicação
                 setJudgeAnalysis(prev => prev ? { 
@@ -1862,11 +1876,15 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
         }
         
         // Salvar versão atualizada
-        await supabase.from('drafts').insert({
+        const { data: savedDraft } = await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
           payload: { single_correction: brecha.descricao }
-        });
+        }).select().single();
+        
+        if (savedDraft) {
+          setCurrentDraftId(savedDraft.id);
+        }
       }
     } catch (error: any) {
       console.error('Erro ao aplicar sugestão individual:', error);
@@ -2153,7 +2171,7 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
       setPetition(result.petition_corrigida);
       
       // 🔥 SALVAR NO BANCO COM INSERT (não upsert)
-      const { error: saveError } = await supabase.from('drafts').insert([{
+      const { data: savedDraft, error: saveError } = await supabase.from('drafts').insert([{
         case_id: data.caseId,
         markdown_content: result.petition_corrigida,
         judge_analysis: judgeAnalysis as any,
@@ -2163,7 +2181,11 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
           applied_brechas: brechasSelecionadas.map((b: any) => b.tipo),
           timestamp: new Date().toISOString() 
         } as any
-      }]);
+      }]).select().single();
+      
+      if (savedDraft) {
+        setCurrentDraftId(savedDraft.id);
+      }
       
       if (saveError) {
         console.error('[APPLY-CORRECTIONS] Erro ao salvar:', saveError);
@@ -2406,7 +2428,7 @@ ${tabelaDocumentos}
       });
       
       // Salvar nova versão no banco
-      await supabase.from('drafts').insert([{
+      const { data: savedDraft } = await supabase.from('drafts').insert([{
         case_id: data.caseId,
         markdown_content: result.petition_corrigida,
         payload: { 
@@ -2415,7 +2437,11 @@ ${tabelaDocumentos}
           documentos_alinhados: documentosExtraidos.length,
           timestamp: new Date().toISOString() 
         } as any
-      }]);
+      }]).select().single();
+      
+      if (savedDraft) {
+        setCurrentDraftId(savedDraft.id);
+      }
       
       // ═══ FASE 7: FEEDBACK VISUAL DETALHADO ═══
       toast.success('✅ Contradições corrigidas com sucesso!', {
@@ -2751,12 +2777,16 @@ ${tabelaDocumentos}
       if (result?.petition_corrigida) {
         setPetition(result.petition_corrigida);
         
-        await supabase.from('drafts').insert({
+        const { data: savedDraft } = await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
           regional_adaptation: regionalAdaptation as any,
           payload: { regional_adaptation: adaptacao.tipo }
-        });
+        }).select().single();
+        
+        if (savedDraft) {
+          setCurrentDraftId(savedDraft.id);
+        }
       }
     } catch (error: any) {
       console.error('Erro:', error);
@@ -2881,12 +2911,16 @@ ${tabelaDocumentos}
       if (result?.petition_corrigida) {
         setPetition(result.petition_corrigida);
         
-        await supabase.from('drafts').insert({
+        const { data: savedDraft } = await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
           appellate_analysis: appellateAnalysis as any,
           payload: { appellate_adaptation: adaptacao.tipo }
-        });
+        }).select().single();
+        
+        if (savedDraft) {
+          setCurrentDraftId(savedDraft.id);
+        }
         
         toast.success(`✅ Adaptação "${adaptacao.tipo}" aplicada!`);
       }
@@ -2935,7 +2969,7 @@ ${tabelaDocumentos}
         setPetition(result.petition_corrigida);
         
         // ✅ Manter todas as flags anteriores + adicionar nova
-        await supabase.from('drafts').insert({
+        const { data: savedDraft } = await supabase.from('drafts').insert({
           case_id: data.caseId,
           markdown_content: result.petition_corrigida,
           appellate_analysis: {
@@ -2948,7 +2982,11 @@ ${tabelaDocumentos}
             appellate_adaptations_applied: true,
             timestamp: new Date().toISOString()
           }
-        });
+        }).select().single();
+        
+        if (savedDraft) {
+          setCurrentDraftId(savedDraft.id);
+        }
         
         toast.success(`✅ ${appellateAnalysis?.adaptacoes_regionais?.length || 0} adaptações do tribunal aplicadas!`);
         
