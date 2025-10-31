@@ -59,7 +59,11 @@ export const QualityReportCard = ({
             </div>
             {qualityReport.enderecamento_ok && qualityReport.jurisdicao_validada && (
               <p className="text-xs text-muted-foreground mt-1">
-                {qualityReport.jurisdicao_validada}
+                {typeof qualityReport.jurisdicao_validada === 'string' 
+                  ? qualityReport.jurisdicao_validada 
+                  : typeof qualityReport.jurisdicao_validada === 'object'
+                    ? `${qualityReport.jurisdicao_validada.endereco || qualityReport.jurisdicao_validada.city || ''} - ${qualityReport.jurisdicao_validada.uf || ''}`
+                    : 'Jurisdição validada'}
               </p>
             )}
           </div>
