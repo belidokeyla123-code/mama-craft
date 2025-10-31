@@ -2902,12 +2902,6 @@ ${tabelaDocumentos}
       {/* ✅ CONTROLE DE QUALIDADE */}
       <QualityReportCard
         qualityReport={qualityReport}
-        onRevalidate={revalidateQualityReport}
-        onRecalculate={async () => {
-          toast.info('Recalculando qualidade...');
-          await loadQualityReport();
-          toast.success('✅ Qualidade recalculada');
-        }}
         loading={loading}
       />
 
@@ -2931,15 +2925,6 @@ ${tabelaDocumentos}
         <Button onClick={handleDownloadPDF} variant="outline" disabled={!petition} className="gap-2">
           <Download className="h-4 w-4" />
           Baixar PDF
-        </Button>
-        <Button
-          onClick={revalidateQualityReport}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          🔧 Validar e Corrigir
         </Button>
       </div>
 

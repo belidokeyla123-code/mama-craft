@@ -103,7 +103,7 @@ export const JudgeModule = ({
               </Button>
             ) : (
               <div className="space-y-4">
-                {/* Risk Assessment */}
+                {/* Risk Assessment - SEMPRE MOSTRAR PRIMEIRO */}
                 <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold">Risco de Improcedência</span>
@@ -114,29 +114,35 @@ export const JudgeModule = ({
                   <Progress value={judgeAnalysis.risco_improcedencia} className="h-2" />
                 </div>
 
-                {/* Brechas */}
-                {judgeAnalysis.brechas.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold">Brechas Detectadas ({judgeAnalysis.brechas.length})</h4>
-                      {selectedBrechas.length > 0 && (
-                        <Button
-                          onClick={onApplyCorrections}
-                          size="sm"
-                          className="gap-2"
-                          disabled={applying}
-                        >
-                          {applying ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Check className="h-4 w-4" />
-                          )}
-                          Aplicar {selectedBrechas.length} Selecionadas
-                        </Button>
-                      )}
-                    </div>
+                {/* Brechas Identificadas - SEMPRE MOSTRAR (mesmo se for 0) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold">Brechas Identificadas</h4>
+                    {selectedBrechas.length > 0 && (
+                      <Button
+                        onClick={onApplyCorrections}
+                        size="sm"
+                        className="gap-2"
+                        disabled={applying}
+                      >
+                        {applying ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                        Aplicar {selectedBrechas.length} Selecionadas
+                      </Button>
+                    )}
+                  </div>
 
-                    {judgeAnalysis.brechas.map((brecha, index) => (
+                  {judgeAnalysis.brechas.length === 0 ? (
+                    <div className="p-4 bg-green-50 rounded-lg text-center">
+                      <p className="text-sm text-green-800 font-medium">
+                        ✅ Nenhuma brecha encontrada
+                      </p>
+                    </div>
+                  ) : (
+                    judgeAnalysis.brechas.map((brecha, index) => (
                       <Card key={index} className="border-l-4 border-l-red-500">
                         <CardContent className="p-4">
                           <div className="flex items-start gap-3">
@@ -161,19 +167,20 @@ export const JudgeModule = ({
                                 onClick={() => onApplySingle(index)}
                                 variant="outline"
                                 size="sm"
-                                className="w-full"
+                                className="w-full gap-2"
                               >
-                                Aplicar Apenas Esta
+                                <Check className="h-4 w-4" />
+                                Adicionar Correção
                               </Button>
                             </div>
                           </div>
                         </CardContent>
                       </Card>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
 
-                {/* Pontos Fortes/Fracos */}
+                {/* Pontos Fortes/Fracos - DEPOIS DAS BRECHAS */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <h4 className="font-semibold text-green-600">✅ Pontos Fortes</h4>
@@ -200,7 +207,7 @@ export const JudgeModule = ({
                   </div>
                 </div>
 
-                {/* Recomendações */}
+                {/* Recomendações - POR ÚLTIMO */}
                 {judgeAnalysis.recomendacoes.length > 0 && (
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <h4 className="font-semibold mb-2">💡 Recomendações</h4>

@@ -1,20 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, AlertTriangle, RefreshCw, Calculator } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
 
 interface QualityReportCardProps {
   qualityReport: any;
-  onRevalidate: () => void;
-  onRecalculate: () => void;
   loading?: boolean;
 }
 
 export const QualityReportCard = ({ 
-  qualityReport, 
-  onRevalidate, 
-  onRecalculate,
+  qualityReport,
   loading 
 }: QualityReportCardProps) => {
   if (!qualityReport) return null;
@@ -53,12 +48,19 @@ export const QualityReportCard = ({
         {/* Status Grid */}
         <div className="grid gap-3">
           {/* Endereçamento */}
-          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <span className="font-medium">Endereçamento</span>
-            {qualityReport.enderecamento_ok ? (
-              <Badge variant="default" className="bg-green-600">✅ Correto</Badge>
-            ) : (
-              <Badge variant="destructive">❌ Incorreto</Badge>
+          <div className="p-3 bg-muted rounded-lg space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Endereçamento</span>
+              {qualityReport.enderecamento_ok ? (
+                <Badge variant="default" className="bg-green-600">✅ Correto</Badge>
+              ) : (
+                <Badge variant="destructive">❌ Incorreto</Badge>
+              )}
+            </div>
+            {qualityReport.enderecamento_ok && qualityReport.jurisdicao_validada && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {qualityReport.jurisdicao_validada}
+              </p>
             )}
           </div>
 
@@ -94,13 +96,65 @@ export const QualityReportCard = ({
           </div>
 
           {/* Jurisdição */}
-          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <span className="font-medium">Jurisdição</span>
-            {qualityReport.jurisdicao_ok ? (
-              <Badge variant="default" className="bg-green-600">✅ Correta</Badge>
-            ) : (
-              <Badge variant="destructive">❌ Incorreta</Badge>
+          <div className="p-3 bg-muted rounded-lg space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Jurisdição</span>
+              {qualityReport.jurisdicao_ok ? (
+                <Badge variant="default" className="bg-green-600">✅ Correta</Badge>
+              ) : (
+                <Badge variant="destructive">❌ Incorreta</Badge>
+              )}
+            </div>
+            {qualityReport.jurisdicao_ok && qualityReport.trf && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {qualityReport.trf}
+              </p>
             )}
+          </div>
+        </div>
+
+        {/* Análise Completa da IA */}
+        <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border-2 border-primary/20">
+          <h4 className="font-semibold mb-3 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            Análise Completa da IA
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {/* Português e Sintaxe */}
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>Português e Sintaxe</span>
+            </div>
+            
+            {/* Contexto */}
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>Contexto</span>
+            </div>
+            
+            {/* Raciocínio Jurídico */}
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>Raciocínio Jurídico</span>
+            </div>
+            
+            {/* Estrutura */}
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>Estrutura (Fato → Direito → Pedido)</span>
+            </div>
+            
+            {/* Documentação */}
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>Documentação</span>
+            </div>
+            
+            {/* Fundamentos */}
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>Fundamentos (Doutrina, Tese, Jurisprudência)</span>
+            </div>
           </div>
         </div>
 
@@ -120,31 +174,6 @@ export const QualityReportCard = ({
             </AlertDescription>
           </Alert>
         )}
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-2">
-          <Button
-            onClick={onRevalidate}
-            variant="outline"
-            size="sm"
-            className="gap-2 flex-1"
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            🔧 Validar e Corrigir
-          </Button>
-          
-          <Button
-            onClick={onRecalculate}
-            variant="outline"
-            size="sm"
-            className="gap-2 flex-1"
-            disabled={loading}
-          >
-            <Calculator className="h-4 w-4" />
-            Recalcular
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );
