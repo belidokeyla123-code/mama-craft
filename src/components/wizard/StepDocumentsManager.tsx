@@ -86,7 +86,6 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [isReprocessing, setIsReprocessing] = useState(false);
-  const [bypassDuplicateCheck, setBypassDuplicateCheck] = useState(false);
   const [showUnfreezeDialog, setShowUnfreezeDialog] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -367,20 +366,18 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       return;
     }
 
-    // Verificar duplicatas (apenas se não estiver em modo bypass)
-    if (!bypassDuplicateCheck) {
-      const duplicates = checkForDuplicates(files);
-      if (duplicates.length > 0) {
-        console.error('[UPLOAD] ⚠️ DUPLICATAS BLOQUEADAS:', duplicates);
-        toast({
-          title: "⚠️ Documentos duplicados detectados",
-          description: `Já existe: ${duplicates.join(', ')}. Use "Permitir documentos duplicados" se precisar reupar.`,
-          variant: "destructive",
-          duration: 8000
-        });
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
+    // Verificar duplicatas sempre
+    const duplicates = checkForDuplicates(files);
+    if (duplicates.length > 0) {
+      console.error('[UPLOAD] ⚠️ DUPLICATAS BLOQUEADAS:', duplicates);
+      toast({
+        title: "⚠️ Documentos duplicados detectados",
+        description: `Já existe: ${duplicates.join(', ')}`,
+        variant: "destructive",
+        duration: 8000
+      });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
     }
 
     console.log('[UPLOAD] ✅ Nenhuma duplicata encontrada, iniciando upload...');
@@ -477,9 +474,6 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         title: "🔄 Sincronização completa",
         description: "Validação, análise, jurisprudência e tese atualizadas!"
       });
-
-      // Resetar bypass após upload bem-sucedido
-      setBypassDuplicateCheck(false);
 
       // ✅ Disparar evento global para sincronizar todas as abas
       window.dispatchEvent(new CustomEvent('documents-updated', {
@@ -795,20 +789,6 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 )}
               </Button>
             </div>
-          </div>
-
-          {/* Checkbox para permitir duplicatas */}
-          <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg border">
-            <input 
-              type="checkbox" 
-              id="bypass-duplicate"
-              checked={bypassDuplicateCheck}
-              onChange={(e) => setBypassDuplicateCheck(e.target.checked)}
-              className="rounded h-4 w-4"
-            />
-            <label htmlFor="bypass-duplicate" className="text-sm text-muted-foreground cursor-pointer">
-              Permitir documentos duplicados (reupar mesmo se já existe)
-            </label>
           </div>
 
           <div className="space-y-3">

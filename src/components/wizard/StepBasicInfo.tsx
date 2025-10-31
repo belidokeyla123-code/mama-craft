@@ -8,6 +8,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CheckCircle2, AlertCircle, Sparkles, User, Calendar, MapPin, AlertTriangle, Plus, Trash2, RefreshCw, FileText, Loader2, Brain, Baby, Heart, Tractor, Building, Home, PlusCircle, Save, Stethoscope } from "lucide-react";
 import { CaseData, RuralPeriod, UrbanPeriod } from "@/pages/NewCase";
 import { getSalarioMinimoHistory, getSalarioMinimoByDate } from "@/lib/salarioMinimo";
@@ -83,6 +93,7 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
   const [aiValidation, setAiValidation] = useState<any>(null);
   const [validatingWithAI, setValidatingWithAI] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [deletingBenefitId, setDeletingBenefitId] = useState<string | null>(null);
 
   const isAutoFilled = (fieldName: string) => {
     return autoFilledFields.includes(fieldName);
@@ -197,6 +208,28 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
 
     loadBenefitHistory();
   }, [data.caseId]);
+
+  // ✅ Função para excluir benefício
+  const handleDeleteBenefit = async (benefitId: string) => {
+    try {
+      const { error } = await supabase
+        .from('benefit_history')
+        .delete()
+        .eq('id', benefitId);
+      
+      if (error) throw error;
+      
+      // Recarregar lista
+      setBenefitHistory(prev => prev.filter(b => b.id !== benefitId));
+      
+      toast.success('✅ Benefício removido do histórico');
+    } catch (error: any) {
+      console.error('[DELETE_BENEFIT] Erro:', error);
+      toast.error(`Erro ao excluir: ${error.message}`);
+    } finally {
+      setDeletingBenefitId(null);
+    }
+  };
 
   // IA Contributiva: Validar dados básicos
   const validateWithAI = async () => {
@@ -1003,6 +1036,14 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
                           Período: {benefit.start_date || 'Não informado'} até {benefit.end_date || 'atual'}
                         </p>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeletingBenefitId(benefit.id)}
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                     {isOverlapping && (
                       <Alert className="mt-3 border-red-500 bg-red-100">
@@ -2164,6 +2205,27 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
           </Alert>
         )}
       </Card>
+
+      {/* AlertDialog para confirmar exclusão de benefício */}
+      <AlertDialog open={deletingBenefitId !== null} onOpenChange={(open) => !open && setDeletingBenefitId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este benefício do histórico? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deletingBenefitId && handleDeleteBenefit(deletingBenefitId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
