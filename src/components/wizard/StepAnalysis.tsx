@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { TimelineChart } from "@/components/case/TimelineChart";
 import { DocumentUploadInline } from "./DocumentUploadInline";
+import { CaseEventsTimeline } from "@/components/case/CaseEventsTimeline";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 import { useTabSync } from "@/hooks/useTabSync";
 
@@ -734,6 +735,13 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
                 onUploadComplete={performAnalysis}
               />
             </Card>
+          )}
+
+          {/* Timeline de Eventos dos Documentos */}
+          {data.caseId && (
+            <div className="mt-8">
+              <CaseEventsTimeline caseId={data.caseId} />
+            </div>
           )}
         </>
       ) : (

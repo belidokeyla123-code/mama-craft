@@ -110,21 +110,61 @@ IMPORTANTE: Benefícios anteriores devem ter NB no formato XXX.XXX.XXX-X`,
 
     autodeclaracao_rural: `🌾 AUTODECLARAÇÃO DE TRABALHO RURAL
 
-Extrair:
-- Períodos de trabalho rural (início, fim, local, atividades)
-- Membros da família
-- Nome do proprietário da terra
-- CPF do proprietário`,
+⚠️ CRÍTICO: Extrair TODAS as datas mencionadas!
 
-    documento_terra: `🏞️ DOCUMENTO DA TERRA (ITR, Escritura, CCIR, etc)
+**EXTRAIR OBRIGATORIAMENTE:**
+{
+  "declarationDate": "data da autodeclaração (YYYY-MM-DD)",
+  "ruralActivityStartDate": "data de INÍCIO da atividade rural declarada (YYYY-MM-DD)",
+  "ruralActivityEndDate": "data FIM (se aplicável) ou null se ainda ativa (YYYY-MM-DD)",
+  "ruralLocation": "município e estado da atividade",
+  "activities": "atividades rurais descritas (plantio, criação, etc)",
+  "familyMembers": ["lista de membros da família mencionados"],
+  "landOwnerName": "nome do proprietário da terra",
+  "landOwnerCpf": "CPF do proprietário"
+}
 
-Extrair:
-- landOwnerName: Nome completo do proprietário
-- landOwnerCpf: CPF do proprietário
-- landOwnerRg: RG do proprietário
-- Área total
-- Localização
-- Número de matrícula/registro`,
+**REGRAS CRÍTICAS:**
+1. Se mencionar "desde XXXX", extrair como ruralActivityStartDate
+2. Se disser "até hoje" ou "atualmente", ruralActivityEndDate deve ser null
+3. A declarationDate é a data em que o documento foi assinado
+4. Estas datas são ESSENCIAIS para comprovar carência de 10 meses`,
+
+    documento_terra: `🏞️ DOCUMENTO DA TERRA (ITR, Escritura, CCIR, INCRA, etc)
+
+⚠️ CRÍTICO: Este documento DEVE conter DATAS que comprovam a atividade rural!
+
+**EXTRAIR OBRIGATORIAMENTE:**
+{
+  "documentType": "tipo do documento (ITR, Escritura, CCIR, CAR, INCRA, etc)",
+  "documentDate": "data de emissão do documento (YYYY-MM-DD)",
+  "landOwnerName": "nome completo do proprietário da terra",
+  "landOwnerCpf": "CPF do proprietário (apenas números)",
+  "landOwnerRg": "RG do proprietário",
+  "ruralActivityStartDate": "data de início da atividade rural mencionada (YYYY-MM-DD)",
+  "ruralActivityEndDate": "data fim da atividade rural se mencionada (YYYY-MM-DD)",
+  "landArea": "área total em hectares",
+  "landLocation": "município e estado",
+  "registrationNumber": "número de matrícula/registro/inscrição"
+}
+
+**REGRAS CRÍTICAS:**
+1. A data do documento (documentDate) é ESSENCIAL para comprovar período de atividade rural
+2. Se o documento menciona "desde" ou "a partir de", extrair como ruralActivityStartDate
+3. Documentos do tipo ITR mostram atividade rural NO ANO de referência do imposto
+4. CAR (Cadastro Ambiental Rural) e CCIR também comprovam atividade rural na data de emissão
+5. Se não houver data explícita de início, use a data de emissão como referência
+
+EXEMPLO:
+Input: "ITR 2020 - Propriedade Rural 'Sítio Boa Vista' - João Silva, CPF 123.456.789-00"
+Output:
+{
+  "documentType": "ITR",
+  "documentDate": "2020-12-31",
+  "landOwnerName": "João Silva",
+  "landOwnerCpf": "12345678900",
+  "ruralActivityStartDate": "2020-01-01"
+}`,
 
     processo_administrativo: `📄 PROCESSO ADMINISTRATIVO / REQUERIMENTO ADMINISTRATIVO
 
