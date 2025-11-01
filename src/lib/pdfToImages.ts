@@ -78,11 +78,11 @@ export async function convertPDFToImages(
         }, 'image/png', 0.8);
       });
       
-      // Criar arquivo de imagem
+      // ✅ MUDANÇA 1: Criar arquivo de imagem PRESERVANDO nome original do PDF
       const originalName = file.name.replace(/\.pdf$/i, '');
       const imageFile = new File(
         [blob],
-        `${originalName}_pagina_${pageNum}.png`,
+        `${originalName}_pagina_${pageNum}.png`,  // Mantém nome do PDF original
         { type: 'image/png' }
       );
       

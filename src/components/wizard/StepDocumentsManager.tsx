@@ -62,10 +62,10 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     watchFields: [documents.length],
   });
 
-  // ✅ FASE 3 e 4: Sincronização em tempo real (substituindo polling)
+  // ✅ MUDANÇA 6: Sincronização em tempo real com evento de classificação
   useTabSync({
     caseId: caseId || '',
-    events: ['documents-updated', 'processing-completed'],
+    events: ['documents-updated', 'processing-completed', 'documents-classified'],
     onSync: (detail) => {
       console.log('[StepDocumentsManager] 🔄 Documentos ou processamento atualizados');
       if (detail.timestamp && !isLoading) {
@@ -250,9 +250,13 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         processedCount++;
         setDownloadProgress(`Processando ${processedCount}/${groupKeys.length}: ${originalName}...`);
         
-        if (docs.length > 1 && docs[0].mime_type?.includes('image')) {
-          // É um PDF convertido em múltiplas páginas - reconverter para PDF único
-          console.log(`Reconvertendo ${docs.length} páginas para ${originalName}.pdf`);
+        // ✅ MUDANÇA 11: Detectar se é PDF original ou imagens de PDF convertido
+        const isPdfOriginal = docs.length === 1 && docs[0].mime_type === 'application/pdf';
+        const isConvertedPdf = docs.length > 1 && docs[0].mime_type?.includes('image');
+        
+        if (isConvertedPdf) {
+          // É um PDF que foi convertido em múltiplas imagens - reconverter para PDF único
+          console.log(`Reconvertendo ${docs.length} imagens para ${originalName}.pdf`);
           
           const imageBlobs: Blob[] = [];
           const sortedDocs = docs.sort((a, b) => (a.pageNum || 0) - (b.pageNum || 0));
@@ -272,7 +276,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
           reconvertedPDFs++;
           
         } else {
-          // Documento individual - adicionar como está
+          // Documento individual (PDF original ou outro tipo) - adicionar como está
           const doc = docs[0];
           const { data, error } = await supabase.storage
             .from("case-documents")
@@ -461,7 +465,11 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         });
       }
 
-      // Recarregar lista
+      // ✅ MUDANÇA 5: Aguardar classificação da IA e recarregar interface
+      setUploadProgress("Aguardando classificação...");
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Aguardar 3s
+      
+      // Recarregar lista para pegar classificações atualizadas
       await loadDocuments();
       
       // 🆕 DISPARAR PIPELINE COMPLETO (Validação → Análise → Jurisprudência → Tese)

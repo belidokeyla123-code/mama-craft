@@ -72,17 +72,68 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
     watchFields: [data.profile, data.eventType, data.hasRa],
   });
 
-  // ✅ FASE 3: Sincronização em tempo real
+  // ✅ MUDANÇA 9: Sincronização em tempo real SEM reload brutal
   useTabSync({
     caseId: data.caseId || '',
     events: ['case-updated', 'extractions-updated', 'benefits-updated'],
-    onSync: (detail) => {
+    onSync: async (detail) => {
       console.log('[StepBasicInfo] 🔄 Dados atualizados remotamente, recarregando...');
-      // Recarregar dados quando houver mudanças remotas
-      if (detail.timestamp && data.caseId) {
-        // Trigger reload via re-mounting do useEffect que carrega os dados
-        window.location.reload(); // Reload simplificado por enquanto
-      }
+      
+      if (!data.caseId) return;
+      
+      // Recarregar dados do banco
+      const { data: freshData, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', data.caseId)
+        .single();
+      
+      if (error || !freshData) return;
+      
+      // ✅ Atualizar via updateData (sem reload da página)
+      updateData({
+        authorName: freshData.author_name,
+        authorCpf: freshData.author_cpf,
+        authorRg: freshData.author_rg,
+        authorBirthDate: freshData.author_birth_date,
+        authorAddress: freshData.author_address,
+        authorMaritalStatus: freshData.author_marital_status,
+        childName: freshData.child_name,
+        childBirthDate: freshData.child_birth_date,
+        fatherName: freshData.father_name,
+        profile: freshData.profile,
+        eventType: freshData.event_type,
+        eventDate: freshData.event_date,
+        petitionType: freshData.petition_type,
+        landOwnerName: freshData.land_owner_name,
+        landOwnerCpf: freshData.land_owner_cpf,
+        landOwnerRg: freshData.land_owner_rg,
+        landOwnershipType: freshData.land_ownership_type as any,
+        landPropertyName: freshData.land_property_name,
+        landMunicipality: freshData.land_municipality,
+        ruralActivitySince: freshData.rural_activity_since,
+        ruralPeriods: freshData.rural_periods as any,
+        urbanPeriods: freshData.urban_periods as any,
+        familyMembers: freshData.family_members as any,
+        manualBenefits: freshData.manual_benefits as any,
+        hasRa: freshData.has_ra,
+        raProtocol: freshData.ra_protocol,
+        raRequestDate: freshData.ra_request_date,
+        raDenialDate: freshData.ra_denial_date,
+        raDenialReason: freshData.ra_denial_reason,
+        salarioMinimoRef: freshData.salario_minimo_ref,
+      });
+      
+      // Recarregar benefícios e análises
+      const { data: benefits } = await supabase
+        .from('benefit_history')
+        .select('*')
+        .eq('case_id', data.caseId)
+        .order('start_date', { ascending: false });
+      
+      if (benefits) setBenefitHistory(benefits);
+      
+      toast.success('✅ Dados sincronizados');
     }
   });
 

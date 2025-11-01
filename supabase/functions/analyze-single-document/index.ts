@@ -202,19 +202,30 @@ serve(async (req) => {
       throw new Error("File not found in storage");
     }
 
-    // ⚠️ VERIFICAR SE É PDF - PDFs devem ser convertidos em imagens primeiro
+    // ✅ MUDANÇA 3: VERIFICAR SE É PDF - Se sim, disparar conversão automática
     const isPDF = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
     if (isPDF) {
-      console.log(`[DOC ${documentId}] ⚠️ DOCUMENTO É PDF - Não pode ser processado diretamente pela IA`);
-      console.log(`[DOC ${documentId}] PDFs devem ser convertidos em imagens antes do processamento`);
+      console.log(`[DOC ${documentId}] 📄 DOCUMENTO É PDF - Disparando conversão automática...`);
+      
+      // Chamar reconvert-failed-pdfs para converter este PDF
+      const { error: reconvertError } = await supabaseClient.functions.invoke('reconvert-failed-pdfs', {
+        body: { caseId }
+      });
+      
+      if (reconvertError) {
+        console.error(`[DOC ${documentId}] Erro ao disparar conversão:`, reconvertError);
+      } else {
+        console.log(`[DOC ${documentId}] ✅ Conversão automática iniciada`);
+      }
       
       return new Response(
         JSON.stringify({ 
-          error: "PDFs devem ser convertidos em imagens antes do processamento",
+          message: "PDF detectado - conversão automática iniciada",
           documentId,
-          shouldConvert: true
+          caseId,
+          status: "converting"
         }), {
-        status: 400,
+        status: 202, // ✅ Status 202 Accepted (processando)
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

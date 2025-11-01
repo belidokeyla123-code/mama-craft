@@ -87,43 +87,9 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     migrateBenefits();
   }, [data.caseId]);
 
-  // ✅ CORREÇÃO #2: Detectar PDFs não processados
-  useEffect(() => {
-    const detectUnprocessedPdfs = async () => {
-      if (!data.caseId) return;
-      
-      try {
-        // Buscar documentos PDF sem extrações
-        const { data: docs, error } = await supabase
-          .from('documents')
-          .select(`
-            file_name,
-            extractions (count)
-          `)
-          .eq('case_id', data.caseId)
-          .or('mime_type.eq.application/pdf,file_name.ilike.%.pdf');
-
-        if (error) throw error;
-
-        // Filtrar PDFs que não foram processados (extraction_count = 0)
-        const unprocessedPdfs = docs
-          ?.filter((doc: any) => {
-            const count = doc.extractions?.[0]?.count || 0;
-            return count === 0;
-          })
-          .map((doc: any) => doc.file_name) || [];
-
-        if (unprocessedPdfs.length > 0) {
-          console.log('[CHAT] ⚠️ PDFs não processados:', unprocessedPdfs);
-          setFailedPdfs(unprocessedPdfs);
-        }
-      } catch (error) {
-        console.error('[CHAT] Erro ao detectar PDFs não processados:', error);
-      }
-    };
-
-    detectUnprocessedPdfs();
-  }, [data.caseId]);
+  // ✅ MUDANÇA 10: DELETADO - useEffect problemático que causava loop de erro
+  // Este código foi removido porque causava toasts infinitos de erro
+  // A conversão de PDFs agora é automática no frontend durante o upload
 
   // 🆕 DEBUG: Log quando o componente monta e quando há caseId
   console.log('[CHAT INTAKE] Componente montado');
@@ -134,6 +100,81 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     authorCpf: data.authorCpf,
     childName: data.childName,
     childBirthDate: data.childBirthDate
+  });
+
+  // ✅ MUDANÇA 7: Carregar dados existentes do banco ao montar o componente
+  useEffect(() => {
+    const loadExistingData = async () => {
+      if (!data.caseId) return;
+      
+      // Buscar dados do caso
+      const { data: caseData, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', data.caseId)
+        .single();
+      
+      if (error || !caseData) return;
+      
+      // Verificar se há dados relevantes preenchidos
+      const hasData = caseData.author_name || caseData.author_cpf || 
+                      caseData.author_rg || caseData.author_address ||
+                      caseData.child_name || caseData.child_birth_date;
+      
+      if (hasData && messages.length === 0) {
+        // Criar mensagem resumindo dados existentes
+        const summary = [];
+        if (caseData.author_name) summary.push(`👤 Nome: ${caseData.author_name}`);
+        if (caseData.author_cpf) summary.push(`🆔 CPF: ${caseData.author_cpf}`);
+        if (caseData.author_rg) summary.push(`📋 RG: ${caseData.author_rg}`);
+        if (caseData.author_address) summary.push(`📍 Endereço: ${caseData.author_address}`);
+        if (caseData.child_name) summary.push(`👶 Filho: ${caseData.child_name}`);
+        if (caseData.child_birth_date) summary.push(`🎂 Nascimento: ${new Date(caseData.child_birth_date).toLocaleDateString('pt-BR')}`);
+        
+        setMessages([{
+          role: 'assistant',
+          content: `📊 **Dados já cadastrados:**\n\n${summary.join('\n')}\n\n✅ Essas informações foram extraídas dos documentos ou cadastradas manualmente. Você pode enviar mais documentos ou fazer perguntas sobre o caso!`
+        }]);
+      }
+    };
+    
+    loadExistingData();
+  }, [data.caseId]); // Executa quando caseId muda
+
+  // ✅ MUDANÇA 8: Escutar atualizações de outras abas em tempo real
+  useTabSync({
+    caseId: data.caseId || '',
+    events: ['case-updated', 'extractions-updated', 'benefits-updated'],
+    onSync: async (detail) => {
+      console.log('[CHAT] 🔄 Dados atualizados em outra aba, recarregando...');
+      
+      // Recarregar dados do banco
+      const { data: freshData, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', data.caseId)
+        .single();
+      
+      if (error || !freshData) return;
+      
+      // Atualizar estado local via updateData
+      updateData({
+        authorName: freshData.author_name,
+        authorCpf: freshData.author_cpf,
+        authorRg: freshData.author_rg,
+        authorAddress: freshData.author_address,
+        childName: freshData.child_name,
+        childBirthDate: freshData.child_birth_date,
+        fatherName: freshData.father_name,
+        // ... outros campos relevantes
+      });
+      
+      // Adicionar mensagem visual no chat
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `🔄 Dados atualizados! Mudanças feitas em outra aba foram sincronizadas.`
+      }]);
+    }
   });
 
   /**

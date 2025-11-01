@@ -259,7 +259,8 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     for (const doc of batch) {
       try {
         console.log(`[BATCH] Processando ${doc.file_name} (${doc.mime_type})`);
-        const docType = classifyDocument(doc.file_name);
+        // ✅ MUDANÇA 4: REMOVER classificação por nome - deixar APENAS a IA classificar pelo conteúdo
+        const docType = 'outro'; // ✅ A IA fará a classificação real pelo conteúdo da imagem
         
         // Salvar classificação no banco
         await supabase
@@ -268,10 +269,7 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
           .eq('id', doc.id);
         console.log(`[BATCH] ✓ Tipo "${docType}" salvo para ${doc.file_name}`);
         
-        // Detectar autodeclaração
-        if (docType === 'autodeclaracao_rural') {
-          hasAutodeclaracao = true;
-        }
+        // ✅ A IA vai reclassificar depois, então não verificamos tipo específico aqui
         
         // Baixar o arquivo do Storage
         const { data: fileData, error: downloadError } = await supabase.storage

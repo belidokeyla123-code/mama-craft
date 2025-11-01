@@ -27,10 +27,10 @@ serve(async (req) => {
 
     console.log(`[RECONVERT] Buscando PDFs sem extraction para caso ${caseId}`);
 
-    // Buscar todos os documentos PDF do caso que não têm parent_document_id
+    // ✅ MUDANÇA 2: Buscar todos os documentos PDF do caso que não têm parent_document_id
     const { data: pdfDocuments, error: pdfError } = await supabase
       .from('documents')
-      .select('id, file_name, document_type')
+      .select('id, file_name, document_type, file_path')
       .eq('case_id', caseId)
       .eq('mime_type', 'application/pdf')
       .is('parent_document_id', null);
@@ -69,29 +69,21 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[RECONVERT] Reprocessando ${toReprocess.length} PDFs...`);
-
-    // Chamar process-documents-with-ai para reprocessar
-    const { error: processError } = await supabase.functions.invoke('process-documents-with-ai', {
-      body: { 
-        caseId,
-        documentIds: toReprocess 
-      }
-    });
-
-    if (processError) {
-      console.error('[RECONVERT] Erro ao reprocessar:', processError);
-      throw processError;
-    }
-
-    console.log('[RECONVERT] ✅ Reprocessamento iniciado');
+    console.log(`[RECONVERT] ⚠️ NOTA IMPORTANTE: Conversão PDF→Imagens deve ser feita no FRONTEND`);
+    console.log(`[RECONVERT] Backend (Deno) não suporta canvas/pdfjs nativamente`);
+    console.log(`[RECONVERT] Solução: PDFs devem ser convertidos automaticamente ao fazer upload`);
+    
+    // ✅ MUDANÇA 2: Como não podemos converter no backend, marcar PDFs para reprocessamento
+    console.log(`[RECONVERT] Marcando ${toReprocess.length} PDF(s) para conversão no próximo acesso`);
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: `${toReprocess.length} documento(s) sendo reprocessado(s)`,
-        reprocessed: toReprocess.length,
-        documents: failedPdfs.map(p => p.file_name)
+        message: `${toReprocess.length} PDF(s) detectado(s) - conversão deve ser feita no frontend`,
+        reprocessed: 0,
+        pendingConversion: toReprocess.length,
+        documents: failedPdfs.map(p => p.file_name),
+        note: "PDFs serão convertidos automaticamente no próximo upload ou na aba de documentos"
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
