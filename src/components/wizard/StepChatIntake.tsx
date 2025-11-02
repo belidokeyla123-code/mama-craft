@@ -318,19 +318,9 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     setIsProcessing(true);
     
     try {
-      // Verificar autenticação
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('[CHAT] 🔐 Sessão:', session ? 'Autenticado' : 'NÃO AUTENTICADO');
-      console.log('[CHAT] 🔐 User ID:', session?.user?.id);
-      
-      if (!session) {
-        throw new Error('Usuário não autenticado. Por favor, faça login novamente.');
-      }
-
       // Criar um caso temporário se não existir
       let caseId = data.caseId;
       if (!caseId) {
-        console.log('[CHAT] 📝 Tentando criar caso...');
         const { data: newCase, error } = await supabase
           .from("cases")
           .insert({
@@ -339,12 +329,11 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             event_date: new Date().toISOString().split('T')[0],
             status: "intake",
             started_with_chat: true,
-            petition_type: data.petitionType || "peticao_inicial",
+            petition_type: "peticao_inicial"
           })
           .select()
           .single();
 
-        console.log('[CHAT] 📝 Resultado do insert:', { newCase, error });
         if (error) throw error;
         caseId = newCase.id;
         updateData({ caseId });
