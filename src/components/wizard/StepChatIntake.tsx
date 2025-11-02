@@ -318,21 +318,58 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     setIsProcessing(true);
     
     try {
+      // Verificar sessão e roles
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('[CHAT] 🔐 Auth Session:', {
+        authenticated: !!session,
+        userId: session?.user?.id,
+        email: session?.user?.email
+      });
+
+      if (!session) {
+        throw new Error('Não autenticado. Faça login novamente.');
+      }
+
+      // Verificar roles
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id);
+      
+      console.log('[CHAT] 👤 User Roles:', { roles, rolesError });
+
       // Criar um caso temporário se não existir
       let caseId = data.caseId;
       if (!caseId) {
+        console.log('[CHAT] 📝 Tentando INSERT em cases...');
+        
+        const insertPayload = {
+          author_name: "Processando...",
+          author_cpf: "00000000000",
+          event_date: new Date().toISOString().split('T')[0],
+          status: "intake" as const,
+          started_with_chat: true,
+          petition_type: "peticao_inicial"
+        };
+        
+        console.log('[CHAT] 📦 Insert Payload:', insertPayload);
+        
         const { data: newCase, error } = await supabase
           .from("cases")
-          .insert({
-            author_name: "Processando...",
-            author_cpf: "00000000000",
-            event_date: new Date().toISOString().split('T')[0],
-            status: "intake",
-            started_with_chat: true,
-            petition_type: "peticao_inicial"
-          })
+          .insert(insertPayload)
           .select()
           .single();
+
+        console.log('[CHAT] ✅ Insert Result:', { 
+          success: !!newCase, 
+          caseId: newCase?.id,
+          error: error ? {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+          } : null
+        });
 
         if (error) throw error;
         caseId = newCase.id;
