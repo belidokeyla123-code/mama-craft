@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { 
@@ -14,6 +16,25 @@ import {
 } from "lucide-react";
 
 export default function Index() {
+  const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsLoggedIn(true);
+      }
+    });
+  }, []);
+
+  const handleGetStarted = () => {
+    if (isLoggedIn) {
+      navigate('/dashboard');
+    } else {
+      navigate('/auth');
+    }
+  };
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -38,12 +59,15 @@ export default function Index() {
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link to="/dashboard">
-                  <Button size="lg" variant="accent" className="w-full sm:w-auto gap-2 text-lg px-8 py-6">
-                    Começar Agora
-                    <ArrowRight className="h-5 w-5" />
-                  </Button>
-                </Link>
+                <Button 
+                  size="lg" 
+                  variant="accent" 
+                  className="w-full sm:w-auto gap-2 text-lg px-8 py-6"
+                  onClick={handleGetStarted}
+                >
+                  {isLoggedIn ? 'Ir para Dashboard' : 'Começar Agora'}
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
                 <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8 py-6 bg-white/10 hover:bg-white/20 border-white/30 text-white">
                   Saiba Mais
                 </Button>

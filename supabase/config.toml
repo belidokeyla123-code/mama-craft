@@ -1,108 +1,108 @@
 project_id = "nwpgbnzvydweexruckpt"
 
 [functions.process-documents-with-ai]
-verify_jwt = false
+verify_jwt = true
 
 [functions.reclassify-documents]
-verify_jwt = false
+verify_jwt = true
 timeout = 120
 
 [functions.process-queue-worker]
-verify_jwt = false
+verify_jwt = true
 
 [functions.queue-validation]
-verify_jwt = false
+verify_jwt = true
 
 [functions.queue-analysis]
-verify_jwt = false
+verify_jwt = true
 
 [functions.queue-jurisprudence]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-financial-insights]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-case-analysis]
-verify_jwt = false
+verify_jwt = true
 
 [functions.voice-to-text]
-verify_jwt = false
+verify_jwt = true
 
 [functions.replicate-case-structure]
-verify_jwt = false
+verify_jwt = true
 
 [functions.validate-case-documents]
-verify_jwt = false
+verify_jwt = true
 timeout = 45
 
 [functions.analyze-case-legal]
-verify_jwt = false
+verify_jwt = true
 timeout = 120
 
 [functions.search-jurisprudence]
-verify_jwt = false
+verify_jwt = true
 timeout = 180
 
 [functions.generate-petition]
-verify_jwt = false
+verify_jwt = true
 timeout = 90
 
 [functions.analyze-petition-judge-view]
-verify_jwt = false
+verify_jwt = true
 
 [functions.adapt-petition-regional]
-verify_jwt = false
+verify_jwt = true
 
 [functions.detect-special-situation]
-verify_jwt = false
+verify_jwt = true
 
 [functions.analyze-petition-appellate]
-verify_jwt = false
+verify_jwt = true
 
 [functions.extract-data-from-text]
-verify_jwt = false
+verify_jwt = true
 
 [functions.reclassify-all-documents]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-tese-juridica]
-verify_jwt = false
+verify_jwt = true
 timeout = 60
 
 [functions.apply-judge-corrections]
-verify_jwt = false
+verify_jwt = true
 
 [functions.analyze-single-document]
-verify_jwt = false
+verify_jwt = true
 timeout = 60
 
 [functions.detect-cnis-situation]
-verify_jwt = false
+verify_jwt = true
 
 [functions.reconvert-failed-pdfs]
-verify_jwt = false
+verify_jwt = true
 
 [functions.process-chat-message]
-verify_jwt = false
+verify_jwt = true
 
 [functions.migrate-extractions-to-history]
-verify_jwt = false
+verify_jwt = true
 
 [functions.validate-jurisdiction]
-verify_jwt = false
+verify_jwt = true
 timeout = 120
 
 [functions.auto-fix-quality]
-verify_jwt = false
+verify_jwt = true
 
 [functions.apply-regional-adaptations]
-verify_jwt = false
+verify_jwt = true
 
 [functions.apply-appellate-adaptations]
-verify_jwt = false
+verify_jwt = true
 
 [functions.check-case-completeness]
-verify_jwt = false
+verify_jwt = true
 
 [functions.cleanup-case-documents]
-verify_jwt = false
+verify_jwt = true
