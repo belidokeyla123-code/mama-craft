@@ -373,6 +373,21 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
         if (error) throw error;
         caseId = newCase.id;
+
+        // Criar assignment explicitamente como backup
+        const { error: assignmentError } = await supabase
+          .from("case_assignments")
+          .insert({
+            case_id: caseId,
+            user_id: session.user.id
+          });
+
+        if (assignmentError) {
+          console.log('[CHAT] ⚠️ Assignment já existe ou trigger criou:', assignmentError.message);
+        } else {
+          console.log('[CHAT] ✅ Assignment criado manualmente');
+        }
+
         updateData({ caseId });
       }
 
