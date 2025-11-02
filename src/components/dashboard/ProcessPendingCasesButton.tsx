@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { PlayCircle, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { RefreshCw, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -17,7 +17,7 @@ interface CaseToProcess {
   error?: string;
 }
 
-export const BatchReplicateButton = () => {
+export const ProcessPendingCasesButton = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [cases, setCases] = useState<CaseToProcess[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -115,15 +115,15 @@ export const BatchReplicateButton = () => {
     }}>
       <DialogTrigger asChild>
         <Button variant="outline" size="lg" className="gap-2">
-          <PlayCircle className="h-5 w-5" />
-          Replicar Estrutura em Lote
+          <RefreshCw className="h-5 w-5" />
+          Processar Casos Pendentes
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle>Replicar Estrutura Completa em Lote</DialogTitle>
+          <DialogTitle>Processamento Automático de Casos</DialogTitle>
           <DialogDescription>
-            Execute o pipeline completo (validação → análise → jurisprudência → teses → minuta) em múltiplos casos
+            Prepare automaticamente os casos pendentes: valida documentos, gera análise jurídica, busca jurisprudência e cria minutas
           </DialogDescription>
         </DialogHeader>
 
@@ -206,7 +206,7 @@ export const BatchReplicateButton = () => {
                     </>
                   ) : (
                     <>
-                      <PlayCircle className="h-4 w-4" />
+                      <RefreshCw className="h-4 w-4" />
                       Processar Todos ({cases.length})
                     </>
                   )}

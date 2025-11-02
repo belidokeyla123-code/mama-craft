@@ -19,7 +19,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2, Trash2, MessageSquare, FileEdit, Gavel } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { BatchReplicateButton } from "@/components/dashboard/BatchReplicateButton";
+import { ProcessPendingCasesButton } from "@/components/dashboard/ProcessPendingCasesButton";
 
 interface Case {
   id: string;
@@ -218,7 +218,7 @@ export default function Dashboard() {
                   Novo Caso
                 </Button>
               </Link>
-              <BatchReplicateButton />
+              <ProcessPendingCasesButton />
             </div>
           </div>
             </div>
