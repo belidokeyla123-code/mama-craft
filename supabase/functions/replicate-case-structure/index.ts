@@ -307,13 +307,13 @@ serve(async (req) => {
       
       await supabase
         .from('cases')
-        .update({ status: 'ready_to_protocolo' })
+        .update({ status: 'exported' })
         .eq('id', caseId);
 
       results.steps.push({
         step: 'update_status',
         status: 'completed',
-        newStatus: 'ready_to_protocolo',
+        newStatus: 'exported',
       });
     } else {
       results.steps.push({

@@ -30,7 +30,7 @@ export const ProcessPendingCasesButton = () => {
       const { data, error } = await supabase
         .from('cases')
         .select('id, author_name, status')
-        .not('status', 'in', '("protocolada","ready_to_protocolo")')
+        .not('status', 'in', '("protocolada","exported")')
         .order('created_at', { ascending: false })
         .limit(20);
 
