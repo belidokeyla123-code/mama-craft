@@ -5,6 +5,15 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -16,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2, Trash2, MessageSquare, FileEdit, Gavel } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle2, AlertCircle, FolderOpen, Scale, Loader2, Trash2, MessageSquare, FileEdit, Gavel, LogOut, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ProcessPendingCasesButton } from "@/components/dashboard/ProcessPendingCasesButton";
@@ -69,13 +78,35 @@ export default function Dashboard() {
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string>("");
 
   const searchParams = new URLSearchParams(location.search);
   const petitionType = searchParams.get("type");
 
   useEffect(() => {
     loadCases();
+    loadUserInfo();
   }, [petitionType]);
+
+  const loadUserInfo = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      setUserEmail(user.email);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate("/auth");
+    } catch (error: any) {
+      toast({
+        title: "Erro ao sair",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   const loadCases = async () => {
     try {
@@ -210,17 +241,37 @@ export default function Dashboard() {
                     : "Todos os casos - Auxílio Maternidade"}
                 </p>
               </div>
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex gap-2">
-              <Link to="/novo-caso">
-                <Button size="lg" className="gap-2">
-                  <Plus className="h-5 w-5" />
-                  Novo Caso
-                </Button>
-              </Link>
-              <ProcessPendingCasesButton />
-            </div>
-          </div>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex gap-2">
+                  <Link to="/novo-caso">
+                    <Button size="lg" className="gap-2">
+                      <Plus className="h-5 w-5" />
+                      Novo Caso
+                    </Button>
+                  </Link>
+                  <ProcessPendingCasesButton />
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>
+                          <User className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="hidden sm:inline">{userEmail}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>{userEmail}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sair
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
           
