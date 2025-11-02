@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic, X, RefreshCw } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
+import { useTabSync } from "@/hooks/useTabSync";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { PasteDataInline } from "./PasteDataInline";
 import { UnfreezeConfirmDialog } from "./UnfreezeConfirmDialog";
