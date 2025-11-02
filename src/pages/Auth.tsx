@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,18 +24,21 @@ const signupSchema = authSchema.extend({
 
 export default function Auth() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({ email: '', password: '', confirmPassword: '' });
+  
+  const from = (location.state as any)?.from || '/dashboard';
 
   useEffect(() => {
     // Check if already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate('/dashboard');
+        navigate(from, { replace: true });
       }
     });
-  }, [navigate]);
+  }, [navigate, from]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +65,7 @@ export default function Auth() {
 
       if (data.session) {
         toast.success('Login realizado com sucesso!');
-        navigate('/dashboard');
+        navigate(from, { replace: true });
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -112,7 +115,7 @@ export default function Auth() {
           }
 
           toast.success('Cadastro realizado com sucesso!');
-          navigate('/dashboard');
+          navigate(from, { replace: true });
         } else {
           // Email confirmation required
           toast.success('Cadastro realizado! Por favor, confirme seu email.');
