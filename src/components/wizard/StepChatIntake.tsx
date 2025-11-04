@@ -354,40 +354,65 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
         
-        const { data: newCase, error } = await supabase
+        // 1. INSERT sem SELECT imediato para evitar race condition
+        const { data: insertedCase, error: insertError } = await supabase
           .from("cases")
           .insert(insertPayload)
-          .select()
+          .select('id')
           .single();
 
         console.log('[CHAT] ✅ Insert Result:', { 
-          success: !!newCase, 
-          caseId: newCase?.id,
-          error: error ? {
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint
+          success: !!insertedCase, 
+          caseId: insertedCase?.id,
+          error: insertError ? {
+            message: insertError.message,
+            code: insertError.code,
+            details: insertError.details,
+            hint: insertError.hint
           } : null
         });
 
-        if (error) throw error;
-        caseId = newCase.id;
+        if (insertError) throw insertError;
+        caseId = insertedCase.id;
 
-        // Criar assignment explicitamente como backup
-        const { error: assignmentError } = await supabase
-          .from("case_assignments")
-          .insert({
-            case_id: caseId,
-            user_id: session.user.id
-          });
+        // 2. Aguardar trigger completar
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-        if (assignmentError) {
-          console.log('[CHAT] ⚠️ Assignment já existe ou trigger criou:', assignmentError.message);
-        } else {
-          console.log('[CHAT] ✅ Assignment criado manualmente');
+        // 3. Criar assignment como backup (ignorar se trigger já criou)
+        try {
+          const { error: assignmentError } = await supabase
+            .from("case_assignments")
+            .insert({
+              case_id: caseId,
+              user_id: session.user.id
+            })
+            .select('id')
+            .single();
+
+          if (assignmentError && assignmentError.code !== '23505') {
+            console.log('[CHAT] ⚠️ Erro ao criar assignment:', assignmentError.message);
+          } else {
+            console.log('[CHAT] ✅ Assignment criado com sucesso');
+          }
+        } catch (err: any) {
+          if (err.code !== '23505') {
+            console.log('[CHAT] ⚠️ Erro ao criar assignment:', err);
+          }
         }
 
+        // 4. Buscar caso completo DEPOIS do assignment existir
+        const { data: newCase, error: fetchError } = await supabase
+          .from("cases")
+          .select('*')
+          .eq('id', caseId)
+          .single();
+
+        if (fetchError) {
+          console.log('[CHAT] ❌ Erro ao buscar caso:', fetchError);
+          throw fetchError;
+        }
+
+        console.log('[CHAT] ✅ Caso completo carregado:', newCase);
         updateData({ caseId });
       }
 
