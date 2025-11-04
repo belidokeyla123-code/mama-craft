@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -182,6 +183,20 @@ ${texto}
     }
 
     const prompt = `Você é um EDITOR DE PETIÇÕES com PODER ABSOLUTO de modificação. Sua tarefa é REESCREVER a petição aplicando TODAS as ${totalCorrecoes} correções abaixo.
+
+═══════════════════════════════════════════════════════════════
+🧠 MÉTODO KEYLA BELIDO™ - MANTER ESTILO NAS CORREÇÕES
+═══════════════════════════════════════════════════════════════
+
+${METODO_KEYLA_BELIDO_PROMPT}
+
+⚠️ AO APLICAR CORREÇÕES:
+1. Mantenha a estrutura tríade (Ressonância → Consciência → Reflexão)
+2. Reescreva com técnicas de PNL e CNV
+3. Preserve tom elegante e empático
+4. Evite linguagem fria ou excessivamente técnica
+
+═══════════════════════════════════════════════════════════════
 
 ⚠️ REGRAS CRÍTICAS DE CORREÇÃO:
 

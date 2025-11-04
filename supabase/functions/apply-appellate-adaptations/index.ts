@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { corsHeaders } from "../_shared/cors.ts";
 import { callLovableAI } from "../_shared/ai-helpers.ts";
+import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -44,6 +45,20 @@ serve(async (req) => {
     `).join('\n---\n');
 
     const prompt = `Você é um advogado especializado em recursos para a TNU (Turma Nacional de Uniformização).
+
+═══════════════════════════════════════════════════════════════
+🧠 MÉTODO KEYLA BELIDO™ - PERSUASÃO EM RECURSOS
+═══════════════════════════════════════════════════════════════
+
+${METODO_KEYLA_BELIDO_PROMPT}
+
+⚠️ RECURSOS COM MÉTODO KEYLA BELIDO:
+1. Antecipe argumentos TNU usando Consciência Racional elevada
+2. Mantenha Ressonância Empática mesmo em argumentações técnicas recursivas
+3. Feche com Reflexão Moral (impacto social da decisão da TNU)
+4. Use CNV para neutralizar defesas do INSS
+
+═══════════════════════════════════════════════════════════════
 
 # PETIÇÃO ORIGINAL (PRIMEIRA INSTÂNCIA)
 ${petition}

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { corsHeaders } from "../_shared/cors.ts";
 import { callLovableAI } from "../_shared/ai-helpers.ts";
+import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -51,6 +52,19 @@ serve(async (req) => {
     `).join('\n') || '';
 
     const prompt = `Você é um advogado especializado em processos do ${regionalAnalysis.trf}.
+
+═══════════════════════════════════════════════════════════════
+🧠 MÉTODO KEYLA BELIDO™ - FILTRO DE ESTILO REGIONAL
+═══════════════════════════════════════════════════════════════
+
+${METODO_KEYLA_BELIDO_PROMPT}
+
+⚠️ ADAPTAÇÕES REGIONAIS COM MÉTODO KEYLA BELIDO:
+1. Ajuste ao estilo do ${regionalAnalysis.trf} SEM perder empatia e elegância
+2. Mantenha estrutura tríade em todas as seções adaptadas
+3. Use técnicas de CNV e PNL mesmo em argumentações técnicas regionais
+
+═══════════════════════════════════════════════════════════════
 
 # PETIÇÃO ORIGINAL
 ${petition}

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -357,6 +358,32 @@ serve(async (req) => {
 **MISSÃO**: 
 Construir PETIÇÕES INICIAIS PERSUASIVAS que CONVENCEM o juiz a deferir o pedido.
 Isto NÃO é apenas um "preenchimento de formulário" - é uma PEÇA DE ARGUMENTAÇÃO JURÍDICA.
+
+═══════════════════════════════════════════════════════════════
+🧠 MÉTODO KEYLA BELIDO™ - APLICAÇÃO OBRIGATÓRIA
+═══════════════════════════════════════════════════════════════
+
+${METODO_KEYLA_BELIDO_PROMPT}
+
+⚠️ INSTRUÇÕES DE INTEGRAÇÃO:
+
+1. **Estrutura Obrigatória** (aplicar em cada seção da petição):
+   - RESSONÂNCIA EMPÁTICA → humanizar fatos sem sentimentalismo
+   - CONSCIÊNCIA RACIONAL → fundamentação técnica equilibrada
+   - REFLEXÃO MORAL E SOCIAL → impacto ético da decisão
+
+2. **Técnicas de Linguagem**:
+   - Períodos médios (12-18 palavras)
+   - Voz ativa, ritmo cadenciado
+   - Transições suaves ("de modo que", "assim", "portanto")
+   - Equilíbrio entre logos (técnica) e pathos (humano)
+
+3. **Tom e Estilo**:
+   - Elegante, assertivo, empático
+   - SEM apelos sentimentais ou teatralização
+   - Emoção contida (não fria), razão lúcida (não arrogante)
+
+═══════════════════════════════════════════════════════════════
 
 ═══════════════════════════════════════════════════════════════════════════════
 📝 FORMATAÇÃO OBRIGATÓRIA - ESTRUTURA HIERÁRQUICA (SEGUIR RIGOROSAMENTE)
