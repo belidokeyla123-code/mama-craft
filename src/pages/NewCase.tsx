@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
 import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
+import DuplicateAlert from "@/components/protocoladas/DuplicateAlert";
 import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
@@ -282,48 +283,14 @@ const NewCase = () => {
       case 1:
         return (
           <>
-            <div className="mb-6">
-              <Label htmlFor="petition_type" className="text-base font-semibold">
-                Tipo de Peça
-              </Label>
-              <p className="text-sm text-muted-foreground mb-3">
-                Selecione o tipo de peça processual que será criada
-              </p>
-              <Select 
-                value={caseData.petitionType} 
-                onValueChange={(value) => updateCaseData({ petitionType: value })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione o tipo de peça" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="peticao_inicial">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Petição Inicial
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="recurso_apelacao">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      Recurso Nominado/Apelação
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="embargos">
-                    <div className="flex items-center gap-2">
-                      <FileEdit className="h-4 w-4" />
-                      Embargos
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="pilf">
-                    <div className="flex items-center gap-2">
-                      <Gavel className="h-4 w-4" />
-                      PILF
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Campo Tipo de Peça removido - sempre será Petição Inicial por padrão */}
+            {caseData.authorName && caseData.authorCpf && (
+              <DuplicateAlert 
+                authorName={caseData.authorName}
+                authorCpf={caseData.authorCpf}
+                currentCaseId={caseData.caseId}
+              />
+            )}
             <StepBasicInfo data={caseData} updateData={updateCaseData} />
           </>
         );
