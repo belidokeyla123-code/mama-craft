@@ -17,7 +17,6 @@ interface SimilarCase {
   author_name: string;
   author_cpf: string;
   status: string;
-  tipo_conclusao?: string;
   created_at: string;
   event_date: string;
 }
@@ -39,7 +38,7 @@ export default function DuplicateAlert({ authorName, authorCpf, benefitType, cur
     try {
       let query = supabase
         .from('cases')
-        .select('id, author_name, author_cpf, status, tipo_conclusao, created_at, event_date')
+        .select('id, author_name, author_cpf, status, created_at, event_date')
         .or(`author_cpf.eq.${authorCpf},author_name.ilike.%${authorName}%`)
         .in('status', ['protocolada', 'em_audiencia', 'acordo', 'sentenca'])
         .order('created_at', { ascending: false });
@@ -70,17 +69,12 @@ export default function DuplicateAlert({ authorName, authorCpf, benefitType, cur
   }
 
   // Classificar casos similares
-  const acordos = similarCases.filter(c => c.status === 'acordo' || c.tipo_conclusao === 'acordo');
-  const sentencasProcedentes = similarCases.filter(c => c.tipo_conclusao === 'sentenca_procedente');
-  const sentencasImprocedentes = similarCases.filter(c => c.tipo_conclusao === 'sentenca_improcedente');
+  const acordos = similarCases.filter(c => c.status === 'acordo');
   const emAndamento = similarCases.filter(c => c.status === 'protocolada' || c.status === 'em_audiencia');
 
   const getAlertType = () => {
-    if (acordos.length > 0 || sentencasProcedentes.length > 0) {
+    if (acordos.length > 0) {
       return 'success';
-    }
-    if (sentencasImprocedentes.length > 0) {
-      return 'warning';
     }
     if (emAndamento.length > 0) {
       return 'info';
@@ -95,24 +89,6 @@ export default function DuplicateAlert({ authorName, authorCpf, benefitType, cur
         description: `Encontramos ${acordos.length} caso(s) anterior(es) com ACORDO para ${authorName}. Considere usar como precedente!`,
         icon: CheckCircle2,
         color: "text-green-600"
-      };
-    }
-
-    if (sentencasProcedentes.length > 0) {
-      return {
-        title: "⚠️ Atenção: Sentença Procedente Anterior",
-        description: `Encontramos ${sentencasProcedentes.length} sentença(s) procedente(s) para ${authorName}. Use como precedente!`,
-        icon: CheckCircle2,
-        color: "text-green-600"
-      };
-    }
-
-    if (sentencasImprocedentes.length > 0) {
-      return {
-        title: "🚨 ALERTA: Derrota Anterior Identificada",
-        description: `Atenção! ${sentencasImprocedentes.length} sentença(s) improcedente(s) encontrada(s). Revise a estratégia antes de protocolar!`,
-        icon: XCircle,
-        color: "text-red-600"
       };
     }
 
@@ -138,10 +114,8 @@ export default function DuplicateAlert({ authorName, authorCpf, benefitType, cur
 
   return (
     <Alert className={`mb-6 border-2 ${
-      acordos.length > 0 || sentencasProcedentes.length > 0 
+      acordos.length > 0 
         ? 'border-green-500 bg-green-50 dark:bg-green-950/20' 
-        : sentencasImprocedentes.length > 0 
-        ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
         : 'border-orange-500 bg-orange-50 dark:bg-orange-950/20'
     }`}>
       <Icon className={`h-5 w-5 ${alertInfo.color}`} />
@@ -162,12 +136,6 @@ export default function DuplicateAlert({ authorName, authorCpf, benefitType, cur
                 {caso.status === 'acordo' && (
                   <Badge className="bg-green-600">Acordo</Badge>
                 )}
-                {caso.tipo_conclusao === 'sentenca_procedente' && (
-                  <Badge className="bg-green-600">Sentença Procedente</Badge>
-                )}
-                {caso.tipo_conclusao === 'sentenca_improcedente' && (
-                  <Badge className="bg-red-600">Improcedente</Badge>
-                )}
                 {(caso.status === 'protocolada' || caso.status === 'em_audiencia') && (
                   <Badge variant="outline">Em Andamento</Badge>
                 )}
@@ -185,7 +153,7 @@ export default function DuplicateAlert({ authorName, authorCpf, benefitType, cur
           )}
         </div>
 
-        {(acordos.length > 0 || sentencasProcedentes.length > 0) && (
+        {acordos.length > 0 && (
           <div className="mt-3 p-3 bg-green-100 dark:bg-green-900/20 rounded border border-green-300 dark:border-green-700">
             <p className="text-sm font-medium text-green-800 dark:text-green-200">
               💡 Dica: Informe ao juiz sobre o(s) precedente(s) favorável(is) antes da distribuição para otimizar o processo!

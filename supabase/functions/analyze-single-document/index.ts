@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import { buildPromptForDocType } from './prompts.ts';
+import { validateRequest, documentAnalysisSchema, createValidationErrorResponse } from "../_shared/validators.ts";
 
 // ============================================================
 // SISTEMA DE NOMENCLATURA INTELIGENTE
@@ -120,16 +122,19 @@ serve(async (req) => {
     if (!user) throw new Error('Could not get user')
 
     const requestBody = await req.json();
-    const documentId = requestBody.documentId;
-    const caseId = requestBody.caseId;
-    const forceReprocess = requestBody.forceReprocess === true;
-
-    if (!documentId || !caseId) {
-      return new Response(JSON.stringify({ error: "Missing documentId or caseId" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    
+    // ✅ VALIDAÇÃO DE ENTRADA
+    let validated;
+    try {
+      validated = validateRequest(documentAnalysisSchema, requestBody);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return createValidationErrorResponse(error, corsHeaders);
+      }
+      throw error;
     }
+    
+    const { documentId, caseId, forceReprocess = false } = validated;
 
     // ==================================================================
     // 1. Buscar dados do documento

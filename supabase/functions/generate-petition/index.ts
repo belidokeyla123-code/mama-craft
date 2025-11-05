@@ -1,7 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
+import { validateRequest, generatePetitionSchema, createValidationErrorResponse } from "../_shared/validators.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +16,10 @@ serve(async (req) => {
   }
 
   try {
-    const { caseId, selectedJurisprudencias = [] } = await req.json();
+    // ✅ VALIDAÇÃO DE ENTRADA
+    const body = await req.json();
+    const validated = validateRequest(generatePetitionSchema, body);
+    const { caseId, selectedJurisprudencias = [] } = validated;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

@@ -18,9 +18,19 @@ interface FinancialManagerProps {
 
 export default function FinancialManager({ caseId, initialData, onUpdate }: FinancialManagerProps) {
   const [formData, setFormData] = useState({
-    // Receita
-    valor_recebido: initialData?.valor_recebido || "",
+    // Status e Datas
+    status: initialData?.status || 'protocolado',
+    data_protocolo: initialData?.data_protocolo || "",
     data_recebimento: initialData?.data_recebimento || "",
+    
+    // Valores Financeiros
+    valor_causa: initialData?.valor_causa || "",
+    valor_recebido: initialData?.valor_recebido || "",
+    valor_cliente: initialData?.valor_cliente || "",
+    valor_honorarios: initialData?.valor_honorarios || "",
+    percentual_honorarios: initialData?.percentual_honorarios || "30",
+    
+    // Receita e Pagamento
     forma_pagamento: initialData?.forma_pagamento || "pix",
     banco: initialData?.banco || "",
     agencia: initialData?.agencia || "",
@@ -32,6 +42,10 @@ export default function FinancialManager({ caseId, initialData, onUpdate }: Fina
     diligencias: initialData?.diligencias || "",
     outros_custos: initialData?.outros_custos || "",
     descricao_outros: initialData?.descricao_outros || "",
+    
+    // Conclusão
+    tipo_conclusao: initialData?.tipo_conclusao || "",
+    observacoes: initialData?.observacoes || "",
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -68,11 +82,16 @@ export default function FinancialManager({ caseId, initialData, onUpdate }: Fina
         .from('case_financial')
         .upsert({
           case_id: caseId,
-          ...formData,
+          status: formData.status || 'protocolado',
+          data_protocolo: formData.data_protocolo || null,
+          data_recebimento: formData.data_recebimento || null,
+          valor_causa: parseFloat(formData.valor_causa || '0'),
           valor_recebido: totais.valorRecebido,
-          total_custeio: totais.totalCusteio,
-          lucro_liquido: totais.lucroLiquido,
-          margem_lucro: parseFloat(totais.margemLucro),
+          valor_cliente: parseFloat(formData.valor_cliente || '0'),
+          valor_honorarios: parseFloat(formData.valor_honorarios || '0'),
+          percentual_honorarios: parseFloat(formData.percentual_honorarios || '30'),
+          tipo_conclusao: formData.tipo_conclusao || null,
+          observacoes: formData.observacoes || null,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'case_id'

@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
+import { validateRequest, chatMessageSchema, createValidationErrorResponse } from "../_shared/validators.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +14,10 @@ serve(async (req) => {
   }
 
   try {
-    const { caseId, messageText } = await req.json();
+    // ✅ VALIDAÇÃO DE ENTRADA
+    const body = await req.json();
+    const validated = validateRequest(chatMessageSchema, body);
+    const { caseId, messageText } = validated;
     
     console.log('[PROCESS-CHAT] Processando mensagem:', messageText);
     
@@ -484,13 +489,24 @@ Analise a mensagem/áudio e extraia TODAS as informações mencionadas, incluind
       throw fetchError;
     }
 
-  } catch (error) {
+  } catch (error: any) {
+    // ✅ TRATAMENTO SEGURO DE ERROS
+    if (error instanceof z.ZodError) {
+      return createValidationErrorResponse(error, corsHeaders);
+    }
+    
     console.error('[PROCESS-CHAT] Error:', error);
-    return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
+    
+    // Não expor detalhes internos ao cliente
+    const userMessage = error.message?.includes('JWT') 
+      ? 'Sessão expirada. Faça login novamente.'
+      : error.message?.includes('permission')
+      ? 'Você não tem permissão para esta ação.'
+      : 'Erro ao processar mensagem. Tente novamente.';
+    
+    return new Response(JSON.stringify({ error: userMessage }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
