@@ -392,6 +392,32 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         caseId = newCase.id;
         console.log('[CHAT] ✅ Caso completo carregado:', newCase);
         updateData({ caseId });
+
+        // ✅ SOLUÇÃO: Criar case_assignment EXPLICITAMENTE antes do upload
+        console.log('[CHAT] 👤 Criando case_assignment explicitamente...');
+        const { error: assignmentError } = await supabase
+          .from("case_assignments")
+          .insert({
+            case_id: caseId,
+            user_id: session?.user?.id
+          });
+
+        // Ignorar erro de duplicata (código 23505) - trigger pode ter criado também
+        if (assignmentError && assignmentError.code !== '23505') {
+          console.error('[CHAT] ❌ Erro ao criar assignment:', assignmentError);
+          throw new Error("Falha ao atribuir caso ao usuário");
+        }
+
+        if (assignmentError?.code === '23505') {
+          console.log('[CHAT] ℹ️ Assignment já existe (criado pelo trigger)');
+        } else {
+          console.log('[CHAT] ✅ Case assignment criado explicitamente');
+        }
+
+        // Aguardar commit da transação (100ms)
+        console.log('[CHAT] ⏳ Aguardando commit da transação...');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log('[CHAT] ✅ Pronto para upload de documentos');
       }
 
       // Função para normalizar nome de arquivo (remove extensão, sufixo de página, truncation DOS 8.3)
