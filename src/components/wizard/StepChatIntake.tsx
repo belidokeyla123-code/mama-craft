@@ -688,20 +688,12 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
         
-        // Usar função SQL para contornar RLS completamente
+        // INSERT direto (RLS desabilitado no banco)
         const { data: newCase, error: insertError } = await supabase
-          .rpc('create_case_bypass_rls', {
-            p_author_name: insertPayload.author_name,
-            p_author_cpf: insertPayload.author_cpf,
-            p_event_date: insertPayload.event_date,
-            p_status: insertPayload.status,
-            p_started_with_chat: insertPayload.started_with_chat,
-            p_petition_type: insertPayload.petition_type,
-            p_user_id: session.user.id
-          });
-        
-        // Converter resultado para formato esperado
-        const caseResult = newCase ? { id: newCase } : null;
+          .from("cases")
+          .insert(insertPayload)
+          .select('id')
+          .single();
 
         console.log('[CHAT] ✅ Insert Result:', { 
           success: !insertError,
@@ -714,7 +706,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
         if (insertError) throw insertError;
 
-        caseId = caseResult?.id || newCase;
+        caseId = newCase.id;
         console.log('[CHAT] ✅ Caso completo carregado:', newCase);
         updateData({ caseId });
 
