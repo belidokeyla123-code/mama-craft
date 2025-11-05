@@ -779,9 +779,10 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       }
 
       /**
-       * 🚀 FASE 2.2: Processar um único documento (upload + insert + análise)
+       * 🚀 FASE 2.3: Upload + INSERT documento (SEM análise individual)
+       * Retorna IDs dos documentos para análise em batch
        */
-      const processOneDocument = async (
+      const uploadAndInsertDocument = async (
         file: File,
         index: number,
         total: number,
@@ -790,16 +791,16 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         existingDocsSet: Set<string>
       ): Promise<{ 
         success: boolean; 
+        docIds: string[];
         fileName: string; 
-        extracted?: any; 
         error?: any 
       }> => {
         try {
-          console.log(`[PARALLEL] 📄 [${index + 1}/${total}] Processando: ${file.name}`);
+          console.log(`[UPLOAD] 📄 [${index + 1}/${total}] Processando: ${file.name}`);
           
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: `📄 [${index + 1}/${total}] Processando: ${file.name}...`
+            content: `📤 [${index + 1}/${total}] Fazendo upload: ${file.name}...`
           }]);
           
           // 🔄 CONVERTER PDF EM IMAGENS (se necessário)
@@ -828,9 +829,10 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             }
           }
           
-          // Processar cada página/imagem
-          const extractedFromAllPages: any[] = [];
+          // Array para armazenar IDs de documentos inseridos
+          const insertedDocIds: string[] = [];
           
+          // Processar cada página/imagem
           for (let i = 0; i < filesToProcess.length; i++) {
             const pageFile = filesToProcess[i];
             const pageNum = filesToProcess.length > 1 ? ` (pág. ${i + 1}/${filesToProcess.length})` : '';
@@ -855,14 +857,14 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             const timestamp = Date.now();
             const randomId = Math.random().toString(36).substring(7);
             const fileName = `${clientFolderName}/${timestamp}_${randomId}.${fileExt}`;
-            console.log(`[PARALLEL] 📤 Upload${pageNum}: ${fileName}`);
+            console.log(`[UPLOAD] 📤 Upload${pageNum}: ${fileName}`);
             
             const { error: uploadError } = await supabase.storage
               .from("case-documents")
               .upload(fileName, fileToUpload);
             
             if (uploadError) {
-              console.error('[PARALLEL] ❌ Erro no upload:', uploadError);
+              console.error('[UPLOAD] ❌ Erro no upload:', uploadError);
               throw uploadError;
             }
             
@@ -881,82 +883,22 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               .single();
             
             if (docError) {
-              console.error('[PARALLEL] ❌ Erro no INSERT:', docError);
+              console.error('[UPLOAD] ❌ Erro no INSERT:', docError);
               throw docError;
             }
             
-            console.log(`[PARALLEL] ✓ Documento inserido, ID: ${doc.id}`);
-            
-            // 🤖 ANÁLISE COM IA
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: `🔍 Analisando${pageNum}...`
-            }]);
-            
-            // Verificar se já foi analisado
-            const { data: existingExtraction } = await supabase
-              .from('extractions')
-              .select('id')
-              .eq('document_id', doc.id)
-              .maybeSingle();
-            
-            if (existingExtraction) {
-              console.log(`[PARALLEL] ⏭️ Documento ${doc.id} já analisado, pulando...`);
-              continue;
-            }
-            
-            // Chamar análise
-            const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
-              "analyze-single-document",
-              { body: { documentId: doc.id } }
-            );
-            
-            if (analysisError) {
-              console.error(`[PARALLEL] ❌ Erro na análise:`, analysisError);
-              setMessages(prev => [...prev, {
-                role: "assistant",
-                content: `⚠️ Erro ao analisar${pageNum}: ${analysisError.message}`
-              }]);
-            } else {
-              console.log(`[PARALLEL] ✅ Análise concluída${pageNum}`);
-              
-              if (analysisData?.extracted_entities) {
-                extractedFromAllPages.push(analysisData.extracted_entities);
-              }
-              
-              // Atualizar tipo de documento
-              if (analysisData?.docType && analysisData.docType !== 'outro') {
-                await supabase
-                  .from('documents')
-                  .update({ document_type: analysisData.docType })
-                  .eq('id', doc.id);
-              }
-              
-              const docTypeLabel = getDocTypeLabel(analysisData?.docType || 'outro');
-              const confidence = analysisData?.confidence || 'medium';
-              const confidenceEmoji = confidence === 'high' ? '✅' : confidence === 'medium' ? '⚠️' : '❌';
-              
-              setMessages(prev => [...prev, {
-                role: "assistant",
-                content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})`
-              }]);
-            }
+            console.log(`[UPLOAD] ✅ Documento inserido${pageNum}, ID: ${doc.id}`);
+            insertedDocIds.push(doc.id);
           }
-          
-          // Mesclar dados extraídos de todas as páginas
-          const mergedExtracted = extractedFromAllPages.reduce((acc, curr) => ({
-            ...acc,
-            ...curr
-          }), {});
           
           return {
             success: true,
+            docIds: insertedDocIds,
             fileName: file.name,
-            extracted: mergedExtracted
           };
           
         } catch (error: any) {
-          console.error(`[PARALLEL] ❌ Erro em ${file.name}:`, error);
+          console.error(`[UPLOAD] ❌ Erro em ${file.name}:`, error);
           
           setMessages(prev => [...prev, {
             role: "assistant",
@@ -965,19 +907,27 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           
           return {
             success: false,
+            docIds: [],
             fileName: file.name,
             error: error.message
           };
         }
       };
 
-      // 🚀 PROCESSAMENTO PARALELO: Todos os documentos simultaneamente
-      console.log(`[PARALLEL] 🚀 Iniciando processamento paralelo de ${filesToUpload.length} documento(s)`);
+      // ═══════════════════════════════════════════════════════════════
+      // FASE A: UPLOAD + INSERT (Paralelo)
+      // ═══════════════════════════════════════════════════════════════
+      console.log(`[BATCH] 🚀 FASE A: Fazendo upload de ${filesToUpload.length} documento(s) em paralelo...`);
+      
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `📤 Fazendo upload de ${filesToUpload.length} documento(s)...`
+      }]);
       
       const clientFolderName = caseId;
       
       const uploadPromises = filesToUpload.map((file, index) => 
-        processOneDocument(
+        uploadAndInsertDocument(
           file, 
           index, 
           filesToUpload.length, 
@@ -988,43 +938,95 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       );
       
       // Aguardar TODOS os uploads completarem
-      const results = await Promise.all(uploadPromises);
+      const uploadResults = await Promise.all(uploadPromises);
       
-      // Processar resultados
-      const successCount = results.filter(r => r.success).length;
-      const failedCount = results.filter(r => !r.success).length;
+      // Processar resultados do upload
+      const uploadedSuccessfully = uploadResults.filter(r => r.success);
+      const uploadFailed = uploadResults.filter(r => !r.success);
       
-      console.log(`[PARALLEL] 📊 Resultados: ${successCount} sucesso, ${failedCount} falhas`);
+      console.log(`[BATCH] 📊 FASE A Concluída: ${uploadedSuccessfully.length} sucesso, ${uploadFailed.length} falhas`);
       
-      if (successCount > 0) {
+      if (uploadFailed.length > 0) {
+        const failedFiles = uploadFailed.map(r => r.fileName).join(", ");
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: `✅ ${successCount} documento(s) processado(s) com sucesso!`
+          content: `⚠️ ${uploadFailed.length} documento(s) falharam no upload: ${failedFiles}`
         }]);
       }
       
-      if (failedCount > 0) {
-        const failedFiles = results
-          .filter(r => !r.success)
-          .map(r => r.fileName)
-          .join(", ");
+      if (uploadedSuccessfully.length === 0) {
+        console.error('[BATCH] ❌ Nenhum documento foi carregado com sucesso');
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `❌ Nenhum documento foi processado com sucesso`
+        }]);
+        return;
+      }
+      
+      // Coletar IDs dos documentos que foram inseridos (flatten array)
+      const documentIds = uploadedSuccessfully
+        .flatMap(r => r.docIds)
+        .filter(id => id !== undefined);
+      
+      console.log(`[BATCH] 📋 ${documentIds.length} documento(s) prontos para análise:`, documentIds);
+      
+      // ═══════════════════════════════════════════════════════════════
+      // FASE B: ANÁLISE EM BATCH (Uma única chamada)
+      // ═══════════════════════════════════════════════════════════════
+      console.log(`[BATCH] 🤖 FASE B: Analisando ${documentIds.length} documento(s) em batch...`);
+      
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `🤖 Analisando ${documentIds.length} documento(s) com IA...`
+      }]);
+      
+      try {
+        // Chamar edge function de BATCH com todos os IDs
+        const { data: batchResult, error: batchError } = await supabase.functions.invoke(
+          "process-documents-with-ai",
+          {
+            body: {
+              caseId: caseId,
+              documentIds: documentIds
+            }
+          }
+        );
+        
+        if (batchError) {
+          console.error('[BATCH] ❌ Erro na análise batch:', batchError);
+          throw batchError;
+        }
+        
+        console.log('[BATCH] ✅ Análise batch iniciada:', batchResult);
         
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: `⚠️ ${failedCount} documento(s) falharam: ${failedFiles}`
+          content: `⏳ Análise em andamento (processamento em background)...`
+        }]);
+        
+        // Aguardar um pouco para garantir que extrações foram salvas
+        // (process-documents-with-ai processa em background)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error: any) {
+        console.error('[BATCH] ❌ Erro ao chamar process-documents-with-ai:', error);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ Erro na análise: ${error.message}`
         }]);
       }
       
-      // Consolidar dados extraídos
-      let extractedData: any = {};
-      results.forEach(result => {
-        if (result.extracted) {
-          extractedData = { ...extractedData, ...result.extracted };
-        }
-      });
+      // ═══════════════════════════════════════════════════════════════
+      // FASE C: CONSOLIDAÇÃO DE DADOS
+      // ═══════════════════════════════════════════════════════════════
+      console.log('[BATCH] 🔄 FASE C: Consolidando todas as extrações...');
       
-      // 🆕 FASE 1: Consolidar extrações após processamento paralelo
-      console.log('[PARALLEL] 🔄 Consolidando extrações...');
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `📊 Consolidando dados extraídos...`
+      }]);
+      
+      let extractedData: any = {};
       const consolidatedData = await consolidateAllExtractions(caseId);
       
       if (consolidatedData) {
@@ -1056,17 +1058,26 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           .eq('id', caseId);
         
         if (updateError) {
-          console.error('[ProcessDocuments] ❌ Erro ao atualizar caso:', updateError);
+          console.error('[BATCH] ❌ Erro ao atualizar caso:', updateError);
         } else {
-          console.log('[ProcessDocuments] ✅ Caso atualizado com sucesso');
+          console.log('[BATCH] ✅ Caso atualizado com sucesso');
+          
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `✅ ${uploadedSuccessfully.length} documento(s) processado(s) e analisados com sucesso!`
+          }]);
         }
         
         // Atualizar dados locais
         extractedData = { ...extractedData, ...consolidatedData };
+      } else {
+        console.warn('[BATCH] ⚠️ Consolidação retornou null');
       }
       
-      // 🆕 FASE 3: Disparar pipeline completo após upload
-      console.log('[PARALLEL] 🚀 Disparando pipeline completo...');
+      // ═══════════════════════════════════════════════════════════════
+      // FASE D: DISPARAR PIPELINE COMPLETO
+      // ═══════════════════════════════════════════════════════════════
+      console.log('[BATCH] 🚀 FASE D: Disparando pipeline completo...');
       setMessages(prev => [...prev, {
         role: "assistant",
         content: `🔄 Iniciando validação, análise jurídica, jurisprudência e tese...`
@@ -1115,7 +1126,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       if (!extractedData.motherCpf) criticalMissing.push('CPF da mãe');
 
       let assistantMessage = `✅ **Documentos processados com sucesso!**\n\n`;
-      assistantMessage += `📄 **${successCount} documento(s) analisado(s)**\n\n`;
+      assistantMessage += `📄 **${uploadedSuccessfully.length} documento(s) analisado(s)**\n\n`;
       
       if (Object.keys(extractedData).length > 0) {
         assistantMessage += "**📋 Informações extraídas dos documentos:**\n\n";
