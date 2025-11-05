@@ -277,36 +277,43 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         return true;
       }
 
-      // 2. Criar se não existir
+      // 2. Criar se não existir (com RETURNING *)
       console.log('[ASSIGNMENT] ➕ Criando assignment...');
-      const { error: insertError } = await supabase
+      const { data: assignment, error: insertError } = await supabase
         .from('case_assignments')
         .insert({
           case_id: caseId,
           user_id: userId
-        });
+        })
+        .select('id')
+        .single();
 
-      if (insertError && insertError.code !== '23505') {
+      // Se erro 23505 (duplicate), buscar existente
+      if (insertError) {
+        if (insertError.code === '23505') {
+          console.log('[ASSIGNMENT] ℹ️ Assignment já existe, buscando...');
+          const { data: existing, error: fetchError } = await supabase
+            .from('case_assignments')
+            .select('id')
+            .eq('case_id', caseId)
+            .eq('user_id', userId)
+            .single();
+          
+          if (fetchError || !existing) {
+            console.error('[ASSIGNMENT] ❌ Erro ao buscar existente:', fetchError);
+            throw new Error('Falha ao validar assignment existente');
+          }
+          
+          console.log('[ASSIGNMENT] ✅ Assignment existente validado:', existing.id);
+          return true;
+        }
+        
+        // Outro erro - lançar
         console.error('[ASSIGNMENT] ❌ Erro ao criar:', insertError);
         throw new Error(`Falha ao atribuir caso: ${insertError.message}`);
       }
 
-      // 3. Aguardar e validar que foi criado
-      await new Promise(resolve => setTimeout(resolve, 150));
-
-      const { data: validated, error: validateError } = await supabase
-        .from('case_assignments')
-        .select('id')
-        .eq('case_id', caseId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (validateError || !validated) {
-        console.error('[ASSIGNMENT] ❌ Falha na validação:', validateError);
-        throw new Error('Assignment não foi criado corretamente');
-      }
-
-      console.log('[ASSIGNMENT] ✅ Assignment criado e validado:', validated.id);
+      console.log('[ASSIGNMENT] ✅ Assignment criado:', assignment.id);
       return true;
 
     } catch (error) {
@@ -681,40 +688,23 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
         
-        // 1. INSERT puro (sem SELECT imediato para evitar race condition)
-        const { error: insertError } = await supabase
+        // Usar RETURNING * para obter caso completo imediatamente
+        const { data: newCase, error: insertError } = await supabase
           .from("cases")
-          .insert(insertPayload);
+          .insert(insertPayload)
+          .select('*')
+          .single();
 
         console.log('[CHAT] ✅ Insert Result:', { 
           success: !insertError,
+          caseId: newCase?.id,
           error: insertError ? {
             message: insertError.message,
             code: insertError.code,
-            details: insertError.details,
-            hint: insertError.hint
           } : null
         });
 
         if (insertError) throw insertError;
-
-        // 2. Aguardar trigger completar (aumentado para 200ms)
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // 3. Buscar caso recém-criado após trigger completar
-        const { data: newCase, error: fetchError } = await supabase
-          .from("cases")
-          .select('*')
-          .eq('author_cpf', '00000000000')
-          .eq('started_with_chat', true)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (fetchError) {
-          console.log('[CHAT] ❌ Erro ao buscar caso:', fetchError);
-          throw fetchError;
-        }
 
         caseId = newCase.id;
         console.log('[CHAT] ✅ Caso completo carregado:', newCase);
@@ -788,33 +778,37 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         }]);
       }
 
-      // 🆕 PROCESSAMENTO SEQUENCIAL: Arquivo por arquivo
-      console.log("[SEQUENTIAL] 🚀 Iniciando processamento sequencial de", filesToUpload.length, "arquivos");
-      
-      // ✅ Usar case_id como pasta para compatibilidade com RLS do Storage
-      const clientFolderName = caseId;
-      
-      let extractedData: any = {};
-      let processedCount = 0;
-      
-      // 🔄 LOOP SEQUENCIAL: Processar cada arquivo individualmente
-      for (const file of filesToUpload) {
+      /**
+       * 🚀 FASE 2.2: Processar um único documento (upload + insert + análise)
+       */
+      const processOneDocument = async (
+        file: File,
+        index: number,
+        total: number,
+        caseId: string,
+        clientFolderName: string,
+        existingDocsSet: Set<string>
+      ): Promise<{ 
+        success: boolean; 
+        fileName: string; 
+        extracted?: any; 
+        error?: any 
+      }> => {
         try {
-          processedCount++;
-          console.log(`[SEQUENTIAL] 📄 Processando arquivo ${processedCount}/${filesToUpload.length}: ${file.name}`);
+          console.log(`[PARALLEL] 📄 [${index + 1}/${total}] Processando: ${file.name}`);
           
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: `📄 [${processedCount}/${filesToUpload.length}] Processando: ${file.name}...`
+            content: `📄 [${index + 1}/${total}] Processando: ${file.name}...`
           }]);
           
-          // 🔄 CONVERTER PDF EM IMAGENS (no cliente)
+          // 🔄 CONVERTER PDF EM IMAGENS (se necessário)
           let filesToProcess: File[] = [file];
           
           if (isPDF(file)) {
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: `📄 Convertendo PDF "${file.name}" em imagens para OCR...`
+              content: `📄 Convertendo PDF "${file.name}" em imagens...`
             }]);
             
             try {
@@ -824,63 +818,56 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               
               setMessages(prev => [...prev, {
                 role: "assistant",
-                content: `✅ PDF convertido: ${images.length} página(s) pronta(s) para análise`
+                content: `✅ PDF convertido: ${images.length} página(s)`
               }]);
               
-              console.log(`[PDF] ✅ ${images.length} imagens geradas de "${file.name}"`);
+              console.log(`[PDF] ✅ ${images.length} imagens geradas`);
             } catch (conversionError: any) {
               console.error('[PDF] ❌ Erro na conversão:', conversionError);
-              throw new Error(`Erro ao converter PDF "${file.name}": ${conversionError.message}`);
+              throw new Error(`Erro ao converter PDF: ${conversionError.message}`);
             }
           }
           
-          // Para cada página/imagem, processar IMEDIATAMENTE
+          // Processar cada página/imagem
+          const extractedFromAllPages: any[] = [];
+          
           for (let i = 0; i < filesToProcess.length; i++) {
             const pageFile = filesToProcess[i];
-            const pageNum = filesToProcess.length > 1 ? ` (página ${i + 1}/${filesToProcess.length})` : '';
+            const pageNum = filesToProcess.length > 1 ? ` (pág. ${i + 1}/${filesToProcess.length})` : '';
             
-            console.log(`[SEQUENTIAL] 📤 Fazendo upload${pageNum}...`);
-            
-            // ⚡ FASE 2: Compressão adaptativa de imagens antes do upload
+            // ⚡ Compressão adaptativa
             let fileToUpload = pageFile;
-            
-            // Comprimir apenas imagens PNG/JPG grandes
             const isPng = pageFile.type === 'image/png' || pageFile.name.toLowerCase().endsWith('.png');
-            const isJpg = pageFile.type === 'image/jpeg' || pageFile.name.toLowerCase().endsWith('.jpg') || pageFile.name.toLowerCase().endsWith('.jpeg');
+            const isJpg = pageFile.type === 'image/jpeg' || pageFile.name.toLowerCase().endsWith('.jpg');
             
             if ((isPng || isJpg) && pageFile.size > 500 * 1024) {
               try {
-                console.log(`[COMPRESS] 📦 Comprimindo ${pageFile.name} (${(pageFile.size / 1024).toFixed(0)}KB)`);
-                fileToUpload = await compressImageForAI(pageFile);
-                console.log(`[COMPRESS] ✅ ${pageFile.name}: ${(pageFile.size / 1024).toFixed(0)}KB → ${(fileToUpload.size / 1024).toFixed(0)}KB`);
-              } catch (compressError) {
-                console.warn(`[COMPRESS] ⚠️ Erro ao comprimir, usando original:`, compressError);
-                fileToUpload = pageFile;
+                const compressed = await compressImageForAI(pageFile);
+                fileToUpload = compressed;
+                console.log(`[COMPRESS] ✓ ${pageFile.name}: ${(pageFile.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`);
+              } catch (err) {
+                console.warn('[COMPRESS] ⚠️ Falha, usando original:', err);
               }
             }
             
-            // Upload para o Storage
+            // 📤 UPLOAD
             const fileExt = pageFile.name.split('.').pop();
             const timestamp = Date.now();
             const randomId = Math.random().toString(36).substring(7);
             const fileName = `${clientFolderName}/${timestamp}_${randomId}.${fileExt}`;
+            console.log(`[PARALLEL] 📤 Upload${pageNum}: ${fileName}`);
             
             const { error: uploadError } = await supabase.storage
               .from("case-documents")
               .upload(fileName, fileToUpload);
-
-            if (uploadError) throw uploadError;
-
-            // Salvar registro do documento
-            console.log('[CHAT-DOC] 📄 Inserindo documento:', {
-              fileName: pageFile.name,
-              caseId,
-              fileSize: pageFile.size,
-              filePath: fileName
-            });
-
-            // 1. INSERT puro (sem SELECT imediato para evitar race condition)
-            const { error: docError } = await supabase
+            
+            if (uploadError) {
+              console.error('[PARALLEL] ❌ Erro no upload:', uploadError);
+              throw uploadError;
+            }
+            
+            // 💾 INSERT documento (com RETURNING *)
+            const { data: doc, error: docError } = await supabase
               .from("documents")
               .insert({
                 case_id: caseId,
@@ -888,235 +875,198 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 file_path: fileName,
                 file_size: pageFile.size,
                 mime_type: pageFile.type,
-                document_type: "outro" as any, // ✅ Será atualizado após análise
-              });
-
-            console.log('[CHAT-DOC] ✅ Documento inserido:', {
-              success: !docError,
-              error: docError?.message
-            });
-
+                document_type: "outro" as any,
+              })
+              .select('*')
+              .single();
+            
             if (docError) {
-              console.error('[CHAT-DOC] ❌ Erro no INSERT:', docError);
+              console.error('[PARALLEL] ❌ Erro no INSERT:', docError);
               throw docError;
             }
             
-            // 2. Aguardar transação completar (200ms)
-            console.log('[CHAT-DOC] ⏳ Aguardando transação completar...');
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // 3. Buscar documento recém-inserido
-            console.log('[CHAT-DOC] 🔍 Buscando documento inserido...');
-            const { data: doc, error: fetchError } = await supabase
-              .from("documents")
-              .select('*')
-              .eq('case_id', caseId)
-              .eq('file_path', fileName)
-              .order('uploaded_at', { ascending: false })
-              .limit(1)
-              .single();
-
-            console.log('[CHAT-DOC] 📋 Documento encontrado:', {
-              success: !!doc,
-              docId: doc?.id,
-              error: fetchError?.message
-            });
-
-            if (fetchError) {
-              console.error('[CHAT-DOC] ❌ Erro ao buscar documento:', fetchError);
-              throw fetchError;
-            }
+            console.log(`[PARALLEL] ✓ Documento inserido, ID: ${doc.id}`);
             
-            console.log(`[SEQUENTIAL] ✓ Upload completo, ID: ${doc.id}`);
-            
-            // 🤖 ANÁLISE IMEDIATA deste documento
+            // 🤖 ANÁLISE COM IA
             setMessages(prev => [...prev, {
               role: "assistant",
               content: `🔍 Analisando${pageNum}...`
             }]);
             
-            console.log(`[SEQUENTIAL] 🤖 Chamando IA para análise individual...`);
-            
-            // ✅ CORREÇÃO #4: Verificar se já foi analisado para evitar duplicações
+            // Verificar se já foi analisado
             const { data: existingExtraction } = await supabase
               .from('extractions')
               .select('id')
               .eq('document_id', doc.id)
               .maybeSingle();
-
+            
             if (existingExtraction) {
-              console.log(`[SEQUENTIAL] ⏭️ Documento ${doc.id} já analisado, pulando...`);
+              console.log(`[PARALLEL] ⏭️ Documento ${doc.id} já analisado, pulando...`);
               continue;
             }
             
-            // 4. Análise com AI
-            console.log('[CHAT-DOC] 🤖 Iniciando análise com AI...');
-            const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
+            // Chamar análise
+            const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
               "analyze-single-document",
-              {
-                body: {
-                  documentId: doc.id,
-                  caseId: caseId
-                },
-                headers: {
-                  Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-                }
-              }
+              { body: { documentId: doc.id } }
             );
             
-            console.log('[CHAT-DOC] 📊 Resultado da análise:', {
-              success: !!analysisResult,
-              error: analysisError?.message
-            });
-            
             if (analysisError) {
-              console.error(`[SEQUENTIAL] ⚠️ Erro na análise${pageNum}:`, analysisError);
+              console.error(`[PARALLEL] ❌ Erro na análise:`, analysisError);
               setMessages(prev => [...prev, {
                 role: "assistant",
                 content: `⚠️ Erro ao analisar${pageNum}: ${analysisError.message}`
               }]);
             } else {
-              console.log(`[SEQUENTIAL] ✅ Análise concluída${pageNum}:`, analysisResult);
+              console.log(`[PARALLEL] ✅ Análise concluída${pageNum}`);
               
-              // ✅ ATUALIZAR DOCUMENT_TYPE após análise
-              if (analysisResult?.docType && analysisResult.docType !== 'outro') {
+              if (analysisData?.extracted_entities) {
+                extractedFromAllPages.push(analysisData.extracted_entities);
+              }
+              
+              // Atualizar tipo de documento
+              if (analysisData?.docType && analysisData.docType !== 'outro') {
                 await supabase
                   .from('documents')
-                  .update({ document_type: analysisResult.docType })
+                  .update({ document_type: analysisData.docType })
                   .eq('id', doc.id);
-                console.log(`[SEQUENTIAL] ✅ Tipo de documento atualizado: ${analysisResult.docType}`);
               }
               
-              // Merge dos dados extraídos
-              if (analysisResult?.extracted) {
-                extractedData = { ...extractedData, ...analysisResult.extracted };
-              }
-              
-              // Mostrar feedback específico
-              const docTypeLabel = getDocTypeLabel(analysisResult?.docType || 'outro');
-              const confidence = analysisResult?.confidence || 'medium';
+              const docTypeLabel = getDocTypeLabel(analysisData?.docType || 'outro');
+              const confidence = analysisData?.confidence || 'medium';
               const confidenceEmoji = confidence === 'high' ? '✅' : confidence === 'medium' ? '⚠️' : '❌';
-              
-              // 🆕 Mostrar novo nome do arquivo se foi renomeado
-              const renameInfo = analysisResult?.extracted?.newFileName 
-                ? `\n📝 Renomeado para: \`${analysisResult.extracted.newFileName}\``
-                : '';
               
               setMessages(prev => [...prev, {
                 role: "assistant",
-                content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})${renameInfo}`
+                content: `${confidenceEmoji} ${docTypeLabel}${pageNum} - Dados extraídos (confiança: ${confidence})`
               }]);
-              
-              // 🆕 APRESENTAÇÃO ESTILO CHATGPT: Dados estruturados + transcrição
-              if (analysisResult?.extracted && Object.keys(analysisResult.extracted).length > 0) {
-                const extracted = analysisResult.extracted;
-                
-                let friendlyMessage = `📋 **Documento analisado: ${pageFile.name}**\n\n`;
-                
-                // DADOS DO PROCESSO ADMINISTRATIVO (se houver)
-                if (extracted.raProtocol || extracted.raRequestDate || extracted.raDenialReason) {
-                  friendlyMessage += `📑 **PROCESSO ADMINISTRATIVO (INSS)**\n`;
-                  if (extracted.raProtocol) friendlyMessage += `• Protocolo/NB: **${extracted.raProtocol}**\n`;
-                  if (extracted.benefitType) friendlyMessage += `• Benefício: ${extracted.benefitType}\n`;
-                  if (extracted.raRequestDate) friendlyMessage += `• Data do Requerimento: ${extracted.raRequestDate}\n`;
-                  if (extracted.raDenialDate) friendlyMessage += `• Data do Indeferimento: ${extracted.raDenialDate}\n`;
-                  if (extracted.raDenialReason) friendlyMessage += `• Motivo: *"${extracted.raDenialReason}"*\n`;
-                  friendlyMessage += '\n';
-                }
-                
-                // DADOS DA AUTORA/MÃE
-                if (extracted.motherName || extracted.motherCpf || extracted.fullName) {
-                  friendlyMessage += `👤 **AUTORA (Mãe)**\n`;
-                  if (extracted.motherName || extracted.fullName) friendlyMessage += `• Nome: **${extracted.motherName || extracted.fullName}**\n`;
-                  if (extracted.motherCpf || extracted.cpf) friendlyMessage += `• CPF: ${extracted.motherCpf || extracted.cpf}\n`;
-                  if (extracted.motherRg || extracted.rg) friendlyMessage += `• RG: ${extracted.motherRg || extracted.rg}\n`;
-                  if (extracted.motherBirthDate || extracted.birthDate) friendlyMessage += `• Data de Nascimento: ${extracted.motherBirthDate || extracted.birthDate}\n`;
-                  if (extracted.motherAddress || extracted.address) friendlyMessage += `• Endereço: ${extracted.motherAddress || extracted.address}\n`;
-                  friendlyMessage += '\n';
-                }
-                
-                // DADOS DA CRIANÇA
-                if (extracted.childName || extracted.childBirthDate) {
-                  friendlyMessage += `👶 **CRIANÇA**\n`;
-                  if (extracted.childName) friendlyMessage += `• Nome: **${extracted.childName}**\n`;
-                  if (extracted.childBirthDate) friendlyMessage += `• Data de Nascimento: ${extracted.childBirthDate}\n`;
-                  if (extracted.birthCity) friendlyMessage += `• Cidade de Nascimento: ${extracted.birthCity}\n`;
-                  if (extracted.fatherName) friendlyMessage += `• Pai: ${extracted.fatherName}\n`;
-                  if (extracted.registryNumber) friendlyMessage += `• Matrícula: ${extracted.registryNumber}\n`;
-                  if (extracted.registryDate) friendlyMessage += `• Data do Registro: ${extracted.registryDate}\n`;
-                  friendlyMessage += '\n';
-                }
-                
-                // PROPRIEDADE RURAL
-                if (extracted.landOwnerName || extracted.landArea || extracted.landLocation) {
-                  friendlyMessage += `🏡 **PROPRIEDADE RURAL**\n`;
-                  if (extracted.landOwnerName) friendlyMessage += `• Proprietário: ${extracted.landOwnerName}\n`;
-                  if (extracted.landOwnerCpf) friendlyMessage += `• CPF do Proprietário: ${extracted.landOwnerCpf}\n`;
-                  if (extracted.landArea) friendlyMessage += `• Área: ${extracted.landArea}\n`;
-                  if (extracted.landLocation) friendlyMessage += `• Localização: ${extracted.landLocation}\n`;
-                  friendlyMessage += '\n';
-                }
-                
-                // ATIVIDADE RURAL
-                if (extracted.ruralActivitySince || (extracted.ruralPeriods && extracted.ruralPeriods.length > 0)) {
-                  friendlyMessage += `🌾 **ATIVIDADE RURAL**\n`;
-                  if (extracted.ruralActivitySince) friendlyMessage += `• Trabalha no campo desde: ${extracted.ruralActivitySince}\n`;
-                  if (extracted.ruralPeriods && extracted.ruralPeriods.length > 0) {
-                    friendlyMessage += `• Períodos declarados:\n`;
-                    extracted.ruralPeriods.forEach((period: any, idx: number) => {
-                      friendlyMessage += `  ${idx + 1}. ${period.startDate || '?'} a ${period.endDate || 'atual'} - ${period.location || ''}\n`;
-                    });
-                  }
-                  if (extracted.familyMembersDetailed && extracted.familyMembersDetailed.length > 0) {
-                    friendlyMessage += `• Membros da família: ${extracted.familyMembersDetailed.map((m: any) => m.name).join(", ")}\n`;
-                  }
-                  friendlyMessage += '\n';
-                }
-                
-                // PROCURAÇÃO
-                if (extracted.attorneyName || extracted.oabNumber) {
-                  friendlyMessage += `📝 **PROCURAÇÃO**\n`;
-                  if (extracted.attorneyName) friendlyMessage += `• Advogado: ${extracted.attorneyName}\n`;
-                  if (extracted.oabNumber) friendlyMessage += `• OAB: ${extracted.oabNumber}\n`;
-                  if (extracted.signatureDate) friendlyMessage += `• Data: ${extracted.signatureDate}\n`;
-                  friendlyMessage += '\n';
-                }
-                
-                // TRANSCRIÇÃO COMPLETA (colapsável, últimos 800 caracteres)
-                if (analysisResult?.extractedText && analysisResult.extractedText.length > 100) {
-                  const transcription = analysisResult.extractedText;
-                  const preview = transcription.length > 800 
-                    ? `...${transcription.slice(-800)}` 
-                    : transcription;
-                  
-                  friendlyMessage += `\n---\n\n📄 **Transcrição Completa** *(${transcription.length} caracteres)*:\n\n\`\`\`\n${preview}\n\`\`\`\n`;
-                }
-                
-                setMessages(prev => [...prev, {
-                  role: "assistant",
-                  content: friendlyMessage
-                }]);
-              } else if (analysisResult?.extractedText) {
-                // Fallback: só tem transcrição, sem dados estruturados
-                setMessages(prev => [...prev, {
-                  role: "assistant",
-                  content: `📄 **Transcrição do documento "${pageFile.name}":**\n\n\`\`\`\n${analysisResult.extractedText.substring(0, 800)}${analysisResult.extractedText.length > 800 ? '...' : ''}\n\`\`\`\n\n✅ Dados processados`
-                }]);
-              }
             }
           }
           
+          // Mesclar dados extraídos de todas as páginas
+          const mergedExtracted = extractedFromAllPages.reduce((acc, curr) => ({
+            ...acc,
+            ...curr
+          }), {});
+          
+          return {
+            success: true,
+            fileName: file.name,
+            extracted: mergedExtracted
+          };
+          
         } catch (error: any) {
-          console.error(`[SEQUENTIAL] ❌ Erro ao processar ${file.name}:`, error);
+          console.error(`[PARALLEL] ❌ Erro em ${file.name}:`, error);
+          
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: `❌ Erro ao processar ${file.name}: ${error.message}`
+            content: `❌ Erro ao processar "${file.name}": ${error.message}`
           }]);
+          
+          return {
+            success: false,
+            fileName: file.name,
+            error: error.message
+          };
         }
+      };
+
+      // 🚀 PROCESSAMENTO PARALELO: Todos os documentos simultaneamente
+      console.log(`[PARALLEL] 🚀 Iniciando processamento paralelo de ${filesToUpload.length} documento(s)`);
+      
+      const clientFolderName = caseId;
+      
+      const uploadPromises = filesToUpload.map((file, index) => 
+        processOneDocument(
+          file, 
+          index, 
+          filesToUpload.length, 
+          caseId, 
+          clientFolderName,
+          existingBaseNames
+        )
+      );
+      
+      // Aguardar TODOS os uploads completarem
+      const results = await Promise.all(uploadPromises);
+      
+      // Processar resultados
+      const successCount = results.filter(r => r.success).length;
+      const failedCount = results.filter(r => !r.success).length;
+      
+      console.log(`[PARALLEL] 📊 Resultados: ${successCount} sucesso, ${failedCount} falhas`);
+      
+      if (successCount > 0) {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `✅ ${successCount} documento(s) processado(s) com sucesso!`
+        }]);
+      }
+      
+      if (failedCount > 0) {
+        const failedFiles = results
+          .filter(r => !r.success)
+          .map(r => r.fileName)
+          .join(", ");
+        
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ ${failedCount} documento(s) falharam: ${failedFiles}`
+        }]);
+      }
+      
+      // Consolidar dados extraídos
+      let extractedData: any = {};
+      results.forEach(result => {
+        if (result.extracted) {
+          extractedData = { ...extractedData, ...result.extracted };
+        }
+      });
+      
+      // 🆕 FASE 1: Consolidar extrações após processamento paralelo
+      console.log('[PARALLEL] 🔄 Consolidando extrações...');
+      const consolidatedData = await consolidateAllExtractions(caseId);
+      
+      if (consolidatedData) {
+        // Atualizar tabela cases com dados consolidados
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update({
+            author_name: consolidatedData.author_name,
+            author_cpf: consolidatedData.author_cpf,
+            author_rg: consolidatedData.author_rg,
+            author_birth_date: consolidatedData.author_birth_date,
+            author_address: consolidatedData.author_address,
+            author_phone: consolidatedData.author_phone,
+            mother_cpf: consolidatedData.mother_cpf,
+            father_cpf: consolidatedData.father_cpf,
+            father_name: consolidatedData.father_name,
+            spouse_name: consolidatedData.spouse_name,
+            spouse_cpf: consolidatedData.spouse_cpf,
+            marriage_date: consolidatedData.marriage_date,
+            nit: consolidatedData.nit,
+            birth_city: consolidatedData.birth_city,
+            birth_state: consolidatedData.birth_state,
+            school_history: consolidatedData.school_history,
+            rural_periods: consolidatedData.rural_periods,
+            urban_periods: consolidatedData.urban_periods,
+            manual_benefits: consolidatedData.manual_benefits,
+            health_declaration_ubs: consolidatedData.health_declaration_ubs,
+          })
+          .eq('id', caseId);
+        
+        if (updateError) {
+          console.error('[ProcessDocuments] ❌ Erro ao atualizar caso:', updateError);
+        } else {
+          console.log('[ProcessDocuments] ✅ Caso atualizado com sucesso');
+        }
+        
+        // Atualizar dados locais
+        extractedData = { ...extractedData, ...consolidatedData };
       }
       
       // 🆕 FASE 3: Disparar pipeline completo após upload
-      console.log('[SEQUENTIAL] 🚀 Disparando pipeline completo...');
+      console.log('[PARALLEL] 🚀 Disparando pipeline completo...');
       setMessages(prev => [...prev, {
         role: "assistant",
         content: `🔄 Iniciando validação, análise jurídica, jurisprudência e tese...`
@@ -1130,7 +1080,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         .update({ status: "ready" })
         .eq("id", caseId);
       
-      console.log(`[SEQUENTIAL] ✅ Processamento sequencial concluído!`);
+      console.log(`[PARALLEL] ✅ Processamento paralelo concluído!`);
       
       // Buscar caso atualizado
       const { data: updatedCase } = await supabase
@@ -1140,7 +1090,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         .single();
 
       if (updatedCase) {
-        console.log('[SEQUENTIAL] Caso final:', updatedCase);
+        console.log('[PARALLEL] Caso final:', updatedCase);
         if (updatedCase.author_name && updatedCase.author_name !== 'Processando...') {
           extractedData.motherName = updatedCase.author_name;
         }
@@ -1165,7 +1115,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       if (!extractedData.motherCpf) criticalMissing.push('CPF da mãe');
 
       let assistantMessage = `✅ **Documentos processados com sucesso!**\n\n`;
-      assistantMessage += `📄 **${processedCount} documento(s) analisado(s)**\n\n`;
+      assistantMessage += `📄 **${successCount} documento(s) analisado(s)**\n\n`;
       
       if (Object.keys(extractedData).length > 0) {
         assistantMessage += "**📋 Informações extraídas dos documentos:**\n\n";
