@@ -688,11 +688,11 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
         
-        // Usar RETURNING * para obter caso completo imediatamente
+        // INSERT sem SELECT imediato para evitar race condition com RLS
         const { data: newCase, error: insertError } = await supabase
           .from("cases")
           .insert(insertPayload)
-          .select('*')
+          .select('id')
           .single();
 
         console.log('[CHAT] ✅ Insert Result:', { 
@@ -868,7 +868,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               throw uploadError;
             }
             
-            // 💾 INSERT documento (com RETURNING *)
+            // 💾 INSERT documento (apenas ID para evitar race condition)
             const { data: doc, error: docError } = await supabase
               .from("documents")
               .insert({
@@ -879,7 +879,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 mime_type: pageFile.type,
                 document_type: "outro" as any,
               })
-              .select('*')
+              .select('id, file_name')
               .single();
             
             if (docError) {
