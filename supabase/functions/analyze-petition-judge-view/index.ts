@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateRequest, createValidationErrorResponse, petitionAnalysisSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,9 +18,13 @@ serve(async (req) => {
   try {
     console.log('[JUDGE-MODULE] Parsing request body...');
     const body = await req.json();
-    console.log('[JUDGE-MODULE] Request body keys:', Object.keys(body));
+    const validated = validateRequest(petitionAnalysisSchema, body);
+    const { petition, caseId, contextDocuments } = validated;
     
-    const { petition, caseInfo, documents, analysis, jurisprudence, tese } = body;
+    // Extract additional fields from body that aren't in schema
+    const { caseInfo, documents, analysis, jurisprudence, tese } = body;
+
+    console.log('[JUDGE-MODULE] Request body keys:', Object.keys(body));
 
     // Log detalhado para debug
     console.log('[JUDGE-MODULE] 📋 ANÁLISE PROFUNDA - Data validation:', {

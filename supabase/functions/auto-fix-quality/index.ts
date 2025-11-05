@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { corsHeaders } from "../_shared/cors.ts";
 import { callLovableAI } from "../_shared/ai-helpers.ts";
+import { validateRequest, createValidationErrorResponse, autoFixQualitySchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -9,7 +11,9 @@ serve(async (req) => {
   }
 
   try {
-    const { caseId, qualityReport: qualityReportParam } = await req.json();
+    const body = await req.json();
+    const validated = validateRequest(autoFixQualitySchema, body);
+    const { caseId, qualityReport: qualityReportParam } = validated;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -221,10 +225,10 @@ serve(async (req) => {
     // ═══════════════════════════════════════════════════════════════
     // CORREÇÃO 4: DADOS COMPLETOS (preencher campos faltantes)
     // ═══════════════════════════════════════════════════════════════
-    if (!qualityReport.dados_completos && qualityReport.campos_faltantes?.length > 0) {
-      console.log('[AUTO-FIX] 🔧 Preenchendo campos faltantes:', qualityReport.campos_faltantes);
+    const camposFaltantes = qualityReport.campos_faltantes || [];
+    if (!qualityReport.dados_completos && camposFaltantes.length > 0) {
+      console.log('[AUTO-FIX] 🔧 Preenchendo campos faltantes:', camposFaltantes);
 
-      const camposFaltantes = qualityReport.campos_faltantes;
       let petitionComDados = petition;
 
       // Buscar dados da procuração

@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+import { validateRequest, createValidationErrorResponse, caseIdSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +16,9 @@ serve(async (req) => {
 
   try {
     console.log('[JURISPRUDENCE] Iniciando busca de jurisprudência');
-    const { caseId } = await req.json();
+    const body = await req.json();
+    const validated = validateRequest(caseIdSchema, body);
+    const { caseId } = validated;
     console.log('[JURISPRUDENCE] CaseID:', caseId);
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -405,10 +409,13 @@ Retorne JSON com NO MÁXIMO 3 de cada tipo:
     }
 
   } catch (error) {
-    console.error('Error in search-jurisprudence:', error);
+    if (error instanceof z.ZodError) {
+      return createValidationErrorResponse(error, corsHeaders);
+    }
+    console.error('[JURISPRUDENCE] Error:', error);
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      code: 'INTERNAL_ERROR'
+      error: 'Erro ao buscar jurisprudência',
+      code: 'SEARCH_ERROR'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

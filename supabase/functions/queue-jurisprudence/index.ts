@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { validateRequest, createValidationErrorResponse, caseIdSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    const { caseId } = await req.json();
+    const body = await req.json();
+    const validated = validateRequest(caseIdSchema, body);
+    const { caseId } = validated;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -59,9 +63,13 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in queue-jurisprudence:', error);
+    if (error instanceof z.ZodError) {
+      return createValidationErrorResponse(error, corsHeaders);
+    }
+    console.error('[QUEUE-JURISPRUDENCE] Error:', error);
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Erro ao adicionar à fila',
+      code: 'QUEUE_ERROR'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

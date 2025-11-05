@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { corsHeaders } from "../_shared/cors.ts";
 import { callLovableAI } from "../_shared/ai-helpers.ts";
 import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
+import { validateRequest, createValidationErrorResponse, applyAdaptationsSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -10,7 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { caseId, appellateAnalysis } = await req.json();
+    const body = await req.json();
+    const validated = validateRequest(applyAdaptationsSchema, body);
+    const { caseId, appellateAnalysis } = validated;
     
     console.log('[APPLY-APPELLATE] Aplicando adaptações recursivas:', {
       caseId,

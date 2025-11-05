@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
+import { validateRequest, createValidationErrorResponse, applyCorrectionsSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,7 +19,9 @@ serve(async (req) => {
 
   try {
     console.log('[EDGE] Parsing request body...');
-    const { petition, judgeAnalysis, caseId, contextDocuments, tentativaInfo } = await req.json();
+    const body = await req.json();
+    const validated = validateRequest(applyCorrectionsSchema, body);
+    const { petition, judgeAnalysis, caseId, contextDocuments, tentativaInfo } = validated;
     console.log('[EDGE] Petition length:', petition?.length);
     console.log('[EDGE] JudgeAnalysis exists:', !!judgeAnalysis);
     console.log('[EDGE] JudgeAnalysis brechas:', judgeAnalysis?.brechas?.length || 0);
@@ -203,7 +207,9 @@ ${METODO_KEYLA_BELIDO_PROMPT}
 1. **Documentos com numeração errada:**
    → LOCALIZE a seção "Das Provas" ou "Documentos Anexos"
    → REESCREVA COMPLETAMENTE usando esta lista EXATA:
-${contextDocuments?.split('\n').slice(0, 10).join('\n') || '(documentos não fornecidos)'}
+${Array.isArray(contextDocuments) 
+  ? contextDocuments.slice(0, 10).map((doc: any) => `- ${doc.nome || doc.name} (Tipo: ${doc.tipo || doc.type})`).join('\n')
+  : '(documentos não fornecidos)'}
 
 2. **Benefício anterior não fundamentado:**
    → ADICIONE parágrafo após mencionar benefícios anteriores:
@@ -221,9 +227,9 @@ ${contextDocuments?.split('\n').slice(0, 10).join('\n') || '(documentos não for
    → MENCIONE explicitamente cada documento necessário na seção de provas
    → JUSTIFIQUE por que cada documento comprova o alegado
 
-${tentativaInfo?.numero > 1 ? `
+${tentativaInfo && (tentativaInfo.numero || tentativaInfo.tentativa) > 1 ? `
 ═══════════════════════════════════════════════════════════════
-⚠️ ATENÇÃO: Esta é a TENTATIVA ${tentativaInfo.numero} de ${3}!
+⚠️ ATENÇÃO: Esta é a TENTATIVA ${tentativaInfo.numero || tentativaInfo.tentativa} de ${tentativaInfo.maxTentativas}!
 
 As seguintes correções NÃO foram aplicadas na tentativa anterior.
 VOCÊ PRECISA APLICÁ-LAS AGORA DE FORMA CLARA E VERIFICÁVEL:

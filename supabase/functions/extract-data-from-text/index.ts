@@ -1,10 +1,23 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Schema for extract-data-from-text with multiple extraction types
+const extractDataFlexibleSchema = z.object({
+  text: z.string().min(10, 'Texto muito curto').max(100000, 'Texto muito longo').optional(),
+  image: z.string().optional(),
+  extractionType: z.enum(['terra', 'processo_administrativo', 'historico_escolar', 'declaracao_saude_ubs'], {
+    errorMap: () => ({ message: 'Tipo de extração inválido' })
+  }),
+  caseId: z.string().uuid().optional(),
+}).refine(data => data.text || data.image, {
+  message: 'Texto ou imagem deve ser fornecido'
+});
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -12,11 +25,9 @@ serve(async (req) => {
   }
 
   try {
-    const { text, image, extractionType } = await req.json();
-    
-    if ((!text && !image) || !extractionType) {
-      throw new Error("Parâmetros 'text' ou 'image' e 'extractionType' são obrigatórios");
-    }
+    const body = await req.json();
+    const validated = extractDataFlexibleSchema.parse(body);
+    const { text, image, extractionType } = validated;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
@@ -221,10 +232,27 @@ Retorne APENAS o JSON, sem explicações adicionais.`;
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    console.error('Error in extract-data-from-text:', error);
+    if (error instanceof z.ZodError) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Validação de entrada falhou',
+          details: error.errors.map(e => ({
+            field: e.path.join('.') || 'body',
+            message: e.message,
+          })),
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    console.error('[EXTRACT-DATA] Error:', error);
     return new Response(JSON.stringify({ 
       success: false, 
-      error: error.message 
+      error: 'Erro ao extrair dados',
+      code: 'EXTRACTION_ERROR'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

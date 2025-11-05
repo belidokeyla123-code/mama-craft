@@ -1,5 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateRequest, createValidationErrorResponse, voiceToTextSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,11 +44,9 @@ serve(async (req) => {
   }
 
   try {
-    const { audio } = await req.json();
-    
-    if (!audio) {
-      throw new Error('No audio data provided');
-    }
+    const body = await req.json();
+    const validated = validateRequest(voiceToTextSchema, body);
+    const { audio } = validated;
 
     console.log('Processing audio for transcription...');
 
@@ -89,9 +89,15 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in voice-to-text:', error);
+    if (error instanceof z.ZodError) {
+      return createValidationErrorResponse(error, corsHeaders);
+    }
+    console.error('[VOICE-TO-TEXT] Error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ 
+        error: 'Erro ao processar áudio',
+        code: 'PROCESSING_ERROR'
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

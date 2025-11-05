@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.76.1';
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+import { validateRequest, createValidationErrorResponse, teseJuridicaSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,7 +63,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-const { caseId, selectedJurisprudencias, selectedSumulas, selectedDoutrinas } = await req.json();
+    const body = await req.json();
+    const validated = validateRequest(teseJuridicaSchema, body);
+    const { caseId, selectedJurisprudencias, selectedSumulas, selectedDoutrinas } = validated;
     
     // Extrair links das jurisprudências
     const jurisLinks = (selectedJurisprudencias || []).map((j: any) => j.link).filter(Boolean);
@@ -284,8 +288,14 @@ AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes
     }
 
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return createValidationErrorResponse(error, corsHeaders);
+    }
     console.error('[TESE] Erro:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ 
+      error: 'Erro ao gerar teses jurídicas',
+      code: 'TESE_GENERATION_ERROR'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

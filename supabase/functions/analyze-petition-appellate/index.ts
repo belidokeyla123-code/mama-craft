@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateRequest, createValidationErrorResponse, petitionAnalysisSchema } from '../_shared/validators.ts';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const { petition, caseInfo, documents, analysis, jurisprudence, tese, judgeAnalysis } = await req.json();
+    const body = await req.json();
+    const validated = validateRequest(petitionAnalysisSchema, body);
+    const { petition, caseId, contextDocuments } = validated;
+    
+    // Extract additional fields
+    const { caseInfo, documents, analysis, jurisprudence, tese, judgeAnalysis } = body;
 
     const prompt = `Você é um ADVOGADO ESPECIALISTA EM RECURSOS PARA TURMA NACIONAL DE UNIFORMIZAÇÃO (TNU).
 
