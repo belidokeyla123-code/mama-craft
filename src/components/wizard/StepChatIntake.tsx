@@ -254,6 +254,67 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     return labels[docType] || '📎 Documento';
   };
 
+  // 🔒 Validar e garantir que case_assignment existe antes de upload
+  const ensureCaseAssignment = async (caseId: string, userId: string): Promise<boolean> => {
+    try {
+      console.log('[ASSIGNMENT] 🔍 Verificando case_assignment...', { caseId, userId });
+
+      // 1. Verificar se já existe
+      const { data: existing, error: checkError } = await supabase
+        .from('case_assignments')
+        .select('id')
+        .eq('case_id', caseId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('[ASSIGNMENT] ❌ Erro ao verificar:', checkError);
+        throw checkError;
+      }
+
+      if (existing) {
+        console.log('[ASSIGNMENT] ✅ Assignment já existe:', existing.id);
+        return true;
+      }
+
+      // 2. Criar se não existir
+      console.log('[ASSIGNMENT] ➕ Criando assignment...');
+      const { error: insertError } = await supabase
+        .from('case_assignments')
+        .insert({
+          case_id: caseId,
+          user_id: userId
+        });
+
+      if (insertError && insertError.code !== '23505') {
+        console.error('[ASSIGNMENT] ❌ Erro ao criar:', insertError);
+        throw new Error(`Falha ao atribuir caso: ${insertError.message}`);
+      }
+
+      // 3. Aguardar e validar que foi criado
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      const { data: validated, error: validateError } = await supabase
+        .from('case_assignments')
+        .select('id')
+        .eq('case_id', caseId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (validateError || !validated) {
+        console.error('[ASSIGNMENT] ❌ Falha na validação:', validateError);
+        throw new Error('Assignment não foi criado corretamente');
+      }
+
+      console.log('[ASSIGNMENT] ✅ Assignment criado e validado:', validated.id);
+      return true;
+
+    } catch (error) {
+      console.error('[ASSIGNMENT] ❌ Erro crítico:', error);
+      return false;
+    }
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const validFiles: File[] = [];
@@ -338,6 +399,18 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       
       console.log('[CHAT] 👤 User Roles:', { roles, rolesError });
 
+      // 🔒 VALIDAÇÃO CRÍTICA: Garantir case_assignment antes de qualquer upload
+      if (data.caseId) {
+        console.log('[CHAT] 🔒 Validando case_assignment antes do upload...');
+        const assignmentValid = await ensureCaseAssignment(data.caseId, session.user.id);
+        
+        if (!assignmentValid) {
+          throw new Error('Não foi possível atribuir o caso ao usuário. Tente novamente.');
+        }
+        
+        console.log('[CHAT] ✅ Case_assignment validado - prosseguindo com upload');
+      }
+
       // Criar um caso temporário se não existir
       let caseId = data.caseId;
       if (!caseId) {
@@ -393,31 +466,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         console.log('[CHAT] ✅ Caso completo carregado:', newCase);
         updateData({ caseId });
 
-        // ✅ SOLUÇÃO: Criar case_assignment EXPLICITAMENTE antes do upload
-        console.log('[CHAT] 👤 Criando case_assignment explicitamente...');
-        const { error: assignmentError } = await supabase
-          .from("case_assignments")
-          .insert({
-            case_id: caseId,
-            user_id: session?.user?.id
-          });
-
-        // Ignorar erro de duplicata (código 23505) - trigger pode ter criado também
-        if (assignmentError && assignmentError.code !== '23505') {
-          console.error('[CHAT] ❌ Erro ao criar assignment:', assignmentError);
-          throw new Error("Falha ao atribuir caso ao usuário");
+        // 🔒 Garantir case_assignment usando função validada
+        console.log('[CHAT] 🔒 Garantindo case_assignment para novo caso...');
+        const assignmentValid = await ensureCaseAssignment(caseId, session.user.id);
+        
+        if (!assignmentValid) {
+          throw new Error('Falha ao atribuir caso ao usuário');
         }
-
-        if (assignmentError?.code === '23505') {
-          console.log('[CHAT] ℹ️ Assignment já existe (criado pelo trigger)');
-        } else {
-          console.log('[CHAT] ✅ Case assignment criado explicitamente');
-        }
-
-        // Aguardar commit da transação (100ms)
-        console.log('[CHAT] ⏳ Aguardando commit da transação...');
-        await new Promise(resolve => setTimeout(resolve, 100));
-        console.log('[CHAT] ✅ Pronto para upload de documentos');
+        
+        console.log('[CHAT] ✅ Case_assignment validado - pronto para upload');
       }
 
       // Função para normalizar nome de arquivo (remove extensão, sufixo de página, truncation DOS 8.3)
