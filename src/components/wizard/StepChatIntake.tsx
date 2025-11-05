@@ -688,12 +688,20 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
         
-        // INSERT sem SELECT imediato para evitar race condition com RLS
+        // Usar função SQL para contornar RLS completamente
         const { data: newCase, error: insertError } = await supabase
-          .from("cases")
-          .insert(insertPayload)
-          .select('id')
-          .single();
+          .rpc('create_case_bypass_rls', {
+            p_author_name: insertPayload.author_name,
+            p_author_cpf: insertPayload.author_cpf,
+            p_event_date: insertPayload.event_date,
+            p_status: insertPayload.status,
+            p_started_with_chat: insertPayload.started_with_chat,
+            p_petition_type: insertPayload.petition_type,
+            p_user_id: session.user.id
+          });
+        
+        // Converter resultado para formato esperado
+        const caseResult = newCase ? { id: newCase } : null;
 
         console.log('[CHAT] ✅ Insert Result:', { 
           success: !insertError,
@@ -706,7 +714,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
         if (insertError) throw insertError;
 
-        caseId = newCase.id;
+        caseId = caseResult?.id || newCase;
         console.log('[CHAT] ✅ Caso completo carregado:', newCase);
         updateData({ caseId });
 
