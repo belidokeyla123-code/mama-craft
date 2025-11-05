@@ -543,7 +543,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             if (uploadError) throw uploadError;
 
             // Salvar registro do documento
-            const { data: doc, error: docError } = await supabase
+            console.log('[CHAT-DOC] 📄 Inserindo documento:', {
+              fileName: pageFile.name,
+              caseId,
+              fileSize: pageFile.size,
+              filePath: fileName
+            });
+
+            // 1. INSERT puro (sem SELECT imediato para evitar race condition)
+            const { error: docError } = await supabase
               .from("documents")
               .insert({
                 case_id: caseId,
@@ -552,11 +560,43 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 file_size: pageFile.size,
                 mime_type: pageFile.type,
                 document_type: "outro" as any, // ✅ Será atualizado após análise
-              })
-              .select()
+              });
+
+            console.log('[CHAT-DOC] ✅ Documento inserido:', {
+              success: !docError,
+              error: docError?.message
+            });
+
+            if (docError) {
+              console.error('[CHAT-DOC] ❌ Erro no INSERT:', docError);
+              throw docError;
+            }
+            
+            // 2. Aguardar transação completar (200ms)
+            console.log('[CHAT-DOC] ⏳ Aguardando transação completar...');
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // 3. Buscar documento recém-inserido
+            console.log('[CHAT-DOC] 🔍 Buscando documento inserido...');
+            const { data: doc, error: fetchError } = await supabase
+              .from("documents")
+              .select('*')
+              .eq('case_id', caseId)
+              .eq('file_path', fileName)
+              .order('uploaded_at', { ascending: false })
+              .limit(1)
               .single();
 
-            if (docError) throw docError;
+            console.log('[CHAT-DOC] 📋 Documento encontrado:', {
+              success: !!doc,
+              docId: doc?.id,
+              error: fetchError?.message
+            });
+
+            if (fetchError) {
+              console.error('[CHAT-DOC] ❌ Erro ao buscar documento:', fetchError);
+              throw fetchError;
+            }
             
             console.log(`[SEQUENTIAL] ✓ Upload completo, ID: ${doc.id}`);
             
@@ -580,15 +620,25 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               continue;
             }
             
+            // 4. Análise com AI
+            console.log('[CHAT-DOC] 🤖 Iniciando análise com AI...');
             const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
               "analyze-single-document",
               {
                 body: {
                   documentId: doc.id,
                   caseId: caseId
+                },
+                headers: {
+                  Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
                 }
               }
             );
+            
+            console.log('[CHAT-DOC] 📊 Resultado da análise:', {
+              success: !!analysisResult,
+              error: analysisError?.message
+            });
             
             if (analysisError) {
               console.error(`[SEQUENTIAL] ⚠️ Erro na análise${pageNum}:`, analysisError);
