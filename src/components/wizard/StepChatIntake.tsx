@@ -480,16 +480,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       // 🆕 PROCESSAMENTO SEQUENCIAL: Arquivo por arquivo
       console.log("[SEQUENTIAL] 🚀 Iniciando processamento sequencial de", filesToUpload.length, "arquivos");
       
-      // Buscar nome da autora para criar a pasta
-      const { data: caseInfo, error: caseError } = await supabase
-        .from("cases")
-        .select("author_name")
-        .eq("id", caseId)
-        .single();
-
-      if (caseError) throw caseError;
-      
-      const clientFolderName = caseInfo.author_name || `caso_${caseId.slice(0, 8)}`;
+      // ✅ Usar case_id como pasta para compatibilidade com RLS do Storage
+      const clientFolderName = caseId;
       
       let extractedData: any = {};
       let processedCount = 0;
