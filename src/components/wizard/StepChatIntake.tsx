@@ -315,6 +315,254 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     }
   };
 
+  /**
+   * 🎯 FASE 1: Consolidar TODAS as extrações de documentos do caso
+   * Faz merge inteligente de arrays, objetos e campos simples
+   */
+  const consolidateAllExtractions = async (caseId: string) => {
+    console.log('[Consolidation] Iniciando consolidação de extrações para caso:', caseId);
+    
+    // Buscar TODAS as extrações do caso
+    const { data: extractions, error } = await supabase
+      .from('extractions')
+      .select('entities, auto_filled_fields, periodos_rurais')
+      .eq('case_id', caseId)
+      .order('extracted_at', { ascending: true }); // Mais antigas primeiro
+
+    if (error) {
+      console.error('[Consolidation] Erro ao buscar extrações:', error);
+      return null;
+    }
+
+    if (!extractions || extractions.length === 0) {
+      console.log('[Consolidation] Nenhuma extração encontrada');
+      return null;
+    }
+
+    console.log(`[Consolidation] Consolidando ${extractions.length} extrações`);
+
+    // Objeto final consolidado
+    const consolidated: any = {
+      // Campos simples
+      author_name: null,
+      author_cpf: null,
+      author_rg: null,
+      author_birth_date: null,
+      author_address: null,
+      author_phone: null,
+      mother_cpf: null,
+      father_cpf: null,
+      father_name: null,
+      spouse_name: null,
+      spouse_cpf: null,
+      marriage_date: null,
+      nit: null,
+      birth_city: null,
+      birth_state: null,
+      
+      // Arrays para merge
+      school_history: [],
+      rural_periods: [],
+      urban_periods: [],
+      manual_benefits: [],
+      
+      // Objeto para merge
+      health_declaration_ubs: {},
+    };
+
+    // Iterar sobre TODAS as extrações
+    for (const extraction of extractions) {
+      const entities = (extraction.entities || {}) as any;
+      const autoFilled = (extraction.auto_filled_fields || {}) as any;
+      const periodosRurais = (extraction.periodos_rurais || []) as any[];
+
+      // ═══════════════════════════════════════════════════════════
+      // ESTRATÉGIA 1: Campos Simples - "Primeiro não-nulo vence"
+      // ═══════════════════════════════════════════════════════════
+      
+      // Nome e identificação
+      if (!consolidated.author_name && entities.nome_completo) {
+        consolidated.author_name = entities.nome_completo;
+      }
+      if (!consolidated.author_cpf && entities.cpf) {
+        consolidated.author_cpf = entities.cpf;
+      }
+      if (!consolidated.author_rg && entities.rg) {
+        consolidated.author_rg = entities.rg;
+      }
+      if (!consolidated.author_birth_date && entities.data_nascimento) {
+        consolidated.author_birth_date = entities.data_nascimento;
+      }
+      
+      // Endereço e contato
+      if (!consolidated.author_address && entities.endereco) {
+        consolidated.author_address = entities.endereco;
+      }
+      if (!consolidated.author_phone && entities.telefone) {
+        consolidated.author_phone = entities.telefone;
+      }
+      
+      // Pais e cônjuge
+      if (!consolidated.mother_cpf && entities.cpf_mae) {
+        consolidated.mother_cpf = entities.cpf_mae;
+      }
+      if (!consolidated.father_cpf && entities.cpf_pai) {
+        consolidated.father_cpf = entities.cpf_pai;
+      }
+      if (!consolidated.father_name && entities.nome_pai) {
+        consolidated.father_name = entities.nome_pai;
+      }
+      if (!consolidated.spouse_name && entities.nome_conjuge) {
+        consolidated.spouse_name = entities.nome_conjuge;
+      }
+      if (!consolidated.spouse_cpf && entities.cpf_conjuge) {
+        consolidated.spouse_cpf = entities.cpf_conjuge;
+      }
+      if (!consolidated.marriage_date && entities.data_casamento) {
+        consolidated.marriage_date = entities.data_casamento;
+      }
+      
+      // Previdência
+      if (!consolidated.nit && entities.nit) {
+        consolidated.nit = entities.nit;
+      }
+      if (!consolidated.birth_city && entities.cidade_nascimento) {
+        consolidated.birth_city = entities.cidade_nascimento;
+      }
+      if (!consolidated.birth_state && entities.estado_nascimento) {
+        consolidated.birth_state = entities.estado_nascimento;
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // ESTRATÉGIA 2: Arrays - Merge Inteligente com Deduplicação
+      // ═══════════════════════════════════════════════════════════
+      
+      // HISTÓRICO ESCOLAR
+      if (entities.historico_escolar && Array.isArray(entities.historico_escolar)) {
+        consolidated.school_history.push(...entities.historico_escolar);
+      }
+      
+      // PERÍODOS RURAIS (3 fontes possíveis)
+      if (periodosRurais && Array.isArray(periodosRurais)) {
+        consolidated.rural_periods.push(...periodosRurais);
+      }
+      if (entities.periodos_rurais && Array.isArray(entities.periodos_rurais)) {
+        consolidated.rural_periods.push(...entities.periodos_rurais);
+      }
+      if (autoFilled.rural_periods && Array.isArray(autoFilled.rural_periods)) {
+        consolidated.rural_periods.push(...autoFilled.rural_periods);
+      }
+      
+      // PERÍODOS URBANOS
+      if (entities.periodos_urbanos && Array.isArray(entities.periodos_urbanos)) {
+        consolidated.urban_periods.push(...entities.periodos_urbanos);
+      }
+      if (autoFilled.urban_periods && Array.isArray(autoFilled.urban_periods)) {
+        consolidated.urban_periods.push(...autoFilled.urban_periods);
+      }
+      
+      // BENEFÍCIOS MANUAIS
+      if (entities.beneficios && Array.isArray(entities.beneficios)) {
+        consolidated.manual_benefits.push(...entities.beneficios);
+      }
+      if (autoFilled.manual_benefits && Array.isArray(autoFilled.manual_benefits)) {
+        consolidated.manual_benefits.push(...autoFilled.manual_benefits);
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // ESTRATÉGIA 3: Objeto - Deep Merge
+      // ═══════════════════════════════════════════════════════════
+      
+      // DECLARAÇÃO DE SAÚDE UBS
+      if (entities.declaracao_saude_ubs && typeof entities.declaracao_saude_ubs === 'object') {
+        consolidated.health_declaration_ubs = {
+          ...consolidated.health_declaration_ubs,
+          ...entities.declaracao_saude_ubs
+        };
+      }
+      if (autoFilled.health_declaration_ubs && typeof autoFilled.health_declaration_ubs === 'object') {
+        consolidated.health_declaration_ubs = {
+          ...consolidated.health_declaration_ubs,
+          ...autoFilled.health_declaration_ubs
+        };
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PÓS-PROCESSAMENTO: Deduplicação e Ordenação
+    // ═══════════════════════════════════════════════════════════
+    
+    // HISTÓRICO ESCOLAR: Remover duplicatas por ano + escola
+    if (consolidated.school_history.length > 0) {
+      const uniqueSchool = new Map();
+      consolidated.school_history.forEach((entry: any) => {
+        const key = `${entry.ano}-${entry.escola}`;
+        if (!uniqueSchool.has(key)) {
+          uniqueSchool.set(key, entry);
+        }
+      });
+      consolidated.school_history = Array.from(uniqueSchool.values())
+        .sort((a: any, b: any) => (a.ano || 0) - (b.ano || 0)); // Ordenar por ano
+    }
+    
+    // PERÍODOS RURAIS: Remover duplicatas por data_inicio + data_fim
+    if (consolidated.rural_periods.length > 0) {
+      const uniqueRural = new Map();
+      consolidated.rural_periods.forEach((period: any) => {
+        const key = `${period.data_inicio}-${period.data_fim}`;
+        if (!uniqueRural.has(key)) {
+          uniqueRural.set(key, period);
+        }
+      });
+      consolidated.rural_periods = Array.from(uniqueRural.values())
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.data_inicio || '1900-01-01');
+          const dateB = new Date(b.data_inicio || '1900-01-01');
+          return dateA.getTime() - dateB.getTime();
+        });
+    }
+    
+    // PERÍODOS URBANOS: Remover duplicatas
+    if (consolidated.urban_periods.length > 0) {
+      const uniqueUrban = new Map();
+      consolidated.urban_periods.forEach((period: any) => {
+        const key = `${period.data_inicio}-${period.data_fim}`;
+        if (!uniqueUrban.has(key)) {
+          uniqueUrban.set(key, period);
+        }
+      });
+      consolidated.urban_periods = Array.from(uniqueUrban.values())
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.data_inicio || '1900-01-01');
+          const dateB = new Date(b.data_inicio || '1900-01-01');
+          return dateA.getTime() - dateB.getTime();
+        });
+    }
+    
+    // BENEFÍCIOS: Remover duplicatas por NB
+    if (consolidated.manual_benefits.length > 0) {
+      const uniqueBenefits = new Map();
+      consolidated.manual_benefits.forEach((benefit: any) => {
+        const key = benefit.nb || benefit.benefit_type;
+        if (!uniqueBenefits.has(key)) {
+          uniqueBenefits.set(key, benefit);
+        }
+      });
+      consolidated.manual_benefits = Array.from(uniqueBenefits.values());
+    }
+
+    console.log('[Consolidation] Dados consolidados:', {
+      campos_simples: Object.keys(consolidated).filter(k => consolidated[k] && !Array.isArray(consolidated[k]) && typeof consolidated[k] !== 'object'),
+      school_history_count: consolidated.school_history.length,
+      rural_periods_count: consolidated.rural_periods.length,
+      urban_periods_count: consolidated.urban_periods.length,
+      manual_benefits_count: consolidated.manual_benefits.length,
+      has_health_declaration: Object.keys(consolidated.health_declaration_ubs).length > 0
+    });
+
+    return consolidated;
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const validFiles: File[] = [];
@@ -359,6 +607,12 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   };
 
   const processDocuments = async (files: File[]) => {
+    console.log('[ProcessDocuments] ═══════════════════════════════════════════');
+    console.log('[ProcessDocuments] Iniciando processamento de documentos');
+    console.log('[ProcessDocuments] Files:', files.length);
+    console.log('[ProcessDocuments] Existing case ID:', data.caseId);
+    console.log('[ProcessDocuments] ═══════════════════════════════════════════');
+    
     // Verificar se existe versão final antes de processar
     if (data.caseId) {
       const { data: finalDraft } = await supabase
@@ -1074,55 +1328,89 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         console.log('[CHAT] Dados extraídos:', extractedData);
         
         try {
-          // ✅ CORREÇÃO #1: Buscar dados ATUAIS antes de atualizar
-          const { data: currentCase } = await supabase
-            .from('cases')
-            .select('author_cpf, author_name, author_birth_date, mother_cpf, father_cpf')
-            .eq('id', caseId)
-            .single();
+          console.log('[ProcessDocuments] Iniciando consolidação de TODAS as extrações');
 
-          console.log('[CHAT] Dados atuais do banco:', currentCase);
-          
-          const { error: updateError } = await supabase
-            .from('cases')
-            .update({
-              // ✅ Priorizar: extractedData.authorCpf > banco > data.authorCpf > fallback
-              author_name: extractedData.authorName || currentCase?.author_name || data.authorName || 'Processando...',
-              author_cpf: extractedData.authorCpf || currentCase?.author_cpf || data.authorCpf || '00000000000',
-              author_rg: extractedData.authorRg || data.authorRg,
-              author_birth_date: extractedData.authorBirthDate || currentCase?.author_birth_date || data.authorBirthDate,
-              author_address: extractedData.authorAddress || data.authorAddress,
-              author_marital_status: extractedData.maritalStatus || data.authorMaritalStatus,
-              
-              // ✅ SEPARAR: CPFs da mãe/pai (não confundir com autora)
-              mother_cpf: extractedData.motherCpf || data.motherCpf,
-              father_cpf: extractedData.fatherCpf || data.fatherCpf,
-              
-              child_name: extractedData.childName || data.childName,
-              child_birth_date: extractedData.childBirthDate || data.childBirthDate,
-              event_date: extractedData.childBirthDate || data.eventDate || new Date().toISOString().split('T')[0],
-              father_name: extractedData.fatherName || data.fatherName,
-              land_owner_name: extractedData.landOwnerName || data.landOwnerName,
-              land_owner_cpf: extractedData.landOwnerCpf || data.landOwnerCpf,
-              land_owner_rg: extractedData.landOwnerRg || data.landOwnerRg,
-              land_ownership_type: extractedData.landOwnershipType || data.landOwnershipType,
-              rural_activity_since: extractedData.ruralActivitySince || data.ruralActivitySince,
-              family_members: extractedData.familyMembers as any || data.familyMembers,
-              has_ra: !!extractedData.raProtocol || data.hasRa,
-              ra_protocol: extractedData.raProtocol || data.raProtocol,
-              ra_request_date: extractedData.raRequestDate || data.raRequestDate,
-              ra_denial_date: extractedData.raDenialDate || data.raDenialDate,
-              ra_denial_reason: extractedData.raDenialReason || data.raDenialReason,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', caseId);
+          // 🎯 FASE 1: Consolidar TODAS as extrações (incluindo sessões anteriores)
+          const consolidatedData = await consolidateAllExtractions(caseId);
 
-          if (updateError) {
-            console.error('[CHAT] Erro ao salvar no banco:', updateError);
-            throw updateError;
+          if (!consolidatedData) {
+            console.warn('[ProcessDocuments] Falha na consolidação, usando dados locais apenas');
+            // Fallback: usar apenas dados do batch atual
+            const extractedDataLocal = extractedData;
+            
+            if (Object.keys(extractedDataLocal).length > 0) {
+              console.log('[ProcessDocuments] Atualizando caso com dados do batch atual:', Object.keys(extractedDataLocal));
+              
+              const { error: caseError } = await supabase
+                .from('cases')
+                .update({
+                  author_name: extractedDataLocal.authorName || data.authorName,
+                  author_cpf: extractedDataLocal.authorCpf || data.authorCpf,
+                  author_rg: extractedDataLocal.authorRg || data.authorRg,
+                  author_birth_date: extractedDataLocal.authorBirthDate || data.authorBirthDate,
+                  author_address: extractedDataLocal.authorAddress || data.authorAddress,
+                  author_marital_status: extractedDataLocal.maritalStatus || data.authorMaritalStatus,
+                  mother_cpf: extractedDataLocal.motherCpf || data.motherCpf,
+                  father_cpf: extractedDataLocal.fatherCpf || data.fatherCpf,
+                  child_name: extractedDataLocal.childName || data.childName,
+                  child_birth_date: extractedDataLocal.childBirthDate || data.childBirthDate,
+                  event_date: extractedDataLocal.childBirthDate || data.eventDate || new Date().toISOString().split('T')[0],
+                  father_name: extractedDataLocal.fatherName || data.fatherName,
+                  land_owner_name: extractedDataLocal.landOwnerName || data.landOwnerName,
+                  land_owner_cpf: extractedDataLocal.landOwnerCpf || data.landOwnerCpf,
+                  land_owner_rg: extractedDataLocal.landOwnerRg || data.landOwnerRg,
+                  land_ownership_type: extractedDataLocal.landOwnershipType || data.landOwnershipType,
+                  rural_activity_since: extractedDataLocal.ruralActivitySince || data.ruralActivitySince,
+                  family_members: extractedDataLocal.familyMembers as any || data.familyMembers,
+                  has_ra: !!extractedDataLocal.raProtocol || data.hasRa,
+                  ra_protocol: extractedDataLocal.raProtocol || data.raProtocol,
+                  ra_request_date: extractedDataLocal.raRequestDate || data.raRequestDate,
+                  ra_denial_date: extractedDataLocal.raDenialDate || data.raDenialDate,
+                  ra_denial_reason: extractedDataLocal.raDenialReason || data.raDenialReason,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', caseId);
+
+              if (caseError) {
+                console.error('[ProcessDocuments] Erro ao atualizar caso:', caseError);
+                toast({
+                  title: "Erro ao salvar",
+                  description: "Erro ao salvar informações extraídas",
+                  variant: "destructive",
+                });
+              }
+            }
+          } else {
+            // Sucesso: usar dados consolidados de TODAS as sessões
+            console.log('[ProcessDocuments] Atualizando caso com dados consolidados de todas as sessões');
+            
+            const { error: caseError } = await supabase
+              .from('cases')
+              .update(consolidatedData)
+              .eq('id', caseId);
+
+            if (caseError) {
+              console.error('[ProcessDocuments] Erro ao atualizar caso com dados consolidados:', caseError);
+              toast({
+                title: "Erro ao salvar informações",
+                description: "Erro ao consolidar dados extraídos",
+                variant: "destructive",
+              });
+            } else {
+              console.log('[ProcessDocuments] ✅ Caso atualizado com sucesso com dados consolidados');
+              
+              // Mostrar feedback ao usuário sobre o que foi consolidado
+              const updatedFields = Object.keys(consolidatedData).filter(k => consolidatedData[k]);
+              if (updatedFields.length > 0) {
+                toast({
+                  title: "Dados consolidados",
+                  description: `${updatedFields.length} campos atualizados com sucesso`,
+                });
+              }
+            }
           }
 
-          console.log('[CHAT] ✅ Dados salvos no banco com sucesso');
+          console.log('[ProcessDocuments] ✅ Consolidação concluída');
           
           // ✅ FASE 2: DISPARAR SYNC APÓS EXTRAÇÃO
           console.log('[CHAT] ✅ Dados salvos, disparando sync...');
