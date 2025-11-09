@@ -243,10 +243,22 @@ Use "medium" para documentos complementares.`;
 
       let aiData;
       try {
-        const responseText = await aiResponse.text();
+        let responseText = await aiResponse.text();
         if (!responseText || responseText.trim() === '') {
           throw new Error('AI response is empty');
         }
+        
+        // Limpar markdown code blocks da resposta completa
+        responseText = responseText.trim();
+        if (responseText.startsWith('```')) {
+          const lines = responseText.split('\n');
+          // Remove primeira linha (```json ou ```)
+          if (lines[0].startsWith('```')) lines.shift();
+          // Remove última linha se for ```)
+          if (lines[lines.length - 1].trim() === '```') lines.pop();
+          responseText = lines.join('\n');
+        }
+        
         aiData = JSON.parse(responseText);
       } catch (parseError) {
         console.error('Error parsing AI response:', parseError);
