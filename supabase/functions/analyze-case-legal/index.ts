@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
-import { parseJSONResponse } from "../_shared/ai-helpers.ts";
+import { callLovableAI, parseJSONResponse } from "../_shared/ai-helpers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -217,64 +217,16 @@ Considere:
 - Verifique idade e qualidade da MÃE na data do evento (child_birth_date)
 - Jurisprudência aplicável: TNU, Pedido 0502723-87.2015.4.05.8300 (restabelecimento)`;
 
-    // ✅ Usar OpenAI API em vez de Lovable AI
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY não configurada');
-    }
-    
-    console.log('[ANALYZE] Usando OpenAI API com modelo gpt-4o-mini');
-    
-    // Timeout de 30 segundos (otimizado para casos com muitos documentos)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    console.log('[ANALYZE] Usando callLovableAI helper com modelo gpt-4o-mini');
 
     try {
-      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
-          response_format: { type: "json_object" }
-        }),
-        signal: controller.signal,
+      const aiResult = await callLovableAI(prompt, {
+        model: 'gpt-4o-mini',
+        responseFormat: 'json_object',
+        timeout: 30000
       });
 
-      clearTimeout(timeoutId);
-
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ 
-          error: 'Rate limit atingido. Aguarde alguns segundos e tente novamente.',
-          code: 'RATE_LIMIT'
-        }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ 
-          error: 'Créditos Lovable AI esgotados. Adicione mais créditos.',
-          code: 'NO_CREDITS'
-        }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (!aiResponse.ok) {
-        const errorText = await aiResponse.text();
-        console.error('AI API error:', aiResponse.status, errorText);
-        throw new Error(`AI API error: ${aiResponse.status}`);
-      }
-
-      const aiData = await aiResponse.json();
-      const analysisResult = parseJSONResponse<any>(aiData.choices[0].message.content);
+      const analysisResult = parseJSONResponse<any>(aiResult.content);
 
       // ✅ PÓS-PROCESSAMENTO: Filtrar benefícios anteriores rigorosamente
       if (analysisResult.cnis_analysis?.beneficios_anteriores) {
@@ -350,9 +302,27 @@ Considere:
       return new Response(JSON.stringify(analysisResult), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
+    } catch (aiError: any) {
+      // Handle specific AI errors
+      if (aiError.message?.includes('RATE_LIMIT')) {
+        return new Response(JSON.stringify({ 
+          error: 'Rate limit atingido. Aguarde alguns segundos e tente novamente.',
+          code: 'RATE_LIMIT'
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (aiError.message?.includes('NO_CREDITS')) {
+        return new Response(JSON.stringify({ 
+          error: 'Créditos OpenAI esgotados. Verifique sua conta.',
+          code: 'NO_CREDITS'
+        }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (aiError.message?.includes('TIMEOUT')) {
         return new Response(JSON.stringify({ 
           error: 'Timeout: Análise demorou muito. Tente com menos documentos.',
           code: 'TIMEOUT'
@@ -361,7 +331,7 @@ Considere:
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      throw fetchError;
+      throw aiError;
     }
 
   } catch (error) {
