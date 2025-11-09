@@ -98,3 +98,9 @@ verify_jwt = true
 
 [functions.cleanup-case-documents]
 verify_jwt = true
+
+[functions.chat-assistant]
+verify_jwt = true
+
+[functions.extract-contract-value]
+verify_jwt = true
