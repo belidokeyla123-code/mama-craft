@@ -145,14 +145,14 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
     
     const { data: extraction, error } = await supabase
       .from('extractions')
-      .select('extracted_data')
+      .select('entities')
       .eq('case_id', data.caseId)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
     
-    if (!error && extraction?.extracted_data) {
-      setExtractedData(extraction.extracted_data);
+    if (!error && extraction?.entities) {
+      setExtractedData(extraction.entities as any);
     }
   };
   

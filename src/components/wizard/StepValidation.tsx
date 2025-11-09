@@ -88,7 +88,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       
       if (!error && validation) {
         // Verificar se tem technical_analysis (versão nova)
-        const hasTechnicalAnalysis = validation.validation_details?.technical_analysis;
+        const hasTechnicalAnalysis = (validation.validation_details as any)?.technical_analysis;
         
         if (!hasTechnicalAnalysis) {
           console.log('[StepValidation] ⚠️ Validação antiga sem technical_analysis, re-validando...');
@@ -319,7 +319,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       <ValidationChecklistVisual 
         uploadedDocuments={documents}
         caseId={data.caseId}
-        technicalAnalysis={validationResult?.technical_analysis}
+        technicalAnalysis={(validationResult as any)?.technical_analysis}
         onDocumentAdded={async () => {
           // Recarregar documentos e re-validar
           await loadDocuments();
