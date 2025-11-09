@@ -3271,31 +3271,6 @@ ${tabelaDocumentos}
         
         <div className="flex items-center gap-3">
           {/* Botão Pipeline */}
-          <Button 
-            onClick={async () => {
-              if (!data.caseId) return;
-              const result = await runFullPipeline(data.caseId, true, true);
-              if (result?.success) {
-                toast.success('Pipeline concluído! Agora você pode gerar uma nova versão.');
-              }
-            }} 
-            disabled={isPipelineRunning || !data.caseId}
-            variant="outline"
-            className="gap-2"
-          >
-            {isPipelineRunning ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Pipeline ({Math.round(pipelineProgress)}%)
-              </>
-            ) : (
-              <>
-                <Zap className="h-4 w-4" />
-                Executar Pipeline
-              </>
-            )}
-          </Button>
-          
           {/* Botão Gerar Nova Versão */}
           <Button onClick={generatePetition} disabled={loading || isPipelineRunning} className="gap-2">
             {loading ? (
@@ -4300,22 +4275,6 @@ ${tabelaDocumentos}
                 <CheckCheck className="h-5 w-5" />
                 Protocolar Ação
               </>
-            )}
-          </Button>
-          <Button 
-            size="lg" 
-            variant="outline" 
-            onClick={handleProtocolar} 
-            disabled={!petition || isProtocoling}
-            className="gap-2"
-          >
-            {isProtocoling ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Protocolando...
-              </>
-            ) : (
-              "Marcar como Protocolada"
             )}
           </Button>
         </div>
