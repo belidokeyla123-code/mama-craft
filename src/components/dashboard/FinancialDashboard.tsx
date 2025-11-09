@@ -37,11 +37,27 @@ export default function FinancialDashboard() {
   });
   const [previousStats, setPreviousStats] = useState<FinancialStats | null>(null);
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [honorariosPrevistos, setHonorariosPrevistos] = useState(0);
 
   useEffect(() => {
     loadStats();
     loadMonthlyTrend();
+    loadHonorariosPrevistos();
   }, [periodo]);
+  
+  const loadHonorariosPrevistos = async () => {
+    try {
+      const { data: cases } = await supabase
+        .from('cases')
+        .select('contract_value')
+        .not('contract_value', 'is', null);
+      
+      const total = cases?.reduce((sum, c) => sum + (c.contract_value || 0), 0) || 0;
+      setHonorariosPrevistos(total);
+    } catch (error) {
+      console.error('Erro ao carregar honorários previstos:', error);
+    }
+  };
 
   const getPeriodoDates = () => {
     const now = new Date();
@@ -218,6 +234,34 @@ export default function FinancialDashboard() {
             <StatCard label="Derrotas" value={stats.total_sentencas_improcedentes} icon={XCircle} color="red" />
           </div>
 
+          {/* Card de Honorários Previstos vs Recebidos */}
+          <Card className="p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-2 border-blue-500/20">
+            <h3 className="text-lg font-semibold mb-4">💰 Honorários - Contratos vs Recebidos</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Previstos (Contratos)</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(honorariosPrevistos)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Total de todos os contratos</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Recebidos (Período)</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {formatCurrency(stats.valor_total_honorarios)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Já recebido neste período</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">A Receber</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {formatCurrency(Math.max(0, honorariosPrevistos - stats.valor_total_honorarios))}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Saldo pendente</p>
+              </div>
+            </div>
+          </Card>
+          
           {/* Card de Valores */}
           <Card className="p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-2 border-green-500/20">
             <h3 className="text-lg font-semibold mb-4">Financeiro do Período</h3>
