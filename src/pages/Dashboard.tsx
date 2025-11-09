@@ -139,6 +139,8 @@ export default function Dashboard() {
   const handleDeleteCase = async () => {
     if (!caseToDelete) return;
 
+    console.log('[DELETE] Iniciando exclusão do caso:', caseToDelete);
+
     try {
       // Buscar documentos do caso para excluir do storage
       const { data: documents } = await supabase
@@ -171,7 +173,12 @@ export default function Dashboard() {
         .delete()
         .eq("id", caseToDelete);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[DELETE] Erro ao excluir caso da tabela cases:', error);
+        throw error;
+      }
+
+      console.log('[DELETE] Caso excluído com sucesso!');
 
       toast({
         title: "Caso excluído",
@@ -181,7 +188,13 @@ export default function Dashboard() {
       // Atualizar lista
       await loadCases();
     } catch (error: any) {
-      console.error("Erro ao excluir caso:", error);
+      console.error('[DELETE] Erro completo:', error);
+      console.error('[DELETE] Detalhes:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       toast({
         title: "Erro ao excluir caso",
         description: error.message,
