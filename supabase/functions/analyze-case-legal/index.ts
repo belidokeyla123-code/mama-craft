@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+import { parseJSONResponse } from "../_shared/ai-helpers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -273,7 +274,7 @@ Considere:
       }
 
       const aiData = await aiResponse.json();
-      const analysisResult = JSON.parse(aiData.choices[0].message.content);
+      const analysisResult = parseJSONResponse<any>(aiData.choices[0].message.content);
 
       // ✅ PÓS-PROCESSAMENTO: Filtrar benefícios anteriores rigorosamente
       if (analysisResult.cnis_analysis?.beneficios_anteriores) {
