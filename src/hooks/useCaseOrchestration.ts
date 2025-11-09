@@ -71,6 +71,15 @@ export const useCaseOrchestration = ({ caseId, enabled }: OrchestrationOptions) 
 
         if (teseError) throw teseError;
       }
+
+      // 5. MINUTA (PETIÇÃO INICIAL)
+      const { error: minutaError } = await supabase.functions.invoke('generate-petition', {
+        body: { caseId }
+      });
+
+      if (minutaError) throw minutaError;
+
+      toast.success('✅ Pipeline completo! Validação → Análise → Jurisprudência → Teses → Minuta', { id: 'orchestration' });
     } catch (error: any) {
       console.error('[ORCHESTRATION] Erro:', error);
       toast.error(`Erro: ${error.message}`);

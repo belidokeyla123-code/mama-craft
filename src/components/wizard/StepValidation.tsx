@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 import { useTabSync } from "@/hooks/useTabSync";
+import { ValidationChecklistVisual } from "./ValidationChecklistVisual";
 
 interface StepValidationProps {
   data: CaseData;
@@ -268,8 +269,28 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const { score, is_sufficient, checklist, missing_docs, recommendations } = validationResult;
 
 
+  // Buscar documentos para o checklist visual
+  const [documents, setDocuments] = useState<any[]>([]);
+  
+  useEffect(() => {
+    if (data.caseId) {
+      loadDocuments();
+    }
+  }, [data.caseId]);
+  
+  const loadDocuments = async () => {
+    if (!data.caseId) return;
+    const { data: docs } = await supabase
+      .from('documents')
+      .select('document_type, file_name')
+      .eq('case_id', data.caseId);
+    if (docs) setDocuments(docs);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Checklist Visual Completo */}
+      <ValidationChecklistVisual uploadedDocuments={documents} />
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Score de Suficiência</h3>
