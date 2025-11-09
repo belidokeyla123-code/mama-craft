@@ -162,8 +162,22 @@ Valide se a documentação é suficiente para protocolar a ação. Retorne um JS
       "impact": "Como a falta disso impacta na ação"
     }
   ],
-  "recommendations": ["Recomendação 1", "Recomendação 2"]
+  "recommendations": ["Recomendação 1", "Recomendação 2"],
+  "technical_analysis": {
+    "atividade_10_meses": {
+      "status": "ok" | "missing" | "incomplete",
+      "details": "Análise detalhada: verificar CNIS + data do parto (${caseData.event_date}) + documentos de prova material. A autora comprovou atividade rural nos 10 meses anteriores ao parto?"
+    },
+    "prova_material": {
+      "status": "ok" | "missing" | "incomplete",
+      "details": "Análise detalhada: há notas fiscais, declarações, contratos, ITR, bloco de produtor, etc. em nome próprio OU do grupo familiar (cônjuge, pais)?"
+    }
+  }
 }
+
+🧠 **ANÁLISE TÉCNICA OBRIGATÓRIA**:
+1. **Carência de 10 meses**: Verifique se há documentos (CNIS, autodeclaração, notas fiscais, contratos) que comprovem atividade rural nos 10 meses anteriores à data do parto (${caseData.event_date}). Se o CNIS estiver vazio ou mostrar apenas atividade rural, isso é POSITIVO.
+2. **Prova Material**: Verifique se há documentos materiais (notas fiscais, ITR, bloco de produtor, contratos, declarações) em nome próprio da autora OU do grupo familiar (cônjuge, pais). Prova indireta (em nome de familiares) também é válida.
 
 ⚠️ **IMPORTANTE - VALORES DO ENUM para "doc_type"**:
 Use APENAS estes valores exatos (NÃO use nomes descritivos):

@@ -1,14 +1,85 @@
 import React from 'react';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Circle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, XCircle, Circle, Upload } from "lucide-react";
+import { useState, useRef } from "react";
 import { VALIDATION_CHECKLIST, getCategoryLabel, DocumentChecklistItem } from "@/config/validation-checklist";
 
 interface ValidationChecklistVisualProps {
   uploadedDocuments?: Array<{ document_type: string; file_name: string }>;
+  caseId?: string;
+  onDocumentAdded?: () => void;
+  technicalAnalysis?: {
+    atividade_10_meses?: { status: string; details: string };
+    prova_material?: { status: string; details: string };
+  };
 }
 
-export const ValidationChecklistVisual = ({ uploadedDocuments = [] }: ValidationChecklistVisualProps) => {
+export const ValidationChecklistVisual = ({ 
+  uploadedDocuments = [],
+  caseId,
+  onDocumentAdded,
+  technicalAnalysis 
+}: ValidationChecklistVisualProps) => {
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, item: DocumentChecklistItem) => {
+    const file = e.target.files?.[0];
+    if (!file || !caseId) return;
+
+    setUploadingItemId(item.id);
+
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_ANON_KEY
+      );
+
+      // Upload para o storage
+      const fileExt = file.name.split('.').pop();
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(7);
+      const fileName = `case_${caseId}/${timestamp}_${randomId}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('case-documents')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // Inserir documento na tabela
+      const { error: docError } = await supabase
+        .from('documents')
+        .insert({
+          case_id: caseId,
+          file_name: file.name,
+          file_path: fileName,
+          file_size: file.size,
+          mime_type: file.type,
+          document_type: item.id,
+        });
+
+      if (docError) throw docError;
+
+      // Notificar componente pai para re-validar
+      if (onDocumentAdded) {
+        onDocumentAdded();
+      }
+
+      // Limpar input
+      if (fileInputRefs.current[item.id]) {
+        fileInputRefs.current[item.id]!.value = '';
+      }
+    } catch (error) {
+      console.error('[UPLOAD INLINE] Erro:', error);
+      alert('Erro ao enviar documento. Tente novamente.');
+    } finally {
+      setUploadingItemId(null);
+    }
+  };
   // Agrupar checklist por categoria
   const categories = [
     'imprescindivel',
@@ -69,11 +140,24 @@ export const ValidationChecklistVisual = ({ uploadedDocuments = [] }: Validation
                 const isUploaded = isItemUploaded(item);
                 const isRequired = item.required;
 
+                // Verificar se tem análise técnica automática para este item
+                const technicalStatus = 
+                  item.id === 'atividade_10_meses' ? technicalAnalysis?.atividade_10_meses :
+                  item.id === 'prova_material' ? technicalAnalysis?.prova_material :
+                  null;
+
+                const hasAutoAnalysis = !!technicalStatus;
+                const autoStatus = technicalStatus?.status || 'missing';
+                const autoOk = autoStatus === 'ok';
+
+                // Para itens com análise automática, usar o status da IA
+                const finalStatus = hasAutoAnalysis ? autoOk : isUploaded;
+
                 return (
                   <div
                     key={item.id}
                     className={`flex items-start gap-3 p-3 rounded-lg border transition-all ${
-                      isUploaded
+                      finalStatus
                         ? 'bg-green-50 border-green-200'
                         : isRequired
                         ? 'bg-red-50 border-red-200'
@@ -81,7 +165,7 @@ export const ValidationChecklistVisual = ({ uploadedDocuments = [] }: Validation
                     }`}
                   >
                     <div className="flex-shrink-0 mt-0.5">
-                      {isUploaded ? (
+                      {finalStatus ? (
                         <CheckCircle className="h-5 w-5 text-green-600" />
                       ) : isRequired ? (
                         <XCircle className="h-5 w-5 text-red-600" />
@@ -102,7 +186,12 @@ export const ValidationChecklistVisual = ({ uploadedDocuments = [] }: Validation
                             OBRIGATÓRIO
                           </Badge>
                         )}
-                        {isUploaded && (
+                        {finalStatus && hasAutoAnalysis && (
+                          <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
+                            ✓ Verificado por IA
+                          </Badge>
+                        )}
+                        {isUploaded && !hasAutoAnalysis && (
                           <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
                             ✓ Enviado
                           </Badge>
@@ -111,7 +200,49 @@ export const ValidationChecklistVisual = ({ uploadedDocuments = [] }: Validation
                       {item.description && (
                         <p className="text-sm text-gray-600">{item.description}</p>
                       )}
+                      
+                      {/* Exibir análise técnica automática */}
+                      {hasAutoAnalysis && technicalStatus && (
+                        <div className={`mt-2 p-2 rounded text-xs ${
+                          autoOk ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          <strong>🧠 Análise Automática da IA:</strong>
+                          <p className="mt-1">{technicalStatus.details}</p>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Botão de Upload Inline (oculto para itens com análise automática) */}
+                    {!hasAutoAnalysis && (
+                      <div className="flex-shrink-0">
+                        <input
+                          ref={el => fileInputRefs.current[item.id] = el}
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, item)}
+                        />
+                        <Button
+                          size="sm"
+                          variant={isUploaded ? "outline" : "default"}
+                          onClick={() => fileInputRefs.current[item.id]?.click()}
+                          disabled={uploadingItemId === item.id || !caseId}
+                          className="gap-2"
+                        >
+                          {uploadingItemId === item.id ? (
+                            <>
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4" />
+                              {isUploaded ? 'Adicionar Outro' : 'Adicionar'}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

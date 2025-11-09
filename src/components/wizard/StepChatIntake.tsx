@@ -45,7 +45,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Auto-scroll quando novas mensagens aparecem
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   // Sistema de orquestração para disparar pipeline completo
   const { triggerFullPipeline } = useCaseOrchestration({ 
@@ -865,29 +873,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           }]);
           
           // 🔄 CONVERTER PDF EM IMAGENS (se necessário)
+          // ✅ ENVIAR PDF DIRETO (sem conversão para PNG)
           let filesToProcess: File[] = [file];
           
           if (isPDF(file)) {
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: `📄 Convertendo PDF "${file.name}" em imagens...`
+              content: `📄 Processando PDF "${file.name}"...`
             }]);
-            
-            try {
-              console.log(`[PDF] Convertendo "${file.name}" em imagens...`);
-              const { images } = await convertPDFToImages(file);
-              filesToProcess = images;
-              
-              setMessages(prev => [...prev, {
-                role: "assistant",
-                content: `✅ PDF convertido: ${images.length} página(s)`
-              }]);
-              
-              console.log(`[PDF] ✅ ${images.length} imagens geradas`);
-            } catch (conversionError: any) {
-              console.error('[PDF] ❌ Erro na conversão:', conversionError);
-              throw new Error(`Erro ao converter PDF: ${conversionError.message}`);
-            }
+            console.log(`[PDF] ✅ Enviando PDF direto (sem conversão): "${file.name}"`);
           }
           
           // Array para armazenar IDs de documentos inseridos
@@ -1157,6 +1151,14 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         .eq("id", caseId);
       
       console.log(`[PARALLEL] ✅ Processamento paralelo concluído!`);
+      
+      // ✅ DISPARAR EVENTO DE SINCRONIZAÇÃO
+      window.dispatchEvent(new CustomEvent('documents-updated', { 
+        detail: { caseId, timestamp: Date.now(), source: 'chat-upload' } 
+      }));
+      window.dispatchEvent(new CustomEvent('processing-completed', { 
+        detail: { caseId, timestamp: Date.now(), source: 'chat-upload' } 
+      }));
       
       // Buscar caso atualizado
       const { data: updatedCase } = await supabase
@@ -2122,6 +2124,9 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
                 </div>
               </div>
             )}
+            
+            {/* Elemento invisível para auto-scroll */}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
       </Card>

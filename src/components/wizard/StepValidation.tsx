@@ -283,7 +283,16 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   return (
     <div className="space-y-6">
       {/* Checklist Visual Completo */}
-      <ValidationChecklistVisual uploadedDocuments={documents} />
+      <ValidationChecklistVisual 
+        uploadedDocuments={documents}
+        caseId={data.caseId}
+        technicalAnalysis={validationResult?.technical_analysis}
+        onDocumentAdded={async () => {
+          // Recarregar documentos e re-validar
+          await loadDocuments();
+          await handleValidate();
+        }}
+      />
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Score de Suficiência</h3>
