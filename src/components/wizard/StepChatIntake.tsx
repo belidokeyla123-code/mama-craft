@@ -1952,7 +1952,6 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         // Montar histórico de conversação (últimas 10 mensagens)
         const conversationHistory = messages
           .slice(-10)
-          .filter(m => m.role !== 'system')
           .map(m => ({ role: m.role, content: m.content }));
         
         const { data: result, error } = await supabase.functions.invoke(
