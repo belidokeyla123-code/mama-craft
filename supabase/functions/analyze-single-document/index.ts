@@ -317,7 +317,7 @@ serve(async (req) => {
           ],
         },
       ],
-      max_tokens: 2048,
+      max_tokens: 8192,
       temperature: 0.3,
     };
 
@@ -413,7 +413,7 @@ serve(async (req) => {
             ],
           },
         ],
-        max_tokens: 2048,
+        max_tokens: 8192,
         temperature: 0.3,
       };
 
