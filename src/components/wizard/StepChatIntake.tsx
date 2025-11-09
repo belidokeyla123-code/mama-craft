@@ -117,12 +117,18 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       
       if (error || !caseData) return;
       
+      // Buscar documentos existentes
+      const { data: existingDocs } = await supabase
+        .from('documents')
+        .select('id, file_name, document_type')
+        .eq('case_id', data.caseId);
+      
       // Verificar se há dados relevantes preenchidos
       const hasData = caseData.author_name || caseData.author_cpf || 
                       caseData.author_rg || caseData.author_address ||
                       caseData.child_name || caseData.child_birth_date;
       
-      if (hasData && messages.length === 0) {
+      if ((hasData || (existingDocs && existingDocs.length > 0)) && messages.length === 1) {
         // Criar mensagem resumindo dados existentes
         const summary = [];
         if (caseData.author_name) summary.push(`👤 Nome: ${caseData.author_name}`);
@@ -132,9 +138,26 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         if (caseData.child_name) summary.push(`👶 Filho: ${caseData.child_name}`);
         if (caseData.child_birth_date) summary.push(`🎂 Nascimento: ${new Date(caseData.child_birth_date).toLocaleDateString('pt-BR')}`);
         
+        let message = '';
+        
+        if (summary.length > 0) {
+          message += `📊 **Dados já cadastrados:**\n\n${summary.join('\n')}`;
+        }
+        
+        if (existingDocs && existingDocs.length > 0) {
+          if (message) message += '\n\n';
+          message += `📄 **Documentos enviados (${existingDocs.length}):**\n\n`;
+          existingDocs.forEach(doc => {
+            const docType = doc.document_type !== 'outro' ? `[${doc.document_type}]` : '';
+            message += `• ${doc.file_name} ${docType}\n`;
+          });
+        }
+        
+        message += '\n\n✅ Você pode enviar mais documentos ou fazer perguntas sobre o caso!';
+        
         setMessages([{
           role: 'assistant',
-          content: `📊 **Dados já cadastrados:**\n\n${summary.join('\n')}\n\n✅ Essas informações foram extraídas dos documentos ou cadastradas manualmente. Você pode enviar mais documentos ou fazer perguntas sobre o caso!`
+          content: message
         }]);
       }
     };
@@ -1042,9 +1065,13 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           content: `⏳ Análise em andamento (processamento em background)...`
         }]);
         
-        // Aguardar um pouco para garantir que extrações foram salvas
+        // Aguardar processamento e classificação dos documentos
         // (process-documents-with-ai processa em background)
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⏳ Aguardando classificação dos documentos...`
+        }]);
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
       } catch (error: any) {
         console.error('[BATCH] ❌ Erro ao chamar process-documents-with-ai:', error);

@@ -65,6 +65,11 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       
       if (!error && validation) {
         setValidationResult(validation);
+        // ✅ Atualizar estado local
+        updateData({ 
+          isDocSufficient: validation.is_sufficient,
+          validationScore: validation.score 
+        });
         console.log('[StepValidation] ✅ Validação carregada do banco:', validation);
       } else if (!validation) {
         // Se não há validação salva, executar validação
@@ -116,6 +121,12 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
 
       setValidationResult(result);
       
+      // ✅ Atualizar estado local para habilitar botão "Próximo"
+      updateData({ 
+        isDocSufficient: result.is_sufficient,
+        validationScore: result.score 
+      });
+      
       toast({
         title: result.is_sufficient ? "Validação aprovada" : "Validação pendente",
         description: result.is_sufficient 
@@ -125,7 +136,7 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
 
       // Pipeline agora é manual na aba Minuta
       if (result.is_sufficient) {
-        sonnerToast.success('✅ Documentos suficientes! Vá para a aba Minuta e execute o Pipeline.');
+        sonnerToast.success('✅ Documentos suficientes! Pode avançar para a próxima etapa.');
       }
     } catch (error: any) {
       console.error('Erro na validação:', error);
