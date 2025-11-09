@@ -200,14 +200,20 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
 
       if (error) {
         // Tratar erros específicos
+        console.error('[ANALYSIS] Erro detalhado:', error);
+        
         if (error.message?.includes('429')) {
           toast.error('Limite de requisições atingido. Tente novamente em alguns minutos.');
         } else if (error.message?.includes('402')) {
           toast.error('Créditos insuficientes. Adicione créditos na sua conta.');
         } else if (error.message?.includes('timeout')) {
           toast.error('Análise demorou muito. Tente novamente.');
+        } else if (error.message?.includes('No documents found')) {
+          toast.error('⚠️ Nenhum documento encontrado. Volte para o Chat e envie os documentos primeiro.');
+        } else if (error.message?.includes('Validation not found')) {
+          toast.error('⚠️ Validação não encontrada. Execute a validação primeiro.');
         } else {
-          toast.error('Erro ao realizar análise jurídica');
+          toast.error(`Erro ao realizar análise jurídica: ${error.message || 'Erro desconhecido'}`);
         }
         throw error;
       }
