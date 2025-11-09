@@ -42,7 +42,6 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const [failedPdfs, setFailedPdfs] = useState<string[]>([]);
   const [showUnfreezeDialog, setShowUnfreezeDialog] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -2165,23 +2164,27 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
       <div className="flex gap-2">
         <input
-          ref={fileInputRef}
           type="file"
           multiple
           accept=".pdf,.jpg,.jpeg,.png,.webp"
           onChange={handleFileSelect}
           className="hidden"
+          id="chat-file-upload"
         />
         
-        <Button
-          variant="outline"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isProcessing || isRecording}
-          className="flex-shrink-0"
-        >
-          <Upload className="h-4 w-4 mr-2" />
-          Documentos
-        </Button>
+        <label htmlFor="chat-file-upload">
+          <Button
+            variant="outline"
+            disabled={isProcessing || isRecording}
+            className="flex-shrink-0"
+            asChild
+          >
+            <span>
+              <Upload className="h-4 w-4 mr-2" />
+              Documentos
+            </span>
+          </Button>
+        </label>
         
         <Button
           variant={isRecording ? "destructive" : isTranscribing ? "secondary" : "outline"}
