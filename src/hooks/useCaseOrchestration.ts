@@ -22,18 +22,25 @@ export const useCaseOrchestration = ({ caseId, enabled }: OrchestrationOptions) 
     console.log(`[ORCHESTRATION] Iniciando pipeline completo. Motivo: ${reason}`);
 
     try {
-      // 1. VALIDAÇÃO
+      // 1. VALIDAÇÃO (sempre executa, mesmo se insuficiente)
+      console.log('[ORCHESTRATION] Executando validação...');
       const { data: validationResult, error: validationError } = await supabase.functions.invoke(
         'validate-case-documents',
         { body: { caseId } }
       );
 
-      if (validationError) throw validationError;
+      if (validationError) {
+        console.error('[ORCHESTRATION] Erro na validação:', validationError);
+        throw validationError;
+      }
 
+      console.log('[ORCHESTRATION] Validação concluída:', validationResult);
+
+      // Avisar se documentos insuficientes, mas continuar pipeline
       if (!validationResult?.is_sufficient) {
-        toast.warning('Documentos insuficientes. Complete a documentação.', { id: 'orchestration' });
-        isProcessingRef.current = false;
-        return;
+        console.warn('[ORCHESTRATION] Documentos insuficientes, mas continuando pipeline');
+        toast.warning('Documentos insuficientes detectados. Checklist técnico disponível na aba Validação.', { id: 'orchestration' });
+        // NÃO retornar aqui - continuar com análise
       }
 
       // 2. ANÁLISE JURÍDICA

@@ -87,15 +87,25 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
         .maybeSingle();
       
       if (!error && validation) {
-        setValidationResult(validation);
-        // ✅ Atualizar estado local
-        updateData({ 
-          isDocSufficient: validation.is_sufficient,
-          validationScore: validation.score 
-        });
-        console.log('[StepValidation] ✅ Validação carregada do banco:', validation);
+        // Verificar se tem technical_analysis (versão nova)
+        const hasTechnicalAnalysis = validation.validation_details?.technical_analysis;
+        
+        if (!hasTechnicalAnalysis) {
+          console.log('[StepValidation] ⚠️ Validação antiga sem technical_analysis, re-validando...');
+          // Re-validar para gerar technical_analysis
+          handleValidate();
+        } else {
+          setValidationResult(validation.validation_details);
+          // ✅ Atualizar estado local
+          updateData({ 
+            isDocSufficient: validation.is_sufficient,
+            validationScore: validation.score 
+          });
+          console.log('[StepValidation] ✅ Validação carregada do banco:', validation);
+        }
       } else if (!validation) {
         // Se não há validação salva, executar validação
+        console.log('[StepValidation] 🆕 Nenhuma validação encontrada, executando...');
         handleValidate();
       }
     } catch (error) {

@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { TimelineChart } from "@/components/case/TimelineChart";
+import { TimelineChartEnhanced } from "@/components/case/TimelineChartEnhanced";
 import { DocumentUploadInline } from "./DocumentUploadInline";
 
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
@@ -71,6 +72,9 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   // ✅ CORREÇÃO #4: Estado para benefícios sobrepostos
   const [benefitHistory, setBenefitHistory] = useState<any[]>([]);
   const [hasOverlappingBenefit, setHasOverlappingBenefit] = useState(false);
+  
+  // Estado para dados de extração (para timeline)
+  const [extractedData, setExtractedData] = useState<any>(null);
 
   // Hook de orquestração para disparar pipeline completo
   const { triggerFullPipeline } = useCaseOrchestration({
@@ -131,8 +135,26 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   useEffect(() => {
     if (data.caseId) {
       loadCachedAnalysis();
+      loadExtractionData();
     }
   }, [data.caseId]);
+  
+  // Carregar dados de extração para timeline
+  const loadExtractionData = async () => {
+    if (!data.caseId) return;
+    
+    const { data: extraction, error } = await supabase
+      .from('extractions')
+      .select('extracted_data')
+      .eq('case_id', data.caseId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (!error && extraction?.extracted_data) {
+      setExtractedData(extraction.extracted_data);
+    }
+  };
 
   // Auto-executar análise se não houver cache
   useEffect(() => {
