@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import { parseJSONResponse } from "../_shared/ai-helpers.ts";
@@ -219,9 +219,13 @@ Use "medium" para documentos complementares.`;
       });
     }
     
-    // Timeout de 15 segundos
+    console.log('[VALIDATION] 🚀 Iniciando validação para caso:', caseId);
+    console.log('[VALIDATION] 📄 Documentos encontrados:', documents.length);
+    console.log('[VALIDATION] 🤖 Chamando Lovable AI...');
+    
+    // Timeout de 25 segundos (maior que o do frontend)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

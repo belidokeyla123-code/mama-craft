@@ -18,6 +18,16 @@ interface StepValidationProps {
   updateData: (data: Partial<CaseData>) => void;
 }
 
+// Helper: Promise com timeout de segurança
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs)
+    )
+  ]);
+};
+
 export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
@@ -99,9 +109,12 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     
     setIsValidating(true);
     try {
-      const { data: result, error } = await supabase.functions.invoke('validate-case-documents', {
-        body: { caseId: data.caseId }
-      });
+      const { data: result, error } = await withTimeout(
+        supabase.functions.invoke('validate-case-documents', {
+          body: { caseId: data.caseId }
+        }),
+        20000 // 20 segundos
+      );
 
       if (error) {
         // Tratar erros específicos
@@ -153,6 +166,16 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       }
     } catch (error: any) {
       console.error('Erro na validação:', error);
+      
+      if (error.message === 'TIMEOUT') {
+        toast({
+          title: "⏱️ Timeout",
+          description: "A validação está demorando muito. Tente novamente em alguns segundos.",
+          variant: "destructive",
+        });
+        return; // Garante que setIsValidating(false) execute no finally
+      }
+      
       toast({
         title: "Erro na validação",
         description: error.message || "Erro desconhecido. Tente novamente.",

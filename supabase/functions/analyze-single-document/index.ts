@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import { buildPromptForDocType } from './prompts.ts';
@@ -236,7 +236,7 @@ serve(async (req) => {
     }
     
     const arrayBuffer = await fileData.arrayBuffer();
-    const fileBase64 = base64Encode(arrayBuffer);
+    const fileBase64 = encodeBase64(arrayBuffer);
     console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64 (${Math.round(arrayBuffer.byteLength / 1024)}KB).`);
 
     // ==================================================================
