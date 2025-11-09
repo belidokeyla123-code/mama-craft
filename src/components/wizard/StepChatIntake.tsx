@@ -31,7 +31,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Olá! Vou te ajudar a criar uma nova petição de salário-maternidade. Para começar, faça upload dos documentos da cliente (certidões, comprovantes, documentos de identificação, etc.). Você também pode usar o microfone para narrar informações especiais.",
+      content: "👋 Olá! Sou seu assistente jurídico especializado em salário-maternidade.\n\n📝 **Como posso ajudar:**\n• Faça upload dos documentos da cliente\n• Converse comigo sobre o caso\n• Tire dúvidas sobre requisitos legais\n• Receba sugestões de próximos passos\n\n💡 **Dica:** Após adicionar documentos, posso responder perguntas como:\n\u2022 \"Quais documentos ainda faltam?\"\n\u2022 \"A cliente tem carência suficiente?\"\n\u2022 \"Qual a chance de sucesso do caso?\"\n\nVamos começar! 🚀",
     },
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -1945,50 +1945,51 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       // Detectar situação especial
       await detectSpecialSituation(messageText);
       
-      // Se há um caseId, processar a mensagem com IA
+      // Se há um caseId, processar a mensagem com IA conversacional
       if (data.caseId) {
-        console.log('[CHAT] Processando mensagem com IA...');
+        console.log('[CHAT] 🤖 Processando mensagem com chat assistente...');
+        
+        // Montar histórico de conversação (últimas 10 mensagens)
+        const conversationHistory = messages
+          .slice(-10)
+          .filter(m => m.role !== 'system')
+          .map(m => ({ role: m.role, content: m.content }));
         
         const { data: result, error } = await supabase.functions.invoke(
-          'process-chat-message',
-          { body: { caseId: data.caseId, messageText } }
+          'chat-assistant',
+          { 
+            body: { 
+              caseId: data.caseId, 
+              userMessage: messageText,
+              conversationHistory 
+            } 
+          }
         );
 
         if (error) {
-          console.error('[CHAT] Erro ao processar mensagem:', error);
+          console.error('[CHAT] ❌ Erro ao processar mensagem:', error);
           setMessages(prev => [...prev, { 
             role: "assistant", 
-            content: `⚠️ Erro ao processar: ${error.message}` 
+            content: `⚠️ Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.` 
           }]);
-        } else if (result?.extracted) {
-          console.log('[CHAT] Informações extraídas:', result.extracted);
+        } else if (result?.message) {
+          console.log('[CHAT] ✅ Resposta recebida do assistente');
           
-          // Mostrar resumo amigável
+          // Adicionar resposta do assistente
           setMessages(prev => [...prev, { 
             role: "assistant", 
-            content: `✅ ${result.extracted.summary}\n\n📊 Campos atualizados: ${result.updatedFields?.length || 0}\n📝 Registros criados: ${result.insertedRecords || 0}` 
+            content: result.message
           }]);
-
-          // Se houver mudanças significativas, disparar pipeline
-          if (result.updatedFields?.length > 0 || result.insertedRecords > 0) {
-            console.log('[CHAT] Disparando pipeline completo...');
-            toast({
-              title: "Informações atualizadas",
-              description: "Reprocessando análise com novos dados...",
-            });
-            
-            await triggerFullPipeline('Informação manual adicionada no chat');
-          }
         } else {
           setMessages(prev => [...prev, { 
             role: "assistant", 
-            content: "Obrigado pela informação! Há mais alguma informação que você gostaria de adicionar?" 
+            content: "Entendi. Como posso ajudar mais?" 
           }]);
         }
       } else {
         setMessages(prev => [...prev, { 
           role: "assistant", 
-          content: "Obrigado pela informação! Por favor, adicione documentos para criar o caso." 
+          content: "Por favor, adicione documentos primeiro para criar o caso e então poderei conversar sobre ele." 
         }]);
       }
     } catch (error: any) {
