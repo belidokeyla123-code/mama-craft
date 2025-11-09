@@ -21,6 +21,7 @@ interface StepValidationProps {
 export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
   const { toast } = useToast();
 
   // ✅ FASE 3: Sincronização em tempo real
@@ -39,6 +40,8 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
     if (data.caseId) {
       // Carregar validação do banco primeiro
       loadValidationFromDB();
+      // Carregar documentos para o checklist visual
+      loadDocuments();
     }
 
     const handleRevalidate = () => {
@@ -51,6 +54,15 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       window.removeEventListener('revalidate-documents', handleRevalidate);
     };
   }, [data.caseId]);
+
+  const loadDocuments = async () => {
+    if (!data.caseId) return;
+    const { data: docs } = await supabase
+      .from('documents')
+      .select('document_type, file_name')
+      .eq('case_id', data.caseId);
+    if (docs) setDocuments(docs);
+  };
 
   const loadValidationFromDB = async () => {
     if (!data.caseId) return;
@@ -267,25 +279,6 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
   }
 
   const { score, is_sufficient, checklist, missing_docs, recommendations } = validationResult;
-
-
-  // Buscar documentos para o checklist visual
-  const [documents, setDocuments] = useState<any[]>([]);
-  
-  useEffect(() => {
-    if (data.caseId) {
-      loadDocuments();
-    }
-  }, [data.caseId]);
-  
-  const loadDocuments = async () => {
-    if (!data.caseId) return;
-    const { data: docs } = await supabase
-      .from('documents')
-      .select('document_type, file_name')
-      .eq('case_id', data.caseId);
-    if (docs) setDocuments(docs);
-  };
 
   return (
     <div className="space-y-6">
