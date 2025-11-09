@@ -47,24 +47,34 @@ export const PetitionViewer = ({ petition, qualityReport, caseId, currentDraftId
     checkIfFinal();
   }, [caseId, currentDraftId]);
 
-  // Configuração da barra de ferramentas do ReactQuill
+  // Configuração da barra de ferramentas do ReactQuill (completa)
   const modules = useMemo(() => ({
     toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      [{ 'font': [] }],
+      [{ 'size': ['small', false, 'large', 'huge'] }],
       ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'script': 'sub'}, { 'script': 'super' }],
       [{ 'align': [] }],
       [{ 'list': 'ordered'}, { 'list': 'bullet' }],
       [{ 'indent': '-1'}, { 'indent': '+1' }],
+      ['blockquote', 'code-block'],
+      ['link'],
       ['clean']
     ]
   }), []);
 
   const formats = [
-    'header',
+    'header', 'font', 'size',
     'bold', 'italic', 'underline', 'strike',
+    'color', 'background',
+    'script',
     'align',
     'list', 'bullet',
-    'indent'
+    'indent',
+    'blockquote', 'code-block',
+    'link'
   ];
 
   // Debounce para auto-save (2 segundos)

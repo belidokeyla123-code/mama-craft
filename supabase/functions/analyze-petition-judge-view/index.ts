@@ -205,12 +205,12 @@ IMPORTANTE: Retorne APENAS o JSON, sem texto adicional ou markdown.`;
     console.log('[JUDGE-MODULE] 🚀 Iniciando chamada para AI Gateway...');
     console.log('[JUDGE-MODULE] Prompt length:', prompt.length);
     
-    // Timeout de 60 segundos para análises complexas
+    // Timeout de 30 segundos para análises rápidas
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.error('[JUDGE-MODULE] ⏰ TIMEOUT após 60 segundos');
+      console.error('[JUDGE-MODULE] ⏰ TIMEOUT após 30 segundos');
       controller.abort();
-    }, 60000);
+    }, 30000);
 
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

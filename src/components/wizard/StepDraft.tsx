@@ -3563,10 +3563,6 @@ ${tabelaDocumentos}
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={validateQuickly} disabled={!petition}>
-                    <Check className="h-4 w-4 mr-2" />
-                    🔍 Validar Rápido
-                  </Button>
                   <Button variant="outline" onClick={() => analyzeWithJudgeModule()} disabled={analyzingJudge}>
                     {analyzingJudge ? (
                       <>
