@@ -22,6 +22,10 @@ serve(async (req) => {
       adaptacoes: regionalAnalysis?.adaptacoes_sugeridas?.length || 0
     });
 
+    if (!regionalAnalysis || !regionalAnalysis.adaptacoes_sugeridas || regionalAnalysis.adaptacoes_sugeridas.length === 0) {
+      throw new Error('Análise regional não encontrada ou sem adaptações');
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);

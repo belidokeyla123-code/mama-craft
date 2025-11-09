@@ -21,6 +21,10 @@ serve(async (req) => {
       adaptacoes: appellateAnalysis?.adaptacoes_sugeridas?.length || 0
     });
 
+    if (!appellateAnalysis || !appellateAnalysis.adaptacoes_sugeridas || appellateAnalysis.adaptacoes_sugeridas.length === 0) {
+      throw new Error('Análise recursiva não encontrada ou sem adaptações');
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
