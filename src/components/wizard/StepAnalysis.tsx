@@ -193,20 +193,44 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
     
     setLoading(true);
     try {
+      // ✅ Verificar se há documentos antes de analisar
+      const { data: docs, error: docsError } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('case_id', data.caseId);
+      
+      if (docsError || !docs || docs.length === 0) {
+        toast.error('⚠️ Nenhum documento encontrado. Volte para o Chat e envie os documentos primeiro.');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('[ANALYSIS] Iniciando análise com', docs.length, 'documentos');
+      
       // Chamar análise diretamente (sem fila)
       const { data: result, error } = await supabase.functions.invoke('analyze-case-legal', {
         body: { caseId: data.caseId }
       });
+      
+      // ✅ Log completo do resultado
+      console.log('[ANALYSIS] Resultado:', result);
+      console.log('[ANALYSIS] Erro:', error);
 
       if (error) {
         // Tratar erros específicos
         console.error('[ANALYSIS] Erro detalhado:', error);
+        console.error('[ANALYSIS] Tipo do erro:', typeof error);
+        console.error('[ANALYSIS] Error.message:', error.message);
         
-        if (error.message?.includes('429')) {
+        // Tentar extrair código de status se disponível
+        const errorStr = JSON.stringify(error);
+        console.error('[ANALYSIS] Error JSON:', errorStr);
+        
+        if (result?.code === 'RATE_LIMIT' || error.message?.includes('429')) {
           toast.error('Limite de requisições atingido. Tente novamente em alguns minutos.');
-        } else if (error.message?.includes('402')) {
-          toast.error('Créditos insuficientes. Adicione créditos na sua conta.');
-        } else if (error.message?.includes('timeout')) {
+        } else if (result?.code === 'NO_CREDITS' || error.message?.includes('402') || errorStr.includes('402')) {
+          toast.error('💳 Créditos Lovable AI esgotados. Adicione mais créditos em Settings.');
+        } else if (result?.code === 'TIMEOUT' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
           toast.error('Análise demorou muito. Tente novamente.');
         } else if (error.message?.includes('No documents found')) {
           toast.error('⚠️ Nenhum documento encontrado. Volte para o Chat e envie os documentos primeiro.');
