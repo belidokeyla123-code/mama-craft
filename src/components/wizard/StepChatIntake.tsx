@@ -683,8 +683,9 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           event_date: new Date().toISOString().split('T')[0],
           status: "intake" as const,
           started_with_chat: true,
-          petition_type: "peticao_inicial",
-          user_id: session.user.id
+          petition_type: "peticao_inicial"
+          // user_id removido temporariamente devido a bug de cache do Supabase
+          // será atribuído via trigger auto_assign_case_owner
         };
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
