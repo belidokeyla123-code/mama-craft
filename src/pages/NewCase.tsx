@@ -165,13 +165,12 @@ export interface CaseData {
 
 const STEPS = [
   { id: 0, name: "Chat Inteligente" },
-  { id: 1, name: "Informações Básicas" },
-  { id: 2, name: "Documentos" },
-  { id: 3, name: "Validação" },
-  { id: 4, name: "Análise" },
-  { id: 5, name: "Jurisprudência" },
-  { id: 6, name: "Teses" },
-  { id: 7, name: "Minuta" },
+  { id: 1, name: "Documentos" },
+  { id: 2, name: "Validação" },
+  { id: 3, name: "Análise" },
+  { id: 4, name: "Jurisprudência" },
+  { id: 5, name: "Teses" },
+  { id: 6, name: "Minuta" },
 ];
 
 const NewCase = () => {
@@ -250,10 +249,10 @@ const NewCase = () => {
         // Chat - não precisa validação, usuário avança quando quiser
         return true;
       case 1:
-        return caseData.authorName && caseData.authorCpf && caseData.eventDate;
-      case 2:
+        // Documentos
         return caseData.documents.length > 0;
-      case 3:
+      case 2:
+        // Validação
         return caseData.isDocSufficient === true;
       default:
         return true;
@@ -281,20 +280,6 @@ const NewCase = () => {
       case 0:
         return <StepChatIntake data={caseData} updateData={updateCaseData} onComplete={handleNext} />;
       case 1:
-        return (
-          <>
-            {/* Campo Tipo de Peça removido - sempre será Petição Inicial por padrão */}
-            {caseData.authorName && caseData.authorCpf && (
-              <DuplicateAlert 
-                authorName={caseData.authorName}
-                authorCpf={caseData.authorCpf}
-                currentCaseId={caseData.caseId}
-              />
-            )}
-            <StepBasicInfo data={caseData} updateData={updateCaseData} />
-          </>
-        );
-      case 2:
         return caseData.caseId ? (
           <StepDocumentsManager 
             caseId={caseData.caseId}
@@ -307,15 +292,15 @@ const NewCase = () => {
             Aguardando criação do caso...
           </div>
         );
-      case 3:
+      case 2:
         return <StepValidation data={caseData} updateData={updateCaseData} />;
-      case 4:
+      case 3:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
-      case 5:
+      case 4:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
-      case 6:
+      case 5:
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
-      case 7:
+      case 6:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;
@@ -345,11 +330,11 @@ const NewCase = () => {
         {/* Progress Bar */}
         <Card className="p-6 mb-6">
           <div className="space-y-4">
-            {/* Grid de 8 colunas - números alinhados com labels */}
-            <div className="grid grid-cols-8 gap-1 pb-4">
+            {/* Grid de 7 colunas - números alinhados com labels */}
+            <div className="grid grid-cols-7 gap-1 pb-4">
               {STEPS.map((step, idx) => {
                 // ✅ FASE 5: Mapear status de cada step
-                const stepKey = ['chat', 'info', 'documentos', 'validacao', 'analise', 'jurisprudencia', 'teses', 'peticao'][idx];
+                const stepKey = ['chat', 'documentos', 'validacao', 'analise', 'jurisprudencia', 'teses', 'peticao'][idx];
                 const stepStatus = status[stepKey as keyof typeof status];
                 const stepIsStale = isStale[stepKey as keyof typeof isStale];
                 
