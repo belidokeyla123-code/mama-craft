@@ -690,16 +690,15 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
         
-        // INSERT direto (RLS desabilitado no banco)
+        // INSERT sem .single() para evitar erro RLS imediato
         const { data: newCase, error: insertError } = await supabase
           .from("cases")
           .insert(insertPayload)
-          .select('id')
-          .single();
+          .select('id');  // Retorna array
 
         console.log('[CHAT] ✅ Insert Result:', { 
           success: !insertError,
-          caseId: newCase?.id,
+          caseData: newCase,
           error: insertError ? {
             message: insertError.message,
             code: insertError.code,
@@ -708,8 +707,45 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
 
         if (insertError) throw insertError;
 
-        caseId = newCase.id;
-        console.log('[CHAT] ✅ Caso completo carregado:', newCase);
+        if (!newCase || !newCase[0]?.id) {
+          throw new Error('Falha ao criar caso');
+        }
+
+        caseId = newCase[0].id;
+        console.log('[CHAT] ✅ Caso criado com ID:', caseId);
+
+        // Aguardar trigger completar (pequeno delay)
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // Validar com retry se necessário (janela de 5s da política RLS)
+        let attempts = 0;
+        let caseData = null;
+
+        while (attempts < 3 && !caseData) {
+          const { data, error } = await supabase
+            .from('cases')
+            .select('id')
+            .eq('id', caseId)
+            .single();
+          
+          if (!error && data) {
+            caseData = data;
+            console.log('[CHAT] ✅ Caso validado na tentativa', attempts + 1);
+            break;
+          }
+          
+          attempts++;
+          if (attempts < 3) {
+            console.log('[CHAT] ⏳ Tentativa', attempts, 'falhou, aguardando...');
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+
+        if (!caseData) {
+          throw new Error('Caso criado mas não acessível. Tente recarregar a página.');
+        }
+
+        console.log('[CHAT] ✅ Caso completo validado:', caseData);
         updateData({ caseId });
 
         // 🔒 Garantir case_assignment usando função validada
