@@ -216,21 +216,28 @@ Considere:
 - Verifique idade e qualidade da MÃE na data do evento (child_birth_date)
 - Jurisprudência aplicável: TNU, Pedido 0502723-87.2015.4.05.8300 (restabelecimento)`;
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // ✅ Usar OpenAI API em vez de Lovable AI
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY não configurada');
+    }
+    
+    console.log('[ANALYZE] Usando OpenAI API com modelo gemini-2.5-flash');
     
     // Timeout de 30 segundos (otimizado para casos com muitos documentos)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'gemini-2.5-flash',
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: "json_object" }
         }),
