@@ -79,7 +79,7 @@ serve(async (req) => {
         tipo: d.document_type,
         status: d.status
       })) || [],
-      dados_extraidos: extractions?.[0]?.extracted_data || null,
+      dados_extraidos: extractions?.[0]?.entities || null,
       validacao: validation?.[0] || null
     };
 
@@ -144,7 +144,7 @@ Responda de forma natural e útil.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-5-mini-2025-08-07',
         messages: messages,
         temperature: 0.7,
         max_tokens: 1000,
@@ -166,12 +166,17 @@ Responda de forma natural e útil.`;
     console.log('[CHAT ASSISTANT] Resposta gerada com sucesso');
 
     // Salvar conversa no banco (opcional - para histórico)
-    await supabase.from('chat_history').insert({
-      case_id: caseId,
-      user_message: userMessage,
-      assistant_message: assistantMessage,
-      context_snapshot: caseContext
-    });
+    try {
+      await supabase.from('chat_history').insert({
+        case_id: caseId,
+        user_message: userMessage,
+        assistant_message: assistantMessage,
+        context_snapshot: caseContext
+      });
+    } catch (historyError) {
+      console.error('[CHAT ASSISTANT] Erro ao salvar histórico (não crítico):', historyError);
+      // Não falhar a função se não conseguir salvar o histórico
+    }
 
     return new Response(
       JSON.stringify({
@@ -184,7 +189,7 @@ Responda de forma natural e útil.`;
   } catch (error) {
     console.error('[CHAT ASSISTANT] Erro:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

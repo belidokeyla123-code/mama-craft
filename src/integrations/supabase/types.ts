@@ -605,6 +605,41 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_history: {
+        Row: {
+          assistant_message: string
+          case_id: string
+          context_snapshot: Json | null
+          created_at: string | null
+          id: string
+          user_message: string
+        }
+        Insert: {
+          assistant_message: string
+          case_id: string
+          context_snapshot?: Json | null
+          created_at?: string | null
+          id?: string
+          user_message: string
+        }
+        Update: {
+          assistant_message?: string
+          case_id?: string
+          context_snapshot?: Json | null
+          created_at?: string | null
+          id?: string
+          user_message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connection_metrics: {
         Row: {
           active_jobs_count: number | null
