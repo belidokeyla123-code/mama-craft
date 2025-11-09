@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.76.1';
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import { validateRequest, createValidationErrorResponse, teseJuridicaSchema } from '../_shared/validators.ts';
+import { parseJSONResponse } from "../_shared/ai-helpers.ts";
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
@@ -244,7 +245,7 @@ AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes
       }
 
       const result = await aiResponse.json();
-      const tesesData = JSON.parse(result.choices[0].message.content);
+      const tesesData = parseJSONResponse<any>(result.choices[0].message.content);
 
       console.log('[TESE] Teses geradas com sucesso:', tesesData.teses?.length || 0);
 
