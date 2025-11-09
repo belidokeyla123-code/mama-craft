@@ -8,8 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
-import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
-import DuplicateAlert from "@/components/protocoladas/DuplicateAlert";
 import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";

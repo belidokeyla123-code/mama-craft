@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useChatSync } from "@/hooks/useChatSync";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
-import { StepBasicInfo } from "@/components/wizard/StepBasicInfo";
 import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
@@ -21,20 +20,19 @@ import type { CaseData } from "./NewCase";
 
 const STEPS = [
   { id: 0, name: "Chat Inteligente" },
-  { id: 1, name: "Informações Básicas" },
-  { id: 2, name: "Documentos" },
-  { id: 3, name: "Validação" },
-  { id: 4, name: "Análise" },
-  { id: 5, name: "Jurisprudência" },
-  { id: 6, name: "Teses" },
-  { id: 7, name: "Minuta" },
+  { id: 1, name: "Documentos" },
+  { id: 2, name: "Validação" },
+  { id: 3, name: "Análise" },
+  { id: 4, name: "Jurisprudência" },
+  { id: 5, name: "Teses" },
+  { id: 6, name: "Minuta" },
 ];
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [currentStep, setCurrentStep] = useState(1); // Começa nas informações básicas
+  const [currentStep, setCurrentStep] = useState(0); // Começa no chat
   const [caseData, setCaseData] = useState<CaseData>({
     authorName: "",
     authorCpf: "",
@@ -268,8 +266,6 @@ export default function CaseDetail() {
           />
         );
       case 1:
-        return <StepBasicInfo data={caseData} updateData={updateCaseData} />;
-      case 2:
         return id ? (
           <StepDocumentsManager
             caseId={id}
@@ -277,15 +273,15 @@ export default function CaseDetail() {
             onDocumentsChange={loadCaseData}
           />
         ) : null;
-      case 3:
+      case 2:
         return <StepValidation data={caseData} updateData={updateCaseData} />;
-      case 4:
+      case 3:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
-      case 5:
+      case 4:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
-      case 6:
+      case 5:
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
-      case 7:
+      case 6:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;
