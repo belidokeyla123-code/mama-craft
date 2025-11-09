@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useChatSync } from "@/hooks/useChatSync";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
-import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
@@ -20,12 +19,11 @@ import type { CaseData } from "./NewCase";
 
 const STEPS = [
   { id: 0, name: "Chat Inteligente" },
-  { id: 1, name: "Documentos" },
-  { id: 2, name: "Validação" },
-  { id: 3, name: "Análise" },
-  { id: 4, name: "Jurisprudência" },
-  { id: 5, name: "Teses" },
-  { id: 6, name: "Minuta" },
+  { id: 1, name: "Validação" },
+  { id: 2, name: "Análise" },
+  { id: 3, name: "Jurisprudência" },
+  { id: 4, name: "Teses" },
+  { id: 5, name: "Minuta" },
 ];
 
 export default function CaseDetail() {
@@ -266,22 +264,14 @@ export default function CaseDetail() {
           />
         );
       case 1:
-        return id ? (
-          <StepDocumentsManager
-            caseId={id}
-            caseName={caseData.authorName}
-            onDocumentsChange={loadCaseData}
-          />
-        ) : null;
-      case 2:
         return <StepValidation data={caseData} updateData={updateCaseData} />;
-      case 3:
+      case 2:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
-      case 4:
+      case 3:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
-      case 5:
+      case 4:
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
-      case 6:
+      case 5:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;

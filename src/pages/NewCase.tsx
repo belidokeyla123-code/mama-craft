@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StepChatIntake } from "@/components/wizard/StepChatIntake";
-import { StepDocumentsManager } from "@/components/wizard/StepDocumentsManager";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
@@ -163,12 +162,11 @@ export interface CaseData {
 
 const STEPS = [
   { id: 0, name: "Chat Inteligente" },
-  { id: 1, name: "Documentos" },
-  { id: 2, name: "Validação" },
-  { id: 3, name: "Análise" },
-  { id: 4, name: "Jurisprudência" },
-  { id: 5, name: "Teses" },
-  { id: 6, name: "Minuta" },
+  { id: 1, name: "Validação" },
+  { id: 2, name: "Análise" },
+  { id: 3, name: "Jurisprudência" },
+  { id: 4, name: "Teses" },
+  { id: 5, name: "Minuta" },
 ];
 
 const NewCase = () => {
@@ -247,9 +245,6 @@ const NewCase = () => {
         // Chat - não precisa validação, usuário avança quando quiser
         return true;
       case 1:
-        // Documentos
-        return caseData.documents.length > 0;
-      case 2:
         // Validação
         return caseData.isDocSufficient === true;
       default:
@@ -278,27 +273,14 @@ const NewCase = () => {
       case 0:
         return <StepChatIntake data={caseData} updateData={updateCaseData} onComplete={handleNext} />;
       case 1:
-        return caseData.caseId ? (
-          <StepDocumentsManager 
-            caseId={caseData.caseId}
-            onDocumentsChange={() => {
-              console.log("Documentos atualizados");
-            }}
-          />
-        ) : (
-          <div className="text-center p-8 text-muted-foreground">
-            Aguardando criação do caso...
-          </div>
-        );
-      case 2:
         return <StepValidation data={caseData} updateData={updateCaseData} />;
-      case 3:
+      case 2:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
-      case 4:
+      case 3:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
-      case 5:
+      case 4:
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
-      case 6:
+      case 5:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;
@@ -328,11 +310,11 @@ const NewCase = () => {
         {/* Progress Bar */}
         <Card className="p-6 mb-6">
           <div className="space-y-4">
-            {/* Grid de 7 colunas - números alinhados com labels */}
-            <div className="grid grid-cols-7 gap-1 pb-4">
+            {/* Grid de 6 colunas - números alinhados com labels */}
+            <div className="grid grid-cols-6 gap-1 pb-4">
               {STEPS.map((step, idx) => {
                 // ✅ FASE 5: Mapear status de cada step
-                const stepKey = ['chat', 'documentos', 'validacao', 'analise', 'jurisprudencia', 'teses', 'peticao'][idx];
+                const stepKey = ['chat', 'validacao', 'analise', 'jurisprudencia', 'teses', 'peticao'][idx];
                 const stepStatus = status[stepKey as keyof typeof status];
                 const stepIsStale = isStale[stepKey as keyof typeof isStale];
                 
