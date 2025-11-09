@@ -101,7 +101,7 @@ export default function Dashboard() {
       navigate("/auth");
     } catch (error: any) {
       toast({
-        title: "Erro ao sair",
+        title: "Erro ao fazer logout",
         description: error.message,
         variant: "destructive",
       });
@@ -139,7 +139,10 @@ export default function Dashboard() {
   const handleDeleteCase = async () => {
     if (!caseToDelete) return;
 
-    console.log('[DELETE] Iniciando exclusão do caso:', caseToDelete);
+      console.log('[DELETE] Iniciando exclusão do caso:', caseToDelete);
+      
+      // Desabilitar botão de exclusão durante o processo
+      setIsLoading(true);
 
     try {
       // Buscar documentos do caso para excluir do storage
@@ -161,6 +164,7 @@ export default function Dashboard() {
       await supabase.from("document_validation").delete().eq("case_id", caseToDelete);
       await supabase.from("case_analysis").delete().eq("case_id", caseToDelete);
       await supabase.from("case_jurisprudencias").delete().eq("case_id", caseToDelete);
+      await supabase.from("jurisprudence_results").delete().eq("case_id", caseToDelete);
       await supabase.from("drafts").delete().eq("case_id", caseToDelete);
       await supabase.from("case_timeline").delete().eq("case_id", caseToDelete);
       await supabase.from("case_exceptions").delete().eq("case_id", caseToDelete);
@@ -201,6 +205,7 @@ export default function Dashboard() {
         variant: "destructive",
       });
     } finally {
+      setIsLoading(false);
       setCaseToDelete(null);
     }
   };
