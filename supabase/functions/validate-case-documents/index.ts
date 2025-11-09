@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
+import { parseJSONResponse } from "../_shared/ai-helpers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -252,7 +253,13 @@ Use "medium" para documentos complementares.`;
         throw new Error('Invalid AI response format');
       }
 
-      const validationResult = JSON.parse(aiData.choices[0].message.content);
+      const validationResult = parseJSONResponse<any>(aiData.choices[0].message.content, {
+        score: 0,
+        threshold: 7,
+        is_sufficient: false,
+        missing_docs: [],
+        checklist: []
+      });
 
       // ✅ FILTRAR DOCUMENTOS JÁ VALIDADOS COM SUCESSO
       const validatedDocs = documents.filter(doc => 
