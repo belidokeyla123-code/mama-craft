@@ -422,8 +422,12 @@ export type Database = {
           author_whatsapp: string | null
           birth_city: string | null
           birth_state: string | null
+          calculated_honorarios: number | null
           child_birth_date: string | null
           child_name: string | null
+          contract_details: string | null
+          contract_percentage: number | null
+          contract_value: number | null
           created_at: string
           dum: string | null
           event_date: string
@@ -450,6 +454,7 @@ export type Database = {
           marriage_date: string | null
           mother_cpf: string | null
           nit: string | null
+          payment_type: string | null
           petition_type: string | null
           profile: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date: string | null
@@ -486,8 +491,12 @@ export type Database = {
           author_whatsapp?: string | null
           birth_city?: string | null
           birth_state?: string | null
+          calculated_honorarios?: number | null
           child_birth_date?: string | null
           child_name?: string | null
+          contract_details?: string | null
+          contract_percentage?: number | null
+          contract_value?: number | null
           created_at?: string
           dum?: string | null
           event_date: string
@@ -514,6 +523,7 @@ export type Database = {
           marriage_date?: string | null
           mother_cpf?: string | null
           nit?: string | null
+          payment_type?: string | null
           petition_type?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
@@ -550,8 +560,12 @@ export type Database = {
           author_whatsapp?: string | null
           birth_city?: string | null
           birth_state?: string | null
+          calculated_honorarios?: number | null
           child_birth_date?: string | null
           child_name?: string | null
+          contract_details?: string | null
+          contract_percentage?: number | null
+          contract_value?: number | null
           created_at?: string
           dum?: string | null
           event_date?: string
@@ -578,6 +592,7 @@ export type Database = {
           marriage_date?: string | null
           mother_cpf?: string | null
           nit?: string | null
+          payment_type?: string | null
           petition_type?: string | null
           profile?: Database["public"]["Enums"]["perfil_segurada"]
           ra_denial_date?: string | null
