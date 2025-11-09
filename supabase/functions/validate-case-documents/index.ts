@@ -208,6 +208,17 @@ Use "medium" para documentos complementares.`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
+    if (!LOVABLE_API_KEY) {
+      console.error('[VALIDATION] ❌ LOVABLE_API_KEY não configurada!');
+      return new Response(JSON.stringify({ 
+        error: 'LOVABLE_API_KEY não configurada. Configure em Edge Function Secrets.',
+        code: 'MISSING_API_KEY'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     // Timeout de 15 segundos
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
