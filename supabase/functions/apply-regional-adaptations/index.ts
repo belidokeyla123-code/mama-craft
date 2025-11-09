@@ -59,7 +59,7 @@ serve(async (req) => {
   Motivo: ${jur.motivo}
     `).join('\n') || '';
 
-    const prompt = `Você é um advogado especializado em processos do ${regionalAnalysis.trf}.
+    const prompt = `Você é um advogado especializado em processos do ${regionalAnalysis.trf || 'TRF'}.
 
 ═══════════════════════════════════════════════════════════════
 🧠 MÉTODO KEYLA BELIDO™ - FILTRO DE ESTILO REGIONAL
@@ -68,7 +68,7 @@ serve(async (req) => {
 ${METODO_KEYLA_BELIDO_PROMPT}
 
 ⚠️ ADAPTAÇÕES REGIONAIS COM MÉTODO KEYLA BELIDO:
-1. Ajuste ao estilo do ${regionalAnalysis.trf} SEM perder empatia e elegância
+1. Ajuste ao estilo do ${regionalAnalysis.trf || 'TRF'} SEM perder empatia e elegância
 2. Mantenha estrutura tríade em todas as seções adaptadas
 3. Use técnicas de CNV e PNL mesmo em argumentações técnicas regionais
 
@@ -79,13 +79,13 @@ ${petition}
 
 ═══════════════════════════════════════════════════════════════
 
-# ADAPTAÇÕES REGIONAIS OBRIGATÓRIAS (${regionalAnalysis.trf})
+# ADAPTAÇÕES REGIONAIS OBRIGATÓRIAS (${regionalAnalysis.trf || 'TRF'})
 
-## Características do ${regionalAnalysis.trf}:
-${regionalAnalysis.tendencias.map((t: string) => `- ${t}`).join('\n')}
+## Características do ${regionalAnalysis.trf || 'TRF'}:
+${regionalAnalysis.tendencias?.map((t: string) => `- ${t}`).join('\n') || 'Nenhuma tendência específica identificada'}
 
 ## Estilo Preferido:
-${regionalAnalysis.estilo_preferido}
+${regionalAnalysis.estilo_preferido || 'Estilo padrão'}
 
 ## Jurisprudências Locais Prioritárias:
 ${jurisprudenciasLocais}
@@ -97,13 +97,13 @@ ${adaptacoesList}
 
 # INSTRUÇÕES
 
-Reescreva a petição implementando TODAS as ${regionalAnalysis.adaptacoes_sugeridas.length} adaptações regionais acima:
+Reescreva a petição implementando TODAS as ${regionalAnalysis.adaptacoes_sugeridas?.length || 0} adaptações regionais acima:
 
-1. Ajuste o estilo para o preferido do ${regionalAnalysis.trf}
+1. Ajuste o estilo para o preferido do ${regionalAnalysis.trf || 'TRF'}
 2. Adicione as jurisprudências locais sugeridas nas seções apropriadas
 3. Implemente cada adaptação específica listada
 4. Mantenha a estrutura geral da petição
-5. Torne o texto mais persuasivo para juízes do ${regionalAnalysis.trf}
+5. Torne o texto mais persuasivo para juízes do ${regionalAnalysis.trf || 'TRF'}
 
 Retorne a petição COMPLETA adaptada em markdown.`;
 
@@ -119,7 +119,7 @@ Retorne a petição COMPLETA adaptada em markdown.`;
 
     return new Response(JSON.stringify({
       petition_adaptada,
-      adaptacoes_aplicadas: regionalAnalysis.adaptacoes_sugeridas.length
+      adaptacoes_aplicadas: regionalAnalysis.adaptacoes_sugeridas?.length || 0
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

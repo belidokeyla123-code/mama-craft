@@ -88,7 +88,7 @@ Adapte a petição para que ela já esteja preparada para eventual recurso à TN
 3. Neutralize possíveis defesas do INSS que costumam prosperar em recursos
 4. Cite precedentes da TNU que favoreçam a tese
 5. Use linguagem que demonstre conhecimento da jurisprudência da TNU
-6. Implemente TODAS as ${appellateAnalysis.adaptacoes_sugeridas.length} adaptações listadas acima
+6. Implemente TODAS as ${appellateAnalysis.adaptacoes_sugeridas?.length || 0} adaptações listadas acima
 
 Retorne a petição COMPLETA adaptada em markdown.`;
 
@@ -104,7 +104,7 @@ Retorne a petição COMPLETA adaptada em markdown.`;
 
     return new Response(JSON.stringify({
       petition_adaptada,
-      adaptacoes_aplicadas: appellateAnalysis.adaptacoes_sugeridas.length
+      adaptacoes_aplicadas: appellateAnalysis.adaptacoes_sugeridas?.length || 0
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
