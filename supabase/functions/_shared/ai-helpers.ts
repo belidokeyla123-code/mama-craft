@@ -41,12 +41,17 @@ export async function callLovableAI(
     throw new Error('OPENAI_API_KEY not configured');
   }
 
-  // Ajustar nome do modelo para OpenAI format
+  // Ajustar nome do modelo para OpenAI (OpenAI não tem modelos Gemini!)
   let openaiModel = model;
   if (model.includes('google/gemini')) {
-    openaiModel = 'gemini-2.5-flash';
-  } else if (model.includes('gpt-4')) {
-    openaiModel = 'gpt-4.1-mini';
+    // Se pediram Gemini, usar GPT-4o-mini que é similar em custo/velocidade
+    openaiModel = 'gpt-4o-mini';
+  } else if (model.includes('gpt-4.1')) {
+    // gpt-4.1 não existe, usar gpt-4o
+    openaiModel = 'gpt-4o';
+  } else if (!model.includes('gpt-')) {
+    // Qualquer outro modelo não-GPT, usar gpt-4o-mini como padrão
+    openaiModel = 'gpt-4o-mini';
   }
 
   console.log(`[AI] Calling OpenAI API with model ${openaiModel}...`);

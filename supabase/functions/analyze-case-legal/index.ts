@@ -224,7 +224,7 @@ Considere:
       throw new Error('OPENAI_API_KEY não configurada');
     }
     
-    console.log('[ANALYZE] Usando OpenAI API com modelo gemini-2.5-flash');
+    console.log('[ANALYZE] Usando OpenAI API com modelo gpt-4o-mini');
     
     // Timeout de 30 segundos (otimizado para casos com muitos documentos)
     const controller = new AbortController();
@@ -238,7 +238,7 @@ Considere:
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gemini-2.5-flash',
+          model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: "json_object" }
         }),
