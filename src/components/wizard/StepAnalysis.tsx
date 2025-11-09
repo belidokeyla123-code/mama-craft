@@ -155,6 +155,66 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
       setExtractedData(extraction.extracted_data);
     }
   };
+  
+  // Processar dados para timeline visual
+  const processTimelineEvents = () => {
+    if (!analysis) return [];
+    
+    const events: any[] = [];
+    
+    // Períodos rurais
+    if (analysis.cnis_analysis?.periodos_rurais) {
+      analysis.cnis_analysis.periodos_rurais.forEach((periodo: any) => {
+        if (periodo.data_inicio && periodo.data_fim) {
+          events.push({
+            type: 'rural_period',
+            title: 'Período Rural',
+            description: periodo.atividade || 'Atividade rural',
+            duration: {
+              start: periodo.data_inicio,
+              end: periodo.data_fim
+            },
+            status: 'confirmed'
+          });
+        }
+      });
+    }
+    
+    // Períodos urbanos
+    if (analysis.cnis_analysis?.periodos_urbanos) {
+      analysis.cnis_analysis.periodos_urbanos.forEach((periodo: any) => {
+        if (periodo.data_inicio && periodo.data_fim) {
+          events.push({
+            type: 'urban_period',
+            title: 'Período Urbano',
+            description: periodo.empresa || periodo.atividade || 'Atividade urbana',
+            duration: {
+              start: periodo.data_inicio,
+              end: periodo.data_fim
+            },
+            status: 'confirmed'
+          });
+        }
+      });
+    }
+    
+    // Benefícios anteriores
+    if (analysis.cnis_analysis?.beneficios_anteriores) {
+      analysis.cnis_analysis.beneficios_anteriores.forEach((beneficio: any) => {
+        if (beneficio.data_inicio) {
+          events.push({
+            date: beneficio.data_inicio,
+            type: 'benefit',
+            title: beneficio.tipo || 'Benefício',
+            description: `NB: ${beneficio.nb || 'N/A'}`,
+            status: 'confirmed'
+          });
+        }
+      });
+    }
+    
+    return events;
+  };
 
   // Auto-executar análise se não houver cache
   useEffect(() => {
@@ -627,11 +687,18 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
             <p className="text-sm">{analysis.qualidade_segurada.detalhes}</p>
           </Card>
 
-          {/* Timeline de Contribuição */}
-          {analysis.timeline && analysis.timeline.length > 0 && (
+          {/* Timeline Visual Detalhada */}
+          {analysis && (
             <Card className="p-6">
-              <h3 className="text-lg font-bold mb-4">Timeline de Contribuição</h3>
-              <TimelineChart events={analysis.timeline} />
+              <h3 className="text-lg font-bold mb-4">📅 Timeline Visual - Histórico Completo</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Visualização gráfica dos períodos rurais, urbanos, benefícios e marcos importantes.
+              </p>
+              <TimelineChartEnhanced 
+                events={processTimelineEvents()}
+                birthDate={extractedData?.author_birth_date}
+                eventDate={extractedData?.event_date}
+              />
             </Card>
           )}
 
