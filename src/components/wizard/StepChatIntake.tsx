@@ -683,7 +683,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
           event_date: new Date().toISOString().split('T')[0],
           status: "intake" as const,
           started_with_chat: true,
-          petition_type: "peticao_inicial"
+          petition_type: "peticao_inicial",
+          user_id: session.user.id
         };
         
         console.log('[CHAT] 📦 Insert Payload:', insertPayload);
