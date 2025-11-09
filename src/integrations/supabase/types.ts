@@ -605,6 +605,59 @@ export type Database = {
         }
         Relationships: []
       }
+      connection_metrics: {
+        Row: {
+          active_jobs_count: number | null
+          case_id: string | null
+          connection_mode: string | null
+          created_at: string | null
+          event_type: string
+          fallback_reason: string | null
+          id: string
+          metadata: Json | null
+          occurred_at: string
+          polling_interval_ms: number | null
+          reconnect_duration_ms: number | null
+          session_id: string
+        }
+        Insert: {
+          active_jobs_count?: number | null
+          case_id?: string | null
+          connection_mode?: string | null
+          created_at?: string | null
+          event_type: string
+          fallback_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          polling_interval_ms?: number | null
+          reconnect_duration_ms?: number | null
+          session_id: string
+        }
+        Update: {
+          active_jobs_count?: number | null
+          case_id?: string | null
+          connection_mode?: string | null
+          created_at?: string | null
+          event_type?: string
+          fallback_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          polling_interval_ms?: number | null
+          reconnect_duration_ms?: number | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_metrics_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       correction_history: {
         Row: {
           after_content: string | null
@@ -713,6 +766,7 @@ export type Database = {
           case_id: string
           document_type: Database["public"]["Enums"]["document_type"]
           exif_data: Json | null
+          file_hash: string | null
           file_name: string
           file_path: string
           file_size: number | null
@@ -725,6 +779,7 @@ export type Database = {
           case_id: string
           document_type: Database["public"]["Enums"]["document_type"]
           exif_data?: Json | null
+          file_hash?: string | null
           file_name: string
           file_path: string
           file_size?: number | null
@@ -737,6 +792,7 @@ export type Database = {
           case_id?: string
           document_type?: Database["public"]["Enums"]["document_type"]
           exif_data?: Json | null
+          file_hash?: string | null
           file_name?: string
           file_path?: string
           file_size?: number | null
@@ -1095,15 +1151,20 @@ export type Database = {
           completed_at: string | null
           correction_stage: string | null
           created_at: string | null
+          current_document: string | null
+          document_ids: Json | null
           error_message: string | null
           id: string
+          job_type: string | null
           jurisprudence_completed_at: string | null
           jurisprudence_status: string | null
           last_correction_error: string | null
+          processed_documents: number | null
           retry_count: number | null
           started_at: string | null
           status: string
           total_corrections_applied: number | null
+          total_documents: number | null
           updated_at: string | null
           validation_completed_at: string | null
           validation_status: string | null
@@ -1116,15 +1177,20 @@ export type Database = {
           completed_at?: string | null
           correction_stage?: string | null
           created_at?: string | null
+          current_document?: string | null
+          document_ids?: Json | null
           error_message?: string | null
           id?: string
+          job_type?: string | null
           jurisprudence_completed_at?: string | null
           jurisprudence_status?: string | null
           last_correction_error?: string | null
+          processed_documents?: number | null
           retry_count?: number | null
           started_at?: string | null
           status?: string
           total_corrections_applied?: number | null
+          total_documents?: number | null
           updated_at?: string | null
           validation_completed_at?: string | null
           validation_status?: string | null
@@ -1137,15 +1203,20 @@ export type Database = {
           completed_at?: string | null
           correction_stage?: string | null
           created_at?: string | null
+          current_document?: string | null
+          document_ids?: Json | null
           error_message?: string | null
           id?: string
+          job_type?: string | null
           jurisprudence_completed_at?: string | null
           jurisprudence_status?: string | null
           last_correction_error?: string | null
+          processed_documents?: number | null
           retry_count?: number | null
           started_at?: string | null
           status?: string
           total_corrections_applied?: number | null
+          total_documents?: number | null
           updated_at?: string | null
           validation_completed_at?: string | null
           validation_status?: string | null
