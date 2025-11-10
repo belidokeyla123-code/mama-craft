@@ -1143,34 +1143,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       
       await triggerFullPipeline('Documentos adicionados via chat');
       
-      // 💰 EXTRAÇÃO DE CONTRATO (se houver)
-      console.log('[BATCH] 💰 Verificando se há contrato...');
-      const { data: contractDocs } = await supabase
-        .from('documents')
-        .select('id')
-        .eq('case_id', caseId)
-        .eq('document_type', 'contrato')
-        .limit(1);
-      
-      if (contractDocs && contractDocs.length > 0) {
-        console.log('[BATCH] 💰 Contrato encontrado, extraindo valor...');
-        try {
-          const { data: contractData, error: contractError } = await supabase.functions.invoke(
-            'extract-contract-value',
-            { body: { documentId: contractDocs[0].id, caseId } }
-          );
-          
-          if (!contractError && contractData) {
-            console.log('[BATCH] ✅ Valor do contrato extraído:', contractData);
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: `💰 Contrato analisado: R$ ${contractData.contract_value?.toFixed(2) || '0,00'}`
-            }]);
-          }
-        } catch (err) {
-          console.error('[BATCH] Erro ao extrair contrato:', err);
-        }
-      }
+      // 💰 EXTRAÇÃO DE CONTRATO REMOVIDA - tipo 'contrato' não existe no enum
+      console.log('[BATCH] ℹ️ Extração de contrato desabilitada temporariamente');
       
       // Atualizar status do caso para "ready"
       await supabase
