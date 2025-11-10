@@ -1,3 +1,4 @@
+import React from "react";
 import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
 import { Loader2, CheckCircle, XCircle, FileText } from "lucide-react";

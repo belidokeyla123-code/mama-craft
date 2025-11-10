@@ -192,13 +192,13 @@ serve(async (req) => {
             .from('document_processing_queue')
             .update({
               status: 'pending',
-              error_message: error.message,
+              error_message: error instanceof Error ? error.message : 'Unknown error',
               retry_count: item.retry_count + 1,
               started_at: null
             })
             .eq('id', item.id)
 
-          results.push({ id: item.id, status: 'retry', error: error.message })
+          results.push({ id: item.id, status: 'retry', error: error instanceof Error ? error.message : 'Unknown error' })
         } else {
           // Mark as failed after max retries
           console.log(`[Queue Processor] Max retries reached for item ${item.id}`)
@@ -206,12 +206,12 @@ serve(async (req) => {
             .from('document_processing_queue')
             .update({
               status: 'failed',
-              error_message: `Max retries (${maxRetries}) exceeded: ${error.message}`,
+              error_message: `Max retries (${maxRetries}) exceeded: ${error instanceof Error ? error.message : 'Unknown error'}`,
               completed_at: new Date().toISOString()
             })
             .eq('id', item.id)
 
-          results.push({ id: item.id, status: 'failed', error: error.message })
+          results.push({ id: item.id, status: 'failed', error: error instanceof Error ? error.message : 'Unknown error' })
         }
       }
     }
@@ -261,7 +261,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('[Queue Processor] Fatal error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
