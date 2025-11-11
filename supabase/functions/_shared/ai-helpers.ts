@@ -35,26 +35,13 @@ export async function callLovableAI(
     responseFormat = 'text'
   } = options;
 
-  // ✅ Usar OpenAI API em vez de Lovable AI
-  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-  if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY not configured');
+  // ✅ Usar Lovable AI Gateway (suporta Gemini e OpenAI)
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    throw new Error('LOVABLE_API_KEY not configured');
   }
 
-  // Ajustar nome do modelo para OpenAI (OpenAI não tem modelos Gemini!)
-  let openaiModel = model;
-  if (model.includes('google/gemini')) {
-    // Se pediram Gemini, usar GPT-4o-mini que é similar em custo/velocidade
-    openaiModel = 'gpt-4o-mini';
-  } else if (model.includes('gpt-4.1')) {
-    // gpt-4.1 não existe, usar gpt-4o
-    openaiModel = 'gpt-4o';
-  } else if (!model.includes('gpt-')) {
-    // Qualquer outro modelo não-GPT, usar gpt-4o-mini como padrão
-    openaiModel = 'gpt-4o-mini';
-  }
-
-  console.log(`[AI] Calling OpenAI API with model ${openaiModel}...`);
+  console.log(`[AI] Calling Lovable AI Gateway with model ${model}...`);
   const startTime = Date.now();
 
   const controller = new AbortController();
@@ -62,7 +49,7 @@ export async function callLovableAI(
 
   try {
     const requestBody: any = {
-      model: openaiModel,
+      model: model,
       messages: [{ role: 'user', content: prompt }]
     };
 
@@ -72,10 +59,10 @@ export async function callLovableAI(
       requestBody.response_format = { type: 'json_object' };
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
