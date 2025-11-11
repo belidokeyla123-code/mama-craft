@@ -217,13 +217,13 @@ Considere:
 - Verifique idade e qualidade da MÃE na data do evento (child_birth_date)
 - Jurisprudência aplicável: TNU, Pedido 0502723-87.2015.4.05.8300 (restabelecimento)`;
 
-    console.log('[ANALYZE] Usando callLovableAI helper com modelo gpt-4o-mini');
+    console.log('[ANALYZE] Usando callLovableAI helper com modelo google/gemini-2.5-flash (rápido)');
 
     try {
       const aiResult = await callLovableAI(prompt, {
-        model: 'gpt-4o-mini',
+        model: 'google/gemini-2.5-flash',
         responseFormat: 'json_object',
-        timeout: 30000
+        timeout: 60000
       });
 
       const analysisResult = parseJSONResponse<any>(aiResult.content);
