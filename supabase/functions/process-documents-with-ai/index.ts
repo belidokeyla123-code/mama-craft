@@ -35,6 +35,16 @@ serve(async (req) => {
 
   try {
     const { caseId, documentIds } = await req.json();
+    
+    // Validar parâmetros
+    if (!caseId) {
+      throw new Error('caseId é obrigatório');
+    }
+    
+    if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+      throw new Error('documentIds deve ser um array não vazio');
+    }
+    
     console.log(`[OCR] Iniciando processamento para caso ${caseId} com ${documentIds.length} documentos`);
     
     // Retornar resposta imediata e processar em background
