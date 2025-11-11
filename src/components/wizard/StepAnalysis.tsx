@@ -299,30 +299,70 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
       console.log('[ANALYSIS] Erro:', error);
 
       if (error) {
-        // Tratar erros específicos
         console.error('[ANALYSIS] Erro detalhado:', error);
-        console.error('[ANALYSIS] Tipo do erro:', typeof error);
-        console.error('[ANALYSIS] Error.message:', error.message);
-        
-        // Tentar extrair código de status se disponível
-        const errorStr = JSON.stringify(error);
-        console.error('[ANALYSIS] Error JSON:', errorStr);
-        
-        if (result?.code === 'RATE_LIMIT' || error.message?.includes('429')) {
-          toast.error('Limite de requisições atingido. Tente novamente em alguns minutos.');
-        } else if (result?.code === 'NO_CREDITS' || error.message?.includes('402') || errorStr.includes('402')) {
-          toast.error('💳 Créditos Lovable AI esgotados. Adicione mais créditos em Settings.');
-        } else if (result?.code === 'TIMEOUT' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
-          toast.error('Análise demorou muito. Tente novamente.');
-        } else if (error.message?.includes('No documents found')) {
-          toast.error('⚠️ Nenhum documento encontrado. Volte para o Chat e envie os documentos primeiro.');
-        } else if (error.message?.includes('Validation not found')) {
-          toast.error('⚠️ Validação não encontrada. Execute a validação primeiro.');
-        } else {
-          toast.error(`Erro ao realizar análise jurídica: ${error.message || 'Erro desconhecido'}`);
-        }
+        toast.error(`Erro ao realizar análise jurídica: ${error.message || 'Erro desconhecido'}`);
         throw error;
       }
+
+      // ✅ CORREÇÃO: Lidar com status 202 (geração em background)
+      if (result?.status === 'generating' && result?.analysisId) {
+        console.log('[ANALYSIS] ⏳ Análise iniciada em background, ID:', result.analysisId);
+        
+        toast.info('Analisando caso...', {
+          description: 'A análise pode levar até 2 minutos. Aguarde.',
+          duration: 5000
+        });
+
+        // ✅ Polling para verificar quando está pronta
+        const pollInterval = setInterval(async () => {
+          const { data: analysisData, error: pollError } = await supabase
+            .from('case_analysis')
+            .select('draft_payload, analyzed_at, qualidade_segurada, carencia, rmi, valor_causa')
+            .eq('case_id', data.caseId)
+            .maybeSingle();
+
+          if (pollError) {
+            console.error('[ANALYSIS] Erro no polling:', pollError);
+            clearInterval(pollInterval);
+            setLoading(false);
+            toast.error('Erro ao verificar status da análise');
+            return;
+          }
+
+          const payload = analysisData?.draft_payload as any;
+          const status = payload?.status;
+
+          console.log('[ANALYSIS] Polling status:', status);
+
+          if (status === 'completed') {
+            clearInterval(pollInterval);
+            
+            // Atualizar estado com análise completa
+            setAnalysis(payload);
+            setHasCache(true);
+            
+            setLoading(false);
+            toast.success('Análise jurídica concluída!');
+          } else if (status === 'error') {
+            clearInterval(pollInterval);
+            setLoading(false);
+            toast.error('Erro ao realizar análise', {
+              description: payload?.error || 'Erro desconhecido'
+            });
+          }
+        }, 3000); // Verificar a cada 3 segundos
+
+        // Timeout após 3 minutos
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setLoading(false);
+          toast.error('Timeout: A análise demorou muito. Tente novamente.');
+        }, 180000);
+
+        return; // Sair da função, polling vai continuar
+      }
+
+      // ✅ Fluxo legado (se retornar análise diretamente)
 
       // Buscar resultado da análise no banco
       const { data: analysisData } = await supabase

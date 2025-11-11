@@ -219,14 +219,48 @@ Considere:
 
     console.log('[ANALYZE] Usando callOpenAI helper com modelo gpt-5-mini-2025-08-07');
 
-    try {
-      const aiResult = await callOpenAI(prompt, {
-        model: 'gpt-5-mini-2025-08-07',
-        responseFormat: 'json_object',
-        timeout: 60000
-      });
+    // ✅ CORREÇÃO: Criar análise inicial e processar em background
+    console.log('[ANALYZE] 🚀 Iniciando análise em background...');
+    
+    // Criar registro inicial com status 'generating'
+    const { data: initialAnalysis, error: initialError } = await supabase
+      .from('case_analysis')
+      .upsert({
+        case_id: caseId,
+        qualidade_segurada: { comprovado: false, detalhes: '⏳ Analisando...' },
+        carencia: { necessaria: true, cumprida: false, meses_faltantes: 0, detalhes: '⏳ Analisando...' },
+        rmi: { valor: 0, base_calculo: 'Analisando...', situacao_especial: false, observacoes: '' },
+        valor_causa: 0,
+        draft_payload: { 
+          status: 'generating',
+          started_at: new Date().toISOString()
+        },
+        is_stale: false,
+        analyzed_at: new Date().toISOString()
+      }, { onConflict: 'case_id' })
+      .select()
+      .single();
 
-      const analysisResult = parseJSONResponse<any>(aiResult.content);
+    if (initialError) {
+      console.error('[ANALYZE] ❌ Erro ao criar análise inicial:', initialError);
+      throw new Error('Erro ao iniciar análise do caso');
+    }
+
+    const analysisId = initialAnalysis.id;
+    console.log('[ANALYZE] ✅ Análise inicial criada, ID:', analysisId);
+
+    // ✅ Processar em background
+    const backgroundTask = async () => {
+      console.log('[ANALYZE-BG] 🎯 Iniciando análise jurídica em background...');
+      
+      try {
+        const aiResult = await callOpenAI(prompt, {
+          model: 'gpt-5-mini-2025-08-07',
+          responseFormat: 'json_object',
+          timeout: 120000 // 2 minutos para análise completa
+        });
+
+        const analysisResult = parseJSONResponse<any>(aiResult.content);
 
       // ✅ PÓS-PROCESSAMENTO: Filtrar benefícios anteriores rigorosamente
       if (analysisResult.cnis_analysis?.beneficios_anteriores) {
@@ -266,7 +300,7 @@ Considere:
         });
         
         analysisResult.cnis_analysis.beneficios_anteriores = validBenefits;
-        console.log(`[ANALYZE] 📊 Benefícios válidos: ${validBenefits.length} de ${(analysisResult.cnis_analysis.beneficios_anteriores as any[]).length || 0} originais`);
+        console.log(`[ANALYZE-BG] 📊 Benefícios válidos: ${validBenefits.length}`);
       }
 
       // Atualizar RMI e valor_causa no caso
@@ -280,59 +314,61 @@ Considere:
           .eq('id', caseId);
       }
 
-      // Salvar análise na tabela case_analysis
-      const { error: insertError } = await supabase
+      // ✅ Atualizar análise com resultado completo
+      const { error: updateError } = await supabase
         .from('case_analysis')
-        .upsert({
-          case_id: caseId,
+        .update({
           qualidade_segurada: analysisResult.qualidade_segurada,
           carencia: analysisResult.carencia,
           rmi: analysisResult.rmi,
           valor_causa: analysisResult.valor_causa,
-          draft_payload: analysisResult,
+          draft_payload: {
+            ...analysisResult,
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          },
           is_stale: false,
           analyzed_at: new Date().toISOString()
-        }, { onConflict: 'case_id' });
+        })
+        .eq('id', analysisId);
 
-      if (insertError) {
-        console.error('Insert error:', insertError);
-        throw insertError;
+      if (updateError) {
+        console.error('[ANALYZE-BG] ❌ Erro ao atualizar análise:', updateError);
+      } else {
+        console.log('[ANALYZE-BG] ✅ Análise completa salva com sucesso!');
       }
 
-      return new Response(JSON.stringify(analysisResult), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } catch (aiError: any) {
-      // Handle specific AI errors
-      if (aiError.message?.includes('RATE_LIMIT')) {
-        return new Response(JSON.stringify({ 
-          error: 'Rate limit atingido. Aguarde alguns segundos e tente novamente.',
-          code: 'RATE_LIMIT'
-        }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      } catch (bgError: any) {
+        console.error('[ANALYZE-BG] ❌ Erro na análise:', bgError);
+        
+        // Atualizar com erro
+        await supabase
+          .from('case_analysis')
+          .update({
+            draft_payload: { 
+              status: 'error',
+              error: bgError.message,
+              failed_at: new Date().toISOString()
+            }
+          })
+          .eq('id', analysisId);
       }
-      if (aiError.message?.includes('NO_CREDITS')) {
-        return new Response(JSON.stringify({ 
-          error: 'Créditos OpenAI esgotados. Verifique sua conta.',
-          code: 'NO_CREDITS'
-        }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (aiError.message?.includes('TIMEOUT')) {
-        return new Response(JSON.stringify({ 
-          error: 'Timeout: Análise demorou muito. Tente com menos documentos.',
-          code: 'TIMEOUT'
-        }), {
-          status: 408,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw aiError;
-    }
+    };
+
+    // Iniciar background task
+    backgroundTask().catch(err => {
+      console.error('[ANALYZE-BG] ❌ Erro fatal em background:', err);
+    });
+
+    // Retornar resposta imediata
+    return new Response(JSON.stringify({ 
+      message: 'Análise jurídica iniciada em background',
+      analysisId: analysisId,
+      status: 'generating'
+    }), {
+      status: 202, // Accepted
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
     console.error('Error in analyze-case-legal:', error);
