@@ -931,27 +931,50 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
     
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     
-    // ✅ Timeout otimizado de 45 segundos
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-
-    console.log('[PETITION] 🚀 Usando gpt-5-2025-08-07 (melhor qualidade para petições)');
-
-    try {
-      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
+    // ✅ CORREÇÃO CRÍTICA: Usar Background Task para evitar timeout
+    console.log('[PETITION] 🚀 Iniciando geração em background...');
+    
+    // Criar registro inicial com status 'generating'
+    const { data: initialDraft, error: initialError } = await supabase
+      .from('drafts')
+      .insert({
+        case_id: caseId,
+        markdown_content: '⏳ Gerando petição... Aguarde alguns instantes.',
+        payload: { 
+          status: 'generating',
+          selectedJurisprudencias,
+          started_at: new Date().toISOString()
         },
-        body: JSON.stringify({
-          model: 'gpt-5-2025-08-07',
-          messages: [{ role: 'user', content: prompt }],
-          max_completion_tokens: 12000,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+        is_stale: false
+      })
+      .select()
+      .single();
+
+    if (initialError) {
+      console.error('[PETITION] ❌ Erro ao criar draft inicial:', initialError);
+      throw new Error('Erro ao iniciar geração da petição');
+    }
+
+    const draftId = initialDraft.id;
+    console.log('[PETITION] ✅ Draft inicial criado:', draftId);
+
+    // ✅ Processar em background usando waitUntil
+    const backgroundTask = async () => {
+      console.log('[PETITION-BG] 🎯 Iniciando geração da petição em background...');
+      
+      try {
+        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-5-2025-08-07',
+            messages: [{ role: 'user', content: prompt }],
+            max_completion_tokens: 12000,
+          }),
+        });
 
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ 
@@ -1230,26 +1253,60 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
         console.log('✅ Draft salvo com ID:', savedDraft?.id);
       }
 
-      return new Response(JSON.stringify({ 
-        petitionText,
-        recomendacoes_validacao: recomendacoesValidacao,
-        draftId: savedDraft?.id
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        return new Response(JSON.stringify({ 
-          error: 'Timeout: Geração da petição demorou muito. Tente novamente.',
-          code: 'TIMEOUT'
-        }), {
-          status: 408,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        // ✅ Atualizar draft com sucesso
+        const { error: updateError } = await supabase
+          .from('drafts')
+          .update({
+            markdown_content: petitionText,
+            payload: { 
+              status: 'completed',
+              selectedJurisprudencias,
+              jurisdicaoValidada,
+              recomendacoes_validacao: recomendacoesValidacao,
+              completed_at: new Date().toISOString()
+            },
+            is_stale: false
+          })
+          .eq('id', draftId);
+
+        if (updateError) {
+          console.error('[PETITION-BG] ❌ Erro ao atualizar draft:', updateError);
+        } else {
+          console.log('[PETITION-BG] ✅ Petição gerada e salva com sucesso!');
+        }
+
+      } catch (bgError: any) {
+        console.error('[PETITION-BG] ❌ Erro na geração:', bgError);
+        
+        // Atualizar draft com erro
+        await supabase
+          .from('drafts')
+          .update({
+            markdown_content: `❌ Erro ao gerar petição: ${bgError.message}`,
+            payload: { 
+              status: 'error',
+              error: bgError.message,
+              failed_at: new Date().toISOString()
+            }
+          })
+          .eq('id', draftId);
       }
-      throw fetchError;
-    }
+    };
+
+    // Iniciar background task (não aguardar)
+    backgroundTask().catch(err => {
+      console.error('[PETITION-BG] ❌ Erro fatal em background:', err);
+    });
+
+    // Retornar resposta imediata
+    return new Response(JSON.stringify({ 
+      message: 'Geração da petição iniciada em background',
+      draftId: draftId,
+      status: 'generating'
+    }), {
+      status: 202, // Accepted
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
     console.error('Error in generate-petition:', error);

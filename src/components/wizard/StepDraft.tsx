@@ -1136,42 +1136,107 @@ export const StepDraft = ({ data, updateData }: StepDraftProps) => {
     }
     
     setLoading(true);
+    let result: any = null;
+    
     try {
-      const { data: result, error } = await supabase.functions.invoke('generate-petition', {
+      const response = await supabase.functions.invoke('generate-petition', {
         body: { 
           caseId: data.caseId,
           selectedJurisprudencias: [] // TODO: passar jurisprudências selecionadas
         }
       });
 
-      if (error) throw error;
+      if (response.error) throw response.error;
+      result = response.data;
 
-      // Corrigir bug: aceitar tanto "petition" quanto "petitionText"
+      // ✅ CORREÇÃO: Lidar com status 202 (geração em background)
+      if (result?.status === 'generating' && result?.draftId) {
+        console.log('[DRAFT] ⏳ Geração iniciada em background, ID:', result.draftId);
+        setCurrentDraftId(result.draftId);
+        
+        toast.info('Gerando petição...', {
+          description: 'A geração pode levar até 2 minutos. Aguarde.',
+          duration: 5000
+        });
+
+        // ✅ Polling para verificar quando está pronta
+        const pollInterval = setInterval(async () => {
+          const { data: draftData, error: pollError } = await supabase
+            .from('drafts')
+            .select('markdown_content, payload, generated_at')
+            .eq('id', result.draftId)
+            .single();
+
+          if (pollError) {
+            console.error('[DRAFT] Erro no polling:', pollError);
+            clearInterval(pollInterval);
+            setLoading(false);
+            toast.error('Erro ao verificar status da petição');
+            return;
+          }
+
+          const payload = draftData?.payload as any;
+          const status = payload?.status;
+
+          console.log('[DRAFT] Polling status:', status);
+
+          if (status === 'completed') {
+            clearInterval(pollInterval);
+            setPetition(draftData.markdown_content);
+            setHasCache(true);
+            
+            if (payload?.recomendacoes_validacao) {
+              setRecomendacoesValidacao(payload.recomendacoes_validacao);
+            }
+            
+            await loadQualityReport();
+            setLoading(false);
+            
+            toast.success('Petição gerada com sucesso!');
+          } else if (status === 'error') {
+            clearInterval(pollInterval);
+            setLoading(false);
+            toast.error('Erro ao gerar petição', {
+              description: payload?.error || 'Erro desconhecido'
+            });
+          }
+        }, 3000); // Verificar a cada 3 segundos
+
+        // Timeout após 3 minutos
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setLoading(false);
+          toast.error('Timeout: A geração demorou muito. Tente novamente.');
+        }, 180000);
+
+        return; // Sair da função, polling vai continuar
+      }
+
+      // ✅ Fluxo legado (se retornar petição diretamente)
       const petitionContent = result?.petition || result?.petitionText;
       if (petitionContent) {
         setPetition(petitionContent);
         setHasCache(true);
         
-        // 🆕 SETAR DRAFT ID se retornado pela edge function
         if (result?.draftId) {
           setCurrentDraftId(result.draftId);
           console.log('[DRAFT] ✅ Draft ID setado:', result.draftId);
         }
         
-        // 🆕 SALVAR VALIDAÇÃO DE RECOMENDAÇÕES
         if (result?.recomendacoes_validacao) {
           setRecomendacoesValidacao(result.recomendacoes_validacao);
           console.log('[DRAFT] ✅ Validação de recomendações salva:', result.recomendacoes_validacao.length);
         }
         
-        // Carregar relatório de qualidade
         await loadQualityReport();
       }
     } catch (error) {
       console.error('Erro ao gerar petição:', error);
       toast.error('Erro ao gerar petição');
     } finally {
-      setLoading(false);
+      if (!result?.status || result.status !== 'generating') {
+        setLoading(false);
+      }
     }
   };
 
