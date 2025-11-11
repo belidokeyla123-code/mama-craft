@@ -69,7 +69,16 @@ serve(async (req) => {
 
     for (const doc of documents || []) {
       try {
-        console.log(`[DOC] Processando: ${doc.file_name}`);
+        console.log(`[DOC] Processando: ${doc.file_name} (${doc.mime_type})`);
+
+        // ✅ VERIFICAR SE É IMAGEM (OpenAI Vision API só aceita imagens)
+        const isImage = doc.mime_type?.startsWith('image/');
+        
+        if (!isImage) {
+          console.log(`[DOC] ⏭️ Pulando ${doc.file_name} - não é imagem (${doc.mime_type})`);
+          extractedData.observations!.push(`Documento ${doc.file_name} não processado - formato não suportado`);
+          continue;
+        }
 
         // Baixar arquivo do storage
         const { data: fileData, error: downloadError } = await supabase.storage
@@ -81,11 +90,19 @@ serve(async (req) => {
           continue;
         }
 
-        // Converter para base64
+        // Converter para base64 de forma segura (sem stack overflow)
         const arrayBuffer = await fileData.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        const bytes = new Uint8Array(arrayBuffer);
+        const chunkSize = 8192;
+        let base64 = '';
+        
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          const chunk = bytes.slice(i, i + chunkSize);
+          base64 += String.fromCharCode.apply(null, Array.from(chunk));
+        }
+        base64 = btoa(base64);
 
-        console.log(`[DOC] Arquivo convertido para base64, tamanho: ${base64.length} chars`);
+        console.log(`[DOC] Imagem convertida para base64, tamanho: ${base64.length} chars`);
 
         // Chamar OpenAI Vision API
         const visionResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -168,15 +185,15 @@ IMPORTANTE:
 
     console.log("[EXTRACT] Dados finais extraídos:", JSON.stringify(extractedData, null, 2));
 
-    // Salvar extração na tabela extractions
+    // Salvar extração na tabela extractions (usando extracted_at, não created_at)
     const { error: insertError } = await supabase
       .from("extractions")
       .insert({
         case_id: caseId,
-        document_ids: documentIds,
+        document_id: documentIds[0] || null, // Primeiro documento como referência
         entities: extractedData,
         auto_filled_fields: extractedData,
-        created_at: new Date().toISOString(),
+        extracted_at: new Date().toISOString(),
       });
 
     if (insertError) {

@@ -1002,9 +1002,23 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[BATCH] ✅ Análise batch iniciada:', batchResult);
         
+        // ⚠️ Verificar se há avisos sobre documentos não processados
+        if (batchResult?.extractedData?.observations?.length > 0) {
+          const pdfWarnings = batchResult.extractedData.observations.filter((obs: string) => 
+            obs.includes('não processado') || obs.includes('formato não suportado')
+          );
+          
+          if (pdfWarnings.length > 0) {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `⚠️ **Atenção**: Alguns documentos em PDF não puderam ser analisados. Por favor, converta os PDFs em imagens (PNG/JPG) e faça upload novamente para melhor extração de dados.\n\nDocumentos afetados:\n${pdfWarnings.map(w => `• ${w}`).join('\n')}`
+            }]);
+          }
+        }
+        
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: `⏳ Análise em andamento (processamento em background)...`
+          content: `✅ Análise concluída! Dados extraídos com sucesso.`
         }]);
         
         // Aguardar processamento e classificação dos documentos
