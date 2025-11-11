@@ -207,13 +207,23 @@ serve(async (req) => {
       throw new Error("File not found in storage");
     }
 
-    // ✅ CORREÇÃO CRÍTICA: PDF deve ser convertido no frontend antes de chegar aqui
+    // ✅ CRÍTICO: PDFs NÃO podem ser processados como imagem - precisam conversão no frontend
     const isPDF = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
     
     if (isPDF) {
-      console.warn(`[DOC ${documentId}] ⚠️ PDF detectado - deveria estar convertido no frontend!`);
-      console.warn(`[DOC ${documentId}] ⚠️ Tentando processar mesmo assim, mas pode falhar...`);
-      // Continuar processamento - não retornar early
+      console.error(`[DOC ${documentId}] ❌ PDF NÃO pode ser analisado - requer conversão no frontend!`);
+      
+      return new Response(
+        JSON.stringify({ 
+          error: "PDFs devem ser convertidos para imagem no frontend antes da análise. Use a aba Documentos para converter.",
+          documentId,
+          caseId,
+          isPDF: true,
+          shouldRetry: false
+        }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
     
     const arrayBuffer = await fileData.arrayBuffer();

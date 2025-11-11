@@ -69,51 +69,25 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[RECONVERT] ⚠️ NOTA: Conversão PDF→Imagens deve ser feita no FRONTEND`);
-    console.log(`[RECONVERT] Disparando análise dos PDFs pendentes...`);
-    
-    // ✅ CORREÇÃO: Disparar análise para cada PDF pendente
-    const analysisResults = [];
-    for (const pdf of failedPdfs) {
-      console.log(`[RECONVERT] Analisando PDF: ${pdf.file_name}`);
-      
-      try {
-        const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
-          'analyze-single-document',
-          {
-            body: {
-              documentId: pdf.id,
-              caseId: caseId,
-              forceReprocess: true
-            }
-          }
-        );
+    console.log(`[RECONVERT] ⚠️ NOTA CRÍTICA: Backend (Deno) NÃO pode converter PDFs!`);
+    console.log(`[RECONVERT] PDFs devem ser convertidos no FRONTEND usando pdfjs-dist`);
+    console.log(`[RECONVERT] Retornando lista de ${toReprocess.length} PDF(s) que precisam conversão...`);
 
-        if (analysisError) {
-          console.error(`[RECONVERT] Erro ao analisar ${pdf.file_name}:`, analysisError);
-          analysisResults.push({ id: pdf.id, status: 'error', error: analysisError.message });
-        } else {
-          console.log(`[RECONVERT] ✅ Análise concluída: ${pdf.file_name}`);
-          analysisResults.push({ id: pdf.id, status: 'success' });
-        }
-      } catch (err: any) {
-        console.error(`[RECONVERT] Exceção ao analisar ${pdf.file_name}:`, err);
-        analysisResults.push({ id: pdf.id, status: 'error', error: err.message });
-      }
-    }
-
-    const successCount = analysisResults.filter(r => r.status === 'success').length;
-
+    // ✅ CORREÇÃO: NÃO tentar analisar PDFs - apenas retornar lista
     return new Response(
       JSON.stringify({ 
-        success: true,
-        message: `${successCount} de ${toReprocess.length} PDF(s) analisado(s) com sucesso`,
-        reprocessed: successCount,
-        pendingConversion: toReprocess.length - successCount,
-        documents: failedPdfs.map(p => p.file_name),
-        results: analysisResults
+        success: false,
+        message: `${toReprocess.length} PDF(s) encontrado(s) - conversão manual necessária`,
+        requiresManualConversion: true,
+        pdfsToConvert: failedPdfs.map(p => ({
+          id: p.id,
+          fileName: p.file_name,
+          documentType: p.document_type,
+          filePath: p.file_path
+        })),
+        note: "Use a aba Documentos ou o botão 'Converter PDFs' no Chat para realizar a conversão"
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error: any) {

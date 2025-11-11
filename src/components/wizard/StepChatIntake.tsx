@@ -1988,55 +1988,72 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         </>
       )}
 
-      {/* ✅ NOVO: Botão de reprocessamento geral de documentos */}
+      {/* ✅ NOVO: Botão de conversão de PDFs */}
       {data.caseId && (
         <div className="flex gap-2">
           <Button
             onClick={async () => {
               setIsProcessing(true);
               try {
-                // 1. Reconverter PDFs
-                toast({ title: "🔄 Reprocessando documentos..." });
+                toast({ title: "🔍 Verificando PDFs pendentes..." });
                 
+                // 1. Verificar se há PDFs para converter
                 const { data: reconvertResult } = await supabase.functions.invoke('reconvert-failed-pdfs', {
                   body: { caseId: data.caseId }
                 });
                 
-                console.log('[REPROCESS] Resultado reconversão:', reconvertResult);
+                console.log('[CONVERT] Resultado:', reconvertResult);
                 
-                // 2. Aguardar 2s para processamento
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // 3. Consolidar extrações
-                const consolidated = await consolidateAllExtractions(data.caseId);
-                if (consolidated) {
-                  updateData(consolidated);
+                if (reconvertResult?.requiresManualConversion) {
+                  const pdfs = reconvertResult.pdfsToConvert || [];
                   
-                  const summary = [];
-                  if (consolidated.author_name) summary.push(`👤 ${consolidated.author_name}`);
-                  if (consolidated.author_cpf) summary.push(`🆔 ${consolidated.author_cpf}`);
-                  if (consolidated.child_name) summary.push(`👶 ${consolidated.child_name}`);
+                  if (pdfs.length === 0) {
+                    toast({ 
+                      title: "✅ Sem PDFs pendentes", 
+                      description: "Todos os documentos já foram processados" 
+                    });
+                    setIsProcessing(false);
+                    return;
+                  }
                   
+                  // Mostrar alerta com PDFs encontrados
                   setMessages(prev => [...prev, {
                     role: 'assistant',
-                    content: `✅ **Reprocessamento concluído!**\n\n📊 **Dados atualizados:**\n${summary.join('\n')}`
+                    content: `⚠️ **${pdfs.length} PDF(s) precisam ser convertidos:**\n\n${pdfs.map((p: any) => `• ${p.fileName}`).join('\n')}\n\n💡 **Solução:** Vá para a aba **Documentos** e clique em "Converter PDFs para Análise"`
                   }]);
                   
                   toast({ 
-                    title: "✅ Documentos reprocessados!", 
-                    description: `${summary.length} campos atualizados` 
+                    title: "⚠️ PDFs precisam conversão manual", 
+                    description: `${pdfs.length} PDF(s) encontrado(s). Veja instruções no chat.`,
+                    duration: 5000
                   });
                 } else {
-                  toast({ 
-                    title: "⚠️ Nenhuma extração encontrada", 
-                    description: "Nenhum dado foi extraído dos documentos" 
-                  });
+                  // Consolidar extrações se houver
+                  const consolidated = await consolidateAllExtractions(data.caseId);
+                  if (consolidated) {
+                    updateData(consolidated);
+                    
+                    const summary = [];
+                    if (consolidated.author_name) summary.push(`👤 ${consolidated.author_name}`);
+                    if (consolidated.author_cpf) summary.push(`🆔 ${consolidated.author_cpf}`);
+                    if (consolidated.child_name) summary.push(`👶 ${consolidated.child_name}`);
+                    
+                    setMessages(prev => [...prev, {
+                      role: 'assistant',
+                      content: `✅ **Dados consolidados!**\n\n📊 **Informações:**\n${summary.join('\n')}`
+                    }]);
+                    
+                    toast({ 
+                      title: "✅ Dados consolidados!", 
+                      description: `${summary.length} campos encontrados` 
+                    });
+                  }
                 }
                 
               } catch (error: any) {
-                console.error('[REPROCESS] Erro:', error);
+                console.error('[CONVERT] Erro:', error);
                 toast({
-                  title: "Erro ao reprocessar",
+                  title: "Erro ao verificar PDFs",
                   description: error.message,
                   variant: "destructive",
                 });
@@ -2051,12 +2068,12 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             {isProcessing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Reprocessando...
+                Verificando...
               </>
             ) : (
               <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Reprocessar Documentos
+                <FileText className="h-4 w-4 mr-2" />
+                Verificar PDFs Pendentes
               </>
             )}
           </Button>
