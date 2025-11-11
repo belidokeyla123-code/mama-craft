@@ -207,32 +207,13 @@ serve(async (req) => {
       throw new Error("File not found in storage");
     }
 
-    // ✅ MUDANÇA 3: VERIFICAR SE É PDF - Se sim, disparar conversão automática
+    // ✅ CORREÇÃO CRÍTICA: PDF deve ser convertido no frontend antes de chegar aqui
     const isPDF = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
+    
     if (isPDF) {
-      console.log(`[DOC ${documentId}] 📄 DOCUMENTO É PDF - Disparando conversão automática...`);
-      
-      // Chamar reconvert-failed-pdfs para converter este PDF
-      const { error: reconvertError } = await supabaseClient.functions.invoke('reconvert-failed-pdfs', {
-        body: { caseId }
-      });
-      
-      if (reconvertError) {
-        console.error(`[DOC ${documentId}] Erro ao disparar conversão:`, reconvertError);
-      } else {
-        console.log(`[DOC ${documentId}] ✅ Conversão automática iniciada`);
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          message: "PDF detectado - conversão automática iniciada",
-          documentId,
-          caseId,
-          status: "converting"
-        }), {
-        status: 202, // ✅ Status 202 Accepted (processando)
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.warn(`[DOC ${documentId}] ⚠️ PDF detectado - deveria estar convertido no frontend!`);
+      console.warn(`[DOC ${documentId}] ⚠️ Tentando processar mesmo assim, mas pode falhar...`);
+      // Continuar processamento - não retornar early
     }
     
     const arrayBuffer = await fileData.arrayBuffer();

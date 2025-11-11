@@ -69,21 +69,49 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[RECONVERT] ⚠️ NOTA IMPORTANTE: Conversão PDF→Imagens deve ser feita no FRONTEND`);
-    console.log(`[RECONVERT] Backend (Deno) não suporta canvas/pdfjs nativamente`);
-    console.log(`[RECONVERT] Solução: PDFs devem ser convertidos automaticamente ao fazer upload`);
+    console.log(`[RECONVERT] ⚠️ NOTA: Conversão PDF→Imagens deve ser feita no FRONTEND`);
+    console.log(`[RECONVERT] Disparando análise dos PDFs pendentes...`);
     
-    // ✅ MUDANÇA 2: Como não podemos converter no backend, marcar PDFs para reprocessamento
-    console.log(`[RECONVERT] Marcando ${toReprocess.length} PDF(s) para conversão no próximo acesso`);
+    // ✅ CORREÇÃO: Disparar análise para cada PDF pendente
+    const analysisResults = [];
+    for (const pdf of failedPdfs) {
+      console.log(`[RECONVERT] Analisando PDF: ${pdf.file_name}`);
+      
+      try {
+        const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
+          'analyze-single-document',
+          {
+            body: {
+              documentId: pdf.id,
+              caseId: caseId,
+              forceReprocess: true
+            }
+          }
+        );
+
+        if (analysisError) {
+          console.error(`[RECONVERT] Erro ao analisar ${pdf.file_name}:`, analysisError);
+          analysisResults.push({ id: pdf.id, status: 'error', error: analysisError.message });
+        } else {
+          console.log(`[RECONVERT] ✅ Análise concluída: ${pdf.file_name}`);
+          analysisResults.push({ id: pdf.id, status: 'success' });
+        }
+      } catch (err: any) {
+        console.error(`[RECONVERT] Exceção ao analisar ${pdf.file_name}:`, err);
+        analysisResults.push({ id: pdf.id, status: 'error', error: err.message });
+      }
+    }
+
+    const successCount = analysisResults.filter(r => r.status === 'success').length;
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: `${toReprocess.length} PDF(s) detectado(s) - conversão deve ser feita no frontend`,
-        reprocessed: 0,
-        pendingConversion: toReprocess.length,
+        message: `${successCount} de ${toReprocess.length} PDF(s) analisado(s) com sucesso`,
+        reprocessed: successCount,
+        pendingConversion: toReprocess.length - successCount,
         documents: failedPdfs.map(p => p.file_name),
-        note: "PDFs serão convertidos automaticamente no próximo upload ou na aba de documentos"
+        results: analysisResults
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

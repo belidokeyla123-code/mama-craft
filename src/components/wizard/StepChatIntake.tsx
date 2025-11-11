@@ -172,14 +172,35 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     loadExistingData();
   }, [data.caseId]); // Executa quando caseId muda
 
-  // ✅ MUDANÇA 8: Escutar atualizações de outras abas em tempo real
+  // ✅ MUDANÇA 8: Escutar atualizações de outras abas em tempo real + consolidação automática
   useTabSync({
     caseId: data.caseId || '',
     events: ['case-updated', 'extractions-updated', 'benefits-updated'],
     onSync: async (detail) => {
       console.log('[CHAT] 🔄 Dados atualizados em outra aba, recarregando...');
       
-      // Recarregar dados do banco
+      // ✅ CORREÇÃO: Consolidar extrações quando houver mudanças
+      if (detail.event === 'extractions-updated') {
+        const consolidated = await consolidateAllExtractions(data.caseId);
+        if (consolidated) {
+          updateData(consolidated);
+          
+          // Mensagem de confirmação com dados extraídos
+          const summary = [];
+          if (consolidated.author_name) summary.push(`👤 Nome: ${consolidated.author_name}`);
+          if (consolidated.author_cpf) summary.push(`🆔 CPF: ${consolidated.author_cpf}`);
+          if (consolidated.child_name) summary.push(`👶 Filho: ${consolidated.child_name}`);
+          if (consolidated.child_birth_date) summary.push(`🎂 Nascimento: ${new Date(consolidated.child_birth_date).toLocaleDateString('pt-BR')}`);
+          
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `✅ **Dados extraídos dos documentos atualizados!**\n\n${summary.join('\n')}\n\nVocê pode fazer perguntas sobre o caso agora!`
+          }]);
+        }
+        return;
+      }
+      
+      // Recarregar dados do banco para outros eventos
       const { data: freshData, error } = await supabase
         .from('cases')
         .select('*')
@@ -197,7 +218,6 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         childName: freshData.child_name,
         childBirthDate: freshData.child_birth_date,
         fatherName: freshData.father_name,
-        // ... outros campos relevantes
       });
       
       // Adicionar mensagem visual no chat
@@ -1966,6 +1986,81 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             </AlertDescription>
           </Alert>
         </>
+      )}
+
+      {/* ✅ NOVO: Botão de reprocessamento geral de documentos */}
+      {data.caseId && (
+        <div className="flex gap-2">
+          <Button
+            onClick={async () => {
+              setIsProcessing(true);
+              try {
+                // 1. Reconverter PDFs
+                toast({ title: "🔄 Reprocessando documentos..." });
+                
+                const { data: reconvertResult } = await supabase.functions.invoke('reconvert-failed-pdfs', {
+                  body: { caseId: data.caseId }
+                });
+                
+                console.log('[REPROCESS] Resultado reconversão:', reconvertResult);
+                
+                // 2. Aguardar 2s para processamento
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // 3. Consolidar extrações
+                const consolidated = await consolidateAllExtractions(data.caseId);
+                if (consolidated) {
+                  updateData(consolidated);
+                  
+                  const summary = [];
+                  if (consolidated.author_name) summary.push(`👤 ${consolidated.author_name}`);
+                  if (consolidated.author_cpf) summary.push(`🆔 ${consolidated.author_cpf}`);
+                  if (consolidated.child_name) summary.push(`👶 ${consolidated.child_name}`);
+                  
+                  setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: `✅ **Reprocessamento concluído!**\n\n📊 **Dados atualizados:**\n${summary.join('\n')}`
+                  }]);
+                  
+                  toast({ 
+                    title: "✅ Documentos reprocessados!", 
+                    description: `${summary.length} campos atualizados` 
+                  });
+                } else {
+                  toast({ 
+                    title: "⚠️ Nenhuma extração encontrada", 
+                    description: "Nenhum dado foi extraído dos documentos" 
+                  });
+                }
+                
+              } catch (error: any) {
+                console.error('[REPROCESS] Erro:', error);
+                toast({
+                  title: "Erro ao reprocessar",
+                  description: error.message,
+                  variant: "destructive",
+                });
+              } finally {
+                setIsProcessing(false);
+              }
+            }}
+            disabled={isProcessing}
+            variant="outline"
+            className="flex-1"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Reprocessando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reprocessar Documentos
+              </>
+            )}
+          </Button>
+        </div>
       )}
 
       {/* ✅ CORREÇÃO #2: Alerta de PDFs não processados */}
