@@ -52,17 +52,22 @@ serve(async (req) => {
       throw new Error('❌ Nenhum documento anexado. Complete a aba "Documentos" primeiro.');
     }
     
-    // 2. Verificar validação
+    // 2. Verificar validação (warning only)
     const { data: validation } = await supabase
       .from('document_validation')
-      .select('is_sufficient')
+      .select('is_sufficient, score, missing_docs')
       .eq('case_id', caseId)
       .order('validated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!validation || !validation.is_sufficient) {
-      throw new Error('❌ Documentação insuficiente. Complete a aba "Validação" primeiro.');
+    if (!validation) {
+      console.warn('[PETITION] ⚠️ Nenhuma validação de documentos encontrada');
+    } else if (!validation.is_sufficient) {
+      console.warn(`[PETITION] ⚠️ Documentação com score ${validation.score} - faltam ${(validation.missing_docs as any[])?.length || 0} documentos críticos`);
+      console.warn('[PETITION] ⚠️ Continuando mesmo assim, mas qualidade pode ser afetada');
+    } else {
+      console.log('[PETITION] ✅ Documentação validada e suficiente');
     }
 
     // 3. Verificar análise
