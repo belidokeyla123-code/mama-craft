@@ -126,27 +126,26 @@ Responda de forma natural e útil.`;
       { role: 'user', content: userMessage }
     ];
 
-    // Chamar Lovable AI Gateway
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableApiKey) {
-      console.error('[CHAT ASSISTANT] LOVABLE_API_KEY não configurada');
+    // Chamar OpenAI
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      console.error('[CHAT ASSISTANT] OPENAI_API_KEY não configurada');
       return new Response(
         JSON.stringify({ error: 'Serviço de IA não configurado' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('[CHAT ASSISTANT] Chamando Lovable AI Gateway...');
-    const openaiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    console.log('[CHAT ASSISTANT] Chamando OpenAI...');
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gpt-5-mini-2025-08-07',
         messages: messages,
-        temperature: 0.7,
         max_completion_tokens: 1000,
       }),
     });

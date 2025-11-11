@@ -271,22 +271,22 @@ Retorne JSON com NO MÁXIMO 3 de cada tipo:
   "teses_juridicas_aplicaveis": []
 }`;
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
       
-    // Chamar IA para busca jurisprudências com contexto completo
-    console.log('[SEARCH-JURIS] Chamando IA com análise completa...');
+    // Chamar OpenAI para busca jurisprudências com contexto completo
+    console.log('[SEARCH-JURIS] Chamando OpenAI com análise completa...');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 segundos timeout
 
     try {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'gpt-5-mini-2025-08-07',
           messages: [
             { 
               role: 'system', 
@@ -294,7 +294,8 @@ Retorne JSON com NO MÁXIMO 3 de cada tipo:
             },
             { role: 'user', content: prompt }
           ],
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          max_completion_tokens: 4000,
         }),
         signal: controller.signal,
       });

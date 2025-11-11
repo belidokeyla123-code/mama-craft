@@ -23,25 +23,25 @@ export interface AICallResult {
 /**
  * Call Lovable AI Gateway with standardized error handling and logging
  */
-export async function callLovableAI(
+export async function callOpenAI(
   prompt: string,
   options: AICallOptions = {}
 ): Promise<AICallResult> {
   const {
-    model = 'google/gemini-2.5-flash',
+    model = 'gpt-4o-mini',
     temperature,
     maxTokens,
     timeout = 30000,
     responseFormat = 'text'
   } = options;
 
-  // ✅ Usar Lovable AI Gateway (suporta Gemini e OpenAI)
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  if (!LOVABLE_API_KEY) {
-    throw new Error('LOVABLE_API_KEY not configured');
+  // ✅ Usar OpenAI API
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY not configured');
   }
 
-  console.log(`[AI] Calling Lovable AI Gateway with model ${model}...`);
+  console.log(`[AI] Calling OpenAI with model ${model}...`);
   const startTime = Date.now();
 
   const controller = new AbortController();
@@ -53,16 +53,28 @@ export async function callLovableAI(
       messages: [{ role: 'user', content: prompt }]
     };
 
-    if (temperature !== undefined) requestBody.temperature = temperature;
-    if (maxTokens) requestBody.max_tokens = maxTokens;
+    // GPT-5 e modelos novos não aceitam temperature
+    if (temperature !== undefined && !model.includes('gpt-5') && !model.includes('o3') && !model.includes('o4')) {
+      requestBody.temperature = temperature;
+    }
+    
+    // GPT-5 e modelos novos usam max_completion_tokens
+    if (maxTokens) {
+      if (model.includes('gpt-5') || model.includes('o3') || model.includes('o4')) {
+        requestBody.max_completion_tokens = maxTokens;
+      } else {
+        requestBody.max_tokens = maxTokens;
+      }
+    }
+    
     if (responseFormat === 'json_object') {
       requestBody.response_format = { type: 'json_object' };
     }
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
@@ -71,12 +83,12 @@ export async function callLovableAI(
 
     clearTimeout(timeoutId);
 
-    // Handle rate limits and payment issues
+    // Handle rate limits and OpenAI errors
     if (response.status === 429) {
       throw new Error('RATE_LIMIT: Too many requests. Please try again later.');
     }
-    if (response.status === 402) {
-      throw new Error('NO_CREDITS: Add credits in Settings -> Workspace -> Usage.');
+    if (response.status === 401) {
+      throw new Error('INVALID_API_KEY: OpenAI API key is invalid.');
     }
 
     if (!response.ok) {

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { corsHeaders } from "../_shared/cors.ts";
-import { callLovableAI } from "../_shared/ai-helpers.ts";
+import { callOpenAI } from "../_shared/ai-helpers.ts";
 import { validateRequest, createValidationErrorResponse, autoFixQualitySchema } from '../_shared/validators.ts';
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
@@ -338,8 +338,9 @@ RETORNE JSON:
   "peticao_corrigida": "texto completo corrigido ou null se não houver erros"
 }`;
 
-          const result = await callLovableAI(promptPortugues, {
-            model: 'google/gemini-2.5-flash',
+          const result = await callOpenAI(promptPortugues, {
+            model: 'gpt-4o-mini',
+            temperature: 0.7,
             responseFormat: "json_object"
           });
           
@@ -383,8 +384,9 @@ RETORNE JSON:
   "secao_provas_corrigida": "Seção 'Das Provas' reescrita com citações corretas ou null se não houver problemas"
 }`;
 
-          const result = await callLovableAI(promptDocumentos, {
-            model: 'google/gemini-2.5-flash',
+          const result = await callOpenAI(promptDocumentos, {
+            model: 'gpt-4o-mini',
+            temperature: 0.7,
             responseFormat: "json_object"
           });
           

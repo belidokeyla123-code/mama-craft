@@ -929,24 +929,25 @@ Retorne a petição completa em markdown, seguindo EXATAMENTE a estrutura acima.
     console.log(`   Endereço INSS: ${inssEndereco}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     
     // ✅ Timeout otimizado de 45 segundos
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-    console.log('[PETITION] 🚀 Usando google/gemini-2.5-flash (otimizado para velocidade)');
+    console.log('[PETITION] 🚀 Usando gpt-5-2025-08-07 (melhor qualidade para petições)');
 
     try {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash', // ✅ Flash: mais rápido e confiável
+          model: 'gpt-5-2025-08-07',
           messages: [{ role: 'user', content: prompt }],
+          max_completion_tokens: 12000,
         }),
         signal: controller.signal,
       });

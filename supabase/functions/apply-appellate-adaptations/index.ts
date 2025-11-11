@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { corsHeaders } from "../_shared/cors.ts";
-import { callLovableAI } from "../_shared/ai-helpers.ts";
+import { callOpenAI } from "../_shared/ai-helpers.ts";
 import { METODO_KEYLA_BELIDO_PROMPT } from "../_shared/prompts/metodo-keyla-belido.ts";
 import { validateRequest, createValidationErrorResponse, applyAdaptationsSchema } from '../_shared/validators.ts';
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
@@ -92,9 +92,8 @@ Adapte a petição para que ela já esteja preparada para eventual recurso à TN
 
 Retorne a petição COMPLETA adaptada em markdown.`;
 
-    const result = await callLovableAI(prompt, {
-      model: 'google/gemini-2.5-flash',
-      temperature: 0.7,
+    const result = await callOpenAI(prompt, {
+      model: 'gpt-5-mini-2025-08-07',
       timeout: 60000
     });
 

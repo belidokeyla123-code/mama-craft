@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
-import { callLovableAI, parseJSONResponse } from "../_shared/ai-helpers.ts";
+import { callOpenAI, parseJSONResponse } from "../_shared/ai-helpers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -217,11 +217,11 @@ Considere:
 - Verifique idade e qualidade da MÃE na data do evento (child_birth_date)
 - Jurisprudência aplicável: TNU, Pedido 0502723-87.2015.4.05.8300 (restabelecimento)`;
 
-    console.log('[ANALYZE] Usando callLovableAI helper com modelo google/gemini-2.5-flash (rápido)');
+    console.log('[ANALYZE] Usando callOpenAI helper com modelo gpt-5-mini-2025-08-07');
 
     try {
-      const aiResult = await callLovableAI(prompt, {
-        model: 'google/gemini-2.5-flash',
+      const aiResult = await callOpenAI(prompt, {
+        model: 'gpt-5-mini-2025-08-07',
         responseFormat: 'json_object',
         timeout: 60000
       });

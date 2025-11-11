@@ -197,28 +197,29 @@ ${JSON.stringify(selectedDoutrinas, null, 2)}
 
 AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes ao caso concreto. Use técnicas de PNL, retórica e persuasão. Seja eloquente mas técnico. RETORNE JSON VÁLIDO.`;
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY não configurada');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    console.log('[TESE] Chamando IA para gerar teses...');
+    console.log('[TESE] Chamando OpenAI para gerar teses...');
 
     // Timeout de 20 segundos
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'gpt-5-mini-2025-08-07',
           messages: [{ role: 'user', content: prompt }],
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          max_completion_tokens: 4000,
         }),
         signal: controller.signal,
       });

@@ -296,13 +296,13 @@ serve(async (req) => {
     const prompt = classificationPrompt;
     console.log(`[DOC ${documentId}] 📋 Prompt de classificação gerado`);
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY não configurada');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY não configurada');
     }
 
     const aiRequestBody = {
-      model: "google/gemini-2.5-flash",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "user",
@@ -321,11 +321,11 @@ serve(async (req) => {
       temperature: 0.3,
     };
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify(aiRequestBody),
     });
@@ -398,7 +398,7 @@ serve(async (req) => {
       console.log(`[DOC ${documentId}] 📋 Prompt detalhado gerado (${detailedPrompt.length} caracteres)`);
       
       const detailedRequest = {
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "user",
@@ -417,11 +417,11 @@ serve(async (req) => {
         temperature: 0.3,
       };
 
-      const detailedResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const detailedResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify(detailedRequest),
       });
@@ -479,7 +479,7 @@ RETORNE JSON com análise detalhada:
 }`;
 
       const fallbackRequest = {
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "user",
@@ -498,11 +498,11 @@ RETORNE JSON com análise detalhada:
         temperature: 0.3,
       };
 
-      const fallbackResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const fallbackResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify(fallbackRequest),
       });
