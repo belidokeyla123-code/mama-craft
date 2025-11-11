@@ -68,7 +68,6 @@ Deno.serve(async (req) => {
     const validated = validateRequest(teseJuridicaSchema, body);
     const { caseId, selectedJurisprudencias, selectedSumulas, selectedDoutrinas } = validated;
     
-    // Extrair links das jurisprudências
     const jurisLinks = (selectedJurisprudencias || []).map((j: any) => j.link).filter(Boolean);
 
     const supabase = createClient(
@@ -76,28 +75,49 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Buscar dados do caso e análise
-    const { data: caseData } = await supabase
-      .from('cases')
-      .select('*')
-      .eq('id', caseId)
-      .single();
+    // Criar registro inicial com status 'generating'
+    const { error: createError } = await supabase
+      .from('teses_juridicas')
+      .upsert({
+        case_id: caseId,
+        teses: [{ status: 'generating' }] as any,
+        selected_ids: [],
+        is_stale: false,
+        created_at: new Date().toISOString()
+      }, {
+        onConflict: 'case_id'
+      });
 
-    const { data: analysis } = await supabase
-      .from('case_analysis')
-      .select('*')
-      .eq('case_id', caseId)
-      .maybeSingle();
+    if (createError) {
+      console.error('[TESE] Erro ao criar registro inicial:', createError);
+      throw createError;
+    }
 
-    // 🆕 EXTRAIR RECOMENDAÇÕES DA ANÁLISE
-    const recomendacoes = analysis?.draft_payload?.recomendacoes || [];
-    console.log('[TESE] Recomendações da análise:', recomendacoes.length);
+    console.log('[TESE] ✅ Registro inicial criado, processando em background...');
 
-    // 🆕 BUSCAR BENEFÍCIOS MANUAIS
-    const manualBenefits = caseData?.manual_benefits || [];
-    console.log('[TESE] Benefícios manuais:', manualBenefits.length);
+    // Executar geração em background (sem await)
+    (async () => {
+      try {
+        // Buscar dados do caso e análise
+        const { data: caseData } = await supabase
+          .from('cases')
+          .select('*')
+          .eq('id', caseId)
+          .single();
 
-    const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
+        const { data: analysis } = await supabase
+          .from('case_analysis')
+          .select('*')
+          .eq('case_id', caseId)
+          .maybeSingle();
+
+        const recomendacoes = analysis?.draft_payload?.recomendacoes || [];
+        console.log('[TESE] Recomendações da análise:', recomendacoes.length);
+
+        const manualBenefits = caseData?.manual_benefits || [];
+        console.log('[TESE] Benefícios manuais:', manualBenefits.length);
+
+        const prompt = `${ESPECIALISTA_MATERNIDADE_PROMPT}
 
 ${ESPECIALISTA_TESE_PROMPT}
 
@@ -176,7 +196,7 @@ ${JSON.stringify(selectedDoutrinas, null, 2)}
     {
       "titulo": "...",
       "tese_completa": "...",
-      "atende_recomendacao": "Fundamentar ilegalidade do indeferimento", // texto da recomendação
+      "atende_recomendacao": "Fundamentar ilegalidade do indeferimento",
       "fundamentacao_legal": [...],
       "fundamentacao_jurisprudencial": [...],
       "links_jurisprudencias": [...],
@@ -197,97 +217,82 @@ ${JSON.stringify(selectedDoutrinas, null, 2)}
 
 AGORA CONSTRUA NO MÁXIMO 3 TESES JURÍDICAS PERSUASIVAS conectando essas fontes ao caso concreto. Use técnicas de PNL, retórica e persuasão. Seja eloquente mas técnico. RETORNE JSON VÁLIDO.`;
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY não configurada');
-    }
+        const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+        if (!OPENAI_API_KEY) {
+          throw new Error('OPENAI_API_KEY não configurada');
+        }
 
-    console.log('[TESE] Chamando OpenAI para gerar teses...');
+        console.log('[TESE] Chamando OpenAI para gerar teses...');
 
-    // Timeout de 20 segundos
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutos
 
-    try {
-      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-5-mini-2025-08-07',
-          messages: [{ role: 'user', content: prompt }],
-          response_format: { type: "json_object" },
-          max_completion_tokens: 4000,
-        }),
-        signal: controller.signal,
-      });
+        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-5-mini-2025-08-07',
+            messages: [{ role: 'user', content: prompt }],
+            response_format: { type: "json_object" },
+            max_completion_tokens: 4000,
+          }),
+          signal: controller.signal,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (!aiResponse.ok) {
-        const errorText = await aiResponse.text();
-        console.error('[TESE] Erro da IA:', aiResponse.status, errorText);
+        if (!aiResponse.ok) {
+          const errorText = await aiResponse.text();
+          console.error('[TESE] Erro da IA:', aiResponse.status, errorText);
+          throw new Error(`AI API error: ${aiResponse.status}`);
+        }
+
+        const result = await aiResponse.json();
+        const tesesData = parseJSONResponse<any>(result.choices[0].message.content);
+
+        console.log('[TESE] Teses geradas com sucesso:', tesesData.teses?.length || 0);
+
+        // Atualizar com sucesso
+        await supabase
+          .from('teses_juridicas')
+          .update({
+            teses: [...tesesData.teses, { status: 'completed' }] as any,
+            selected_ids: [],
+            is_stale: false
+          })
+          .eq('case_id', caseId);
+
+        console.log('[TESE] ✅ Background task concluída com sucesso');
+      } catch (error: any) {
+        console.error('[TESE] ❌ Erro no background task:', error);
         
-        if (aiResponse.status === 429) {
-          return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
-            status: 429,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        if (aiResponse.status === 402) {
-          return new Response(JSON.stringify({ error: 'Payment required' }), {
-            status: 402,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        throw new Error(`AI API error: ${aiResponse.status}`);
+        // Atualizar com erro
+        await supabase
+          .from('teses_juridicas')
+          .update({
+            teses: [{ 
+              status: 'error',
+              error: error.name === 'AbortError' 
+                ? 'Timeout: Geração de teses demorou muito.'
+                : error.message || 'Erro ao gerar teses jurídicas'
+            }] as any
+          })
+          .eq('case_id', caseId);
       }
+    })();
 
-      const result = await aiResponse.json();
-      const tesesData = parseJSONResponse<any>(result.choices[0].message.content);
-
-      console.log('[TESE] Teses geradas com sucesso:', tesesData.teses?.length || 0);
-
-      // ═══ SALVAR TESES NO BANCO ═══
-      console.log('[TESE] Salvando teses em teses_juridicas...');
-      
-      const { error: saveError } = await supabase
-        .from('teses_juridicas')
-        .upsert({
-          case_id: caseId,
-          teses: tesesData.teses,
-          selected_ids: [], // Inicialmente vazio, usuário seleciona depois
-          is_stale: false,
-          created_at: new Date().toISOString()
-        }, {
-          onConflict: 'case_id'
-        });
-
-      if (saveError) {
-        console.error('[TESE] ⚠️ Erro ao salvar teses:', saveError);
-        // Não falhar se der erro ao salvar, apenas logar
-      } else {
-        console.log('[TESE] ✅ Teses salvas em teses_juridicas!');
-      }
-
-      return new Response(JSON.stringify(tesesData), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        return new Response(JSON.stringify({ 
-          error: 'Timeout: Geração de teses demorou muito. Tente novamente.',
-          code: 'TIMEOUT'
-        }), {
-          status: 408,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw fetchError;
-    }
+    // Retornar 202 Accepted imediatamente
+    return new Response(JSON.stringify({ 
+      message: 'Geração de teses iniciada',
+      caseId: caseId,
+      status: 'generating'
+    }), {
+      status: 202,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error: any) {
     if (error instanceof z.ZodError) {

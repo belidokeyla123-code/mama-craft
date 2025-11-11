@@ -203,46 +203,77 @@ export const StepJurisprudence = ({ data, updateData }: StepJurisprudenceProps) 
     
     setLoading(true);
     try {
-      // Chamar DIRETAMENTE a busca (sem fila)
       const { data: result, error } = await supabase.functions.invoke('search-jurisprudence', {
         body: { caseId: data.caseId }
       });
 
       if (error) {
-        // Tratar erros específicos
         if (error.message?.includes('429')) {
           toast.error('Limite de requisições atingido. Tente novamente em alguns minutos.');
         } else if (error.message?.includes('402')) {
           toast.error('Créditos insuficientes. Adicione créditos na sua conta.');
-        } else if (error.message?.includes('timeout')) {
-          toast.error('Busca demorou muito. Tente novamente.');
         } else {
           toast.error('Erro ao buscar jurisprudências');
         }
         throw error;
       }
 
+      // Verificar se é 202 Accepted (background task)
+      if (result?.status === 'generating') {
+        toast.info('🔄 Busca de jurisprudência em andamento...', {
+          description: 'Acompanhe o progresso aqui. Isso pode levar alguns minutos.',
+          duration: 5000
+        });
+
+        // Iniciar polling
+        const pollInterval = setInterval(async () => {
+          const { data: jurisprudenceData } = await supabase
+            .from('jurisprudence_results')
+            .select('*')
+            .eq('case_id', data.caseId)
+            .single();
+
+          if (jurisprudenceData?.results) {
+            const results = jurisprudenceData.results as any;
+            if (results.status === 'completed') {
+              clearInterval(pollInterval);
+              setJurisprudencias(results.jurisprudencias || []);
+              setSumulas(results.sumulas || []);
+              setDoutrinas(results.doutrinas || []);
+              setTeses(results.teses_juridicas_aplicaveis || []);
+              setHasCache(true);
+              setLoading(false);
+              toast.success('✅ Jurisprudências carregadas com sucesso!');
+            } else if (results.status === 'error') {
+              clearInterval(pollInterval);
+              setLoading(false);
+              toast.error('❌ Erro ao buscar jurisprudências: ' + results.error);
+            }
+          }
+        }, 3000); // Poll a cada 3 segundos
+
+        // Timeout de segurança de 3 minutos
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          if (loading) {
+            setLoading(false);
+            toast.error('⏱️ Tempo limite excedido. Tente novamente.');
+          }
+        }, 180000);
+        
+        return;
+      }
+
+      // Resposta síncrona (fallback)
       setJurisprudencias(result.jurisprudencias || []);
       setSumulas(result.sumulas || []);
       setDoutrinas(result.doutrinas || []);
       setTeses(result.teses_juridicas_aplicaveis || []);
-      
-      // Salvar no cache PRESERVANDO seleções existentes
-      const currentSelectedIds = Array.from(selectedIds);
-      await supabase
-        .from('jurisprudence_results')
-        .upsert({
-          case_id: data.caseId,
-          results: result,
-          selected_ids: currentSelectedIds, // Manter seleções anteriores
-          created_at: new Date().toISOString()
-        });
-      
       setHasCache(true);
+      setLoading(false);
 
     } catch (error: any) {
       console.error('Erro ao buscar jurisprudências:', error);
-    } finally {
       setLoading(false);
     }
   };

@@ -135,23 +135,61 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
         throw error;
       }
 
+      // Verificar se é 202 Accepted (background task)
+      if (result?.status === 'generating') {
+        toast.info('🔄 Gerando teses jurídicas...', {
+          description: 'Acompanhe o progresso aqui. Isso pode levar alguns minutos.',
+          duration: 5000
+        });
+
+        // Iniciar polling
+        const pollInterval = setInterval(async () => {
+          const { data: teseData } = await supabase
+            .from('teses_juridicas')
+            .select('*')
+            .eq('case_id', data.caseId)
+            .single();
+
+          if (teseData?.teses) {
+            const tesesArray = teseData.teses as any[];
+            const statusObj = tesesArray.find(t => t.status);
+            
+            if (statusObj?.status === 'completed') {
+              clearInterval(pollInterval);
+              const validTeses = tesesArray.filter(t => !t.status);
+              setTeses(validTeses);
+              setHasCache(true);
+              setLoading(false);
+              toast.success('✅ Teses jurídicas geradas com sucesso!');
+            } else if (statusObj?.status === 'error') {
+              clearInterval(pollInterval);
+              setLoading(false);
+              toast.error('❌ Erro ao gerar teses: ' + statusObj.error);
+            }
+          }
+        }, 3000); // Poll a cada 3 segundos
+
+        // Timeout de segurança de 3 minutos
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          if (loading) {
+            setLoading(false);
+            toast.error('⏱️ Tempo limite excedido. Tente novamente.');
+          }
+        }, 180000);
+        
+        return;
+      }
+
+      // Resposta síncrona (fallback)
       if (result?.teses) {
         setTeses(result.teses);
-        
-        // Salvar no banco
-        await supabase
-          .from('teses_juridicas')
-          .insert({
-            case_id: data.caseId,
-            teses: result.teses,
-            selected_ids: []
-        });
-        
         setHasCache(true);
       }
+      setLoading(false);
+
     } catch (error: any) {
       console.error('Erro ao gerar teses:', error);
-    } finally {
       setLoading(false);
     }
   };

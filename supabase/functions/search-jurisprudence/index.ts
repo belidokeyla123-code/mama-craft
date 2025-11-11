@@ -25,104 +25,133 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Buscar dados do caso
-    const { data: caseData } = await supabase
-      .from('cases')
-      .select('*')
-      .eq('id', caseId)
-      .single();
-    
-    console.log('[JURISPRUDENCE] Caso carregado:', caseData?.profile, caseData?.event_type);
-
-    // 🆕 BUSCAR BENEFÍCIOS MANUAIS
-    const manualBenefits = caseData?.manual_benefits || [];
-    console.log('[JURISPRUDENCE] Benefícios manuais:', manualBenefits.length);
-
-    // Buscar histórico de benefícios
-    const { data: benefitHistory } = await supabase
-      .from('benefit_history')
-      .select('*')
-      .eq('case_id', caseId);
-    
-    // 2. Buscar análise jurídica completa
-    const { data: analysisData } = await supabase
-      .from('case_analysis')
-      .select('*')
-      .eq('case_id', caseId)
-      .order('analyzed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    console.log('[JURISPRUDENCE] Análise encontrada:', !!analysisData);
-    
-    // 3. Buscar documentos e extrações
-    const { data: documents } = await supabase
-      .from('documents')
-      .select(`
-        *,
-        extractions(*)
-      `)
-      .eq('case_id', caseId);
-    
-    console.log('[JURISPRUDENCE] Documentos encontrados:', documents?.length || 0);
-    
-    // Gerar chave de cache baseada no perfil e tipo de evento
-    const cacheKey = `${caseData.profile}_${caseData.event_type}`;
-    console.log('[JURISPRUDENCE] Cache key:', cacheKey);
-    
-    // Verificar cache global
-    const { data: cachedResult } = await supabase
-      .from('jurisprudence_cache')
-      .select('*')
-      .eq('profile', caseData.profile)
-      .eq('event_type', caseData.event_type)
-      .single();
-    
-    if (cachedResult) {
-      console.log('[JURISPRUDENCE] ✅ Cache HIT! Retornando resultado cacheado');
-      
-      // Incrementar contador de hits
-      await supabase
-        .from('jurisprudence_cache')
-        .update({ hits: cachedResult.hits + 1 })
-        .eq('id', cachedResult.id);
-      
-      return new Response(JSON.stringify(cachedResult.results), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Criar registro inicial com status 'generating'
+    const { error: createError } = await supabase
+      .from('jurisprudence_results')
+      .upsert({
+        case_id: caseId,
+        results: { status: 'generating' } as any,
+        is_stale: false,
+        created_at: new Date().toISOString()
+      }, {
+        onConflict: 'case_id'
       });
-    }
-    
-    console.log('[JURISPRUDENCE] Cache MISS - Chamando IA...');
 
-    // Construir contexto rico e específico do caso
-    const draftPayload = analysisData?.draft_payload as any;
-    
-    const situacoesEspecificas = [];
-    
-    // Detectar situações específicas
-    if (draftPayload?.carencia?.cumprida === false) {
-      situacoesEspecificas.push(`Carência NÃO cumprida (faltam ${draftPayload.carencia.meses_faltantes} meses)`);
-    }
-    
-    if (draftPayload?.cnis_analysis?.periodos_urbanos?.length === 0 && 
-        draftPayload?.cnis_analysis?.periodos_rurais?.length === 0) {
-      situacoesEspecificas.push('CNIS VAZIO - reforça atividade rural exclusiva');
-    }
-    
-    if (caseData.child_death_date) {
-      situacoesEspecificas.push('FILHO FALECIDO - situação especial de salário maternidade post-mortem');
-    }
-    
-    if (draftPayload?.rmi?.situacao_especial) {
-      situacoesEspecificas.push('Situação especial detectada na análise de RMI');
-    }
-    
-    if (caseData.has_ra) {
-      situacoesEspecificas.push(`Requerimento Administrativo: ${caseData.ra_denial_reason || 'indeferido'}`);
+    if (createError) {
+      console.error('[JURISPRUDENCE] Erro ao criar registro inicial:', createError);
+      throw createError;
     }
 
-    // Prompt enriquecido com análise completa
-    const prompt = `# BUSCA DE JURISPRUDÊNCIA ESPECÍFICA - SALÁRIO MATERNIDADE
+    console.log('[JURISPRUDENCE] ✅ Registro inicial criado, processando em background...');
+
+    // Executar busca em background
+    const backgroundTask = async () => {
+      try {
+        // 1. Buscar dados do caso
+        const { data: caseData } = await supabase
+          .from('cases')
+          .select('*')
+          .eq('id', caseId)
+          .single();
+        
+        console.log('[JURISPRUDENCE] Caso carregado:', caseData?.profile, caseData?.event_type);
+
+        const manualBenefits = caseData?.manual_benefits || [];
+        console.log('[JURISPRUDENCE] Benefícios manuais:', manualBenefits.length);
+
+        // Buscar histórico de benefícios
+        const { data: benefitHistory } = await supabase
+          .from('benefit_history')
+          .select('*')
+          .eq('case_id', caseId);
+        
+        // 2. Buscar análise jurídica completa
+        const { data: analysisData } = await supabase
+          .from('case_analysis')
+          .select('*')
+          .eq('case_id', caseId)
+          .order('analyzed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        console.log('[JURISPRUDENCE] Análise encontrada:', !!analysisData);
+        
+        // 3. Buscar documentos e extrações
+        const { data: documents } = await supabase
+          .from('documents')
+          .select(`
+            *,
+            extractions(*)
+          `)
+          .eq('case_id', caseId);
+        
+        console.log('[JURISPRUDENCE] Documentos encontrados:', documents?.length || 0);
+        
+        // Gerar chave de cache baseada no perfil e tipo de evento
+        const cacheKey = `${caseData.profile}_${caseData.event_type}`;
+        console.log('[JURISPRUDENCE] Cache key:', cacheKey);
+        
+        // Verificar cache global
+        const { data: cachedResult } = await supabase
+          .from('jurisprudence_cache')
+          .select('*')
+          .eq('profile', caseData.profile)
+          .eq('event_type', caseData.event_type)
+          .single();
+        
+        if (cachedResult) {
+          console.log('[JURISPRUDENCE] ✅ Cache HIT! Usando resultado cacheado');
+          
+          // Incrementar contador de hits
+          await supabase
+            .from('jurisprudence_cache')
+            .update({ hits: cachedResult.hits + 1 })
+            .eq('id', cachedResult.id);
+          
+          // Salvar no caso específico
+          await supabase
+            .from('jurisprudence_results')
+            .update({
+              results: { ...cachedResult.results, status: 'completed' } as any,
+              is_stale: false
+            })
+            .eq('case_id', caseId);
+          
+          console.log('[JURISPRUDENCE] ✅ Background task concluída (cache)');
+          return;
+        }
+        
+        console.log('[JURISPRUDENCE] Cache MISS - Chamando IA...');
+
+        // Construir contexto rico e específico do caso
+        const draftPayload = analysisData?.draft_payload as any;
+        
+        const situacoesEspecificas = [];
+        
+        // Detectar situações específicas
+        if (draftPayload?.carencia?.cumprida === false) {
+          situacoesEspecificas.push(`Carência NÃO cumprida (faltam ${draftPayload.carencia.meses_faltantes} meses)`);
+        }
+        
+        if (draftPayload?.cnis_analysis?.periodos_urbanos?.length === 0 && 
+            draftPayload?.cnis_analysis?.periodos_rurais?.length === 0) {
+          situacoesEspecificas.push('CNIS VAZIO - reforça atividade rural exclusiva');
+        }
+        
+        if (caseData.child_death_date) {
+          situacoesEspecificas.push('FILHO FALECIDO - situação especial de salário maternidade post-mortem');
+        }
+        
+        if (draftPayload?.rmi?.situacao_especial) {
+          situacoesEspecificas.push('Situação especial detectada na análise de RMI');
+        }
+        
+        if (caseData.has_ra) {
+          situacoesEspecificas.push(`Requerimento Administrativo: ${caseData.ra_denial_reason || 'indeferido'}`);
+        }
+
+        // Prompt enriquecido com análise completa
+        const prompt = `# BUSCA DE JURISPRUDÊNCIA ESPECÍFICA - SALÁRIO MATERNIDADE
 
 ## DADOS DO CASO
 - Perfil: ${caseData.profile === 'especial' ? 'SEGURADA ESPECIAL RURAL' : 'SEGURADA URBANA'}
@@ -271,143 +300,122 @@ Retorne JSON com NO MÁXIMO 3 de cada tipo:
   "teses_juridicas_aplicaveis": []
 }`;
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-      
-    // Chamar OpenAI para busca jurisprudências com contexto completo
-    console.log('[SEARCH-JURIS] Chamando OpenAI com análise completa...');
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 segundos timeout
+        const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+          
+        // Chamar OpenAI para busca jurisprudências com contexto completo
+        console.log('[SEARCH-JURIS] Chamando OpenAI com análise completa...');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutos
 
-    try {
-      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-5-mini-2025-08-07',
-          messages: [
-            { 
-              role: 'system', 
-              content: 'Você é um especialista em pesquisa jurisprudencial de direito previdenciário com 20 anos de experiência. Busque jurisprudências ESPECÍFICAS e RELEVANTES para cada caso, não genéricas.' 
-            },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: "json_object" },
-          max_completion_tokens: 4000,
-        }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ 
-          error: 'Rate limit atingido. Aguarde alguns segundos e tente novamente.',
-          code: 'RATE_LIMIT'
-        }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-5-mini-2025-08-07',
+            messages: [
+              { 
+                role: 'system', 
+                content: 'Você é um especialista em pesquisa jurisprudencial de direito previdenciário com 20 anos de experiência. Busque jurisprudências ESPECÍFICAS e RELEVANTES para cada caso, não genéricas.' 
+              },
+              { role: 'user', content: prompt }
+            ],
+            response_format: { type: "json_object" },
+            max_completion_tokens: 4000,
+          }),
+          signal: controller.signal,
         });
-      }
 
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ 
-          error: 'Créditos Lovable AI esgotados. Adicione mais créditos.',
-          code: 'NO_CREDITS'
-        }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+        clearTimeout(timeoutId);
 
-      if (!aiResponse.ok) {
-        const errorText = await aiResponse.text();
-        console.error('AI API error:', aiResponse.status, errorText);
-        throw new Error(`AI API error: ${aiResponse.status}`);
-      }
+        if (aiResponse.status === 429) {
+          throw new Error('Rate limit atingido');
+        }
 
-      const aiData = await aiResponse.json();
-      let results;
-      
-      try {
-        results = JSON.parse(aiData.choices[0].message.content);
-      } catch (parseError) {
-        // Tentar limpar o JSON antes de parsear novamente
-        console.log('JSON parse error, tentando limpar...');
-        const cleanedContent = aiData.choices[0].message.content
-          .replace(/\n/g, ' ')
-          .replace(/\t/g, ' ')
-          .replace(/\r/g, ' ')
-          .replace(/\\"/g, '"')
-          .trim();
+        if (aiResponse.status === 402) {
+          throw new Error('Créditos esgotados');
+        }
+
+        if (!aiResponse.ok) {
+          const errorText = await aiResponse.text();
+          console.error('AI API error:', aiResponse.status, errorText);
+          throw new Error(`AI API error: ${aiResponse.status}`);
+        }
+
+        const aiData = await aiResponse.json();
+        let results;
         
         try {
+          results = JSON.parse(aiData.choices[0].message.content);
+        } catch (parseError) {
+          console.log('JSON parse error, tentando limpar...');
+          const cleanedContent = aiData.choices[0].message.content
+            .replace(/\n/g, ' ')
+            .replace(/\t/g, ' ')
+            .replace(/\r/g, ' ')
+            .replace(/\\"/g, '"')
+            .trim();
+          
           results = JSON.parse(cleanedContent);
-        } catch (secondError) {
-          console.error('Failed to parse even after cleaning:', cleanedContent.substring(0, 200));
-          throw new Error('JSON inválido retornado pela IA. Tente novamente.');
         }
+
+        // Salvar no cache global para reutilização
+        console.log('[JURISPRUDENCE] Salvando no cache global...');
+        await supabase
+          .from('jurisprudence_cache')
+          .insert({
+            query_hash: cacheKey,
+            profile: caseData.profile,
+            event_type: caseData.event_type,
+            results: results
+          });
+
+        console.log('[JURISPRUDENCE] ✅ Salvo no cache global');
+
+        // Atualizar com sucesso e status completed
+        await supabase
+          .from('jurisprudence_results')
+          .update({
+            results: { ...results, status: 'completed' } as any,
+            selected_ids: [],
+            last_case_hash: cacheKey,
+            is_stale: false
+          })
+          .eq('case_id', caseId);
+
+        console.log('[JURISPRUDENCE] ✅ Background task concluída com sucesso');
+      } catch (error: any) {
+        console.error('[JURISPRUDENCE] ❌ Erro no background task:', error);
+        
+        // Atualizar com erro
+        await supabase
+          .from('jurisprudence_results')
+          .update({
+            results: { 
+              status: 'error',
+              error: error.name === 'AbortError' 
+                ? 'Timeout: Busca de jurisprudência demorou muito.'
+                : error.message || 'Erro ao buscar jurisprudência'
+            } as any
+          })
+          .eq('case_id', caseId);
       }
+    };
 
-      // Salvar no cache global para reutilização
-      console.log('[JURISPRUDENCE] Salvando no cache global...');
-      const { error: cacheError } = await supabase
-        .from('jurisprudence_cache')
-        .insert({
-          query_hash: cacheKey,
-          profile: caseData.profile,
-          event_type: caseData.event_type,
-          results: results
-        });
+    // Executar em background sem aguardar (async IIFE)
+    backgroundTask();
 
-      if (cacheError) {
-        console.error('[JURISPRUDENCE] Erro ao salvar cache:', cacheError);
-        // Não falhar se der erro no cache, apenas logar
-      }
-
-      console.log('[JURISPRUDENCE] ✅ Salvo no cache global');
-
-      // ═══ SALVAR RESULTADOS NO BANCO PARA ESTE CASO ═══
-      console.log('[JURISPRUDENCE] Salvando resultados em jurisprudence_results...');
-      
-      const { error: saveError } = await supabase
-        .from('jurisprudence_results')
-        .upsert({
-          case_id: caseId,
-          results: results,
-          selected_ids: [], // Inicialmente vazio, usuário seleciona depois
-          last_case_hash: cacheKey,
-          is_stale: false,
-          created_at: new Date().toISOString()
-        }, {
-          onConflict: 'case_id'
-        });
-
-      if (saveError) {
-        console.error('[JURISPRUDENCE] ⚠️ Erro ao salvar resultados:', saveError);
-        // Não falhar se der erro ao salvar, apenas logar
-      } else {
-        console.log('[JURISPRUDENCE] ✅ Resultados salvos em jurisprudence_results!');
-      }
-
-      return new Response(JSON.stringify(results), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        return new Response(JSON.stringify({ 
-          error: 'Timeout: Busca de jurisprudência demorou muito. Tente novamente.',
-          code: 'TIMEOUT'
-        }), {
-          status: 408,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw fetchError;
-    }
+    // Retornar 202 Accepted imediatamente
+    return new Response(JSON.stringify({ 
+      message: 'Busca de jurisprudência iniciada',
+      caseId: caseId,
+      status: 'generating'
+    }), {
+      status: 202,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
     if (error instanceof z.ZodError) {
