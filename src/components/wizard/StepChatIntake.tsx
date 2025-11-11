@@ -120,7 +120,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         .from('cases')
         .select('*')
         .eq('id', data.caseId)
-        .single();
+        .maybeSingle();
       
       if (error || !caseData) return;
       
@@ -184,7 +184,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         .from('cases')
         .select('*')
         .eq('id', data.caseId)
-        .single();
+        .maybeSingle();
       
       if (error || !freshData) return;
       
