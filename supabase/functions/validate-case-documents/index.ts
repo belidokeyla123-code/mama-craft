@@ -43,9 +43,19 @@ serve(async (req) => {
       .from('cases')
       .select('*')
       .eq('id', caseId)
-      .single();
+      .maybeSingle();
 
     if (caseError) throw caseError;
+    
+    if (!caseData) {
+      return new Response(JSON.stringify({ 
+        error: 'Caso não encontrado',
+        code: 'CASE_NOT_FOUND'
+      }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Buscar documentos (incluindo parent_document_id para agrupar PDFs convertidos)
     const { data: documents, error: docsError } = await supabase
