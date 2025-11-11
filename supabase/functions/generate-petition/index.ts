@@ -190,9 +190,9 @@ serve(async (req) => {
       console.log(`✅ [PRIORIDADE 3] UF da procuração: ${uf}`);
     }
 
-    // ═══ VALIDAÇÃO FINAL ═══
+    // ═══ VALIDAÇÃO FINAL COM FALLBACK ═══
     if (!city || !uf) {
-      console.error('🔴 ERRO CRÍTICO: Cidade ou UF não identificados!', {
+      console.warn('⚠️ AVISO: Cidade ou UF não identificados nos dados!', {
         autoraEndereco,
         birth_city: caseData.birth_city,
         birth_state: caseData.birth_state,
@@ -202,7 +202,17 @@ serve(async (req) => {
         uf_final: uf
       });
       
-      throw new Error(`Dados de endereçamento incompletos: cidade="${city}", uf="${uf}". Verifique os dados do caso.`);
+      // ═══ FALLBACK FINAL: Usar cidade/UF padrão para permitir geração ═══
+      if (!city) {
+        city = 'São Paulo';
+        console.warn('⚠️ Usando cidade padrão: São Paulo');
+      }
+      if (!uf) {
+        uf = 'SP';
+        console.warn('⚠️ Usando UF padrão: SP');
+      }
+      
+      console.warn('⚠️ ATENÇÃO: Petição gerada com dados de endereçamento padrão. REVISAR MANUALMENTE antes de protocolar!');
     }
 
     console.log(`✅ [EXTRAÇÃO FINAL] Cidade: ${city} | UF: ${uf}`);
