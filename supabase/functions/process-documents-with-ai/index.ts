@@ -269,8 +269,8 @@ async function processDocumentsInBackground(caseId: string, documentIds: string[
     for (const doc of batch) {
       try {
         console.log(`[BATCH] Processando ${doc.file_name} (${doc.mime_type})`);
-        // ✅ MUDANÇA 4: REMOVER classificação por nome - deixar APENAS a IA classificar pelo conteúdo
-        const docType = 'outro'; // ✅ A IA fará a classificação real pelo conteúdo da imagem
+        // Classificar documento pelo nome do arquivo
+        const docType = classifyDocument(doc.file_name);
         
         // Salvar classificação no banco
         await supabase
