@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Upload, Send, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { CaseData } from "@/pages/NewCase";
 
 interface Message {
   role: "user" | "assistant";
@@ -13,8 +14,8 @@ interface Message {
 }
 
 interface StepChatInteligenteProps {
-  data: any;
-  updateData: (data: any) => void;
+  data: CaseData;
+  updateData: (data: Partial<CaseData>) => void;
   onComplete: () => void;
 }
 

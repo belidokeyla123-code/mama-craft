@@ -5,10 +5,11 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, CheckCircle2, AlertTriangle, XCircle, FileText, Scale } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { CaseData } from "@/pages/NewCase";
 
 interface StepDiagnosticoJuizProps {
-  data: any;
-  updateData: (data: any) => void;
+  data: CaseData;
+  updateData: (data: Partial<CaseData>) => void;
 }
 
 interface DiagnosticoReport {

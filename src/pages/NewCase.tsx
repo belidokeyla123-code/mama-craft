@@ -157,6 +157,25 @@ export interface CaseData {
     tipo: string;        // Ex: "Salário-maternidade", "Auxílio-doença rural"
     numero_beneficio?: string; // Opcional
   }>;
+  
+  // Dados do Chat Inteligente
+  chatAnalysis?: any;
+  chatCompleted?: boolean;
+  
+  // Dados da Análise
+  analysisReport?: any;
+  
+  // Dados da Jurisprudência
+  jurisprudenceData?: any;
+  
+  // Dados da Tese
+  thesisData?: any;
+  
+  // Minuta
+  minuta?: string;
+  
+  // Diagnóstico JUIZ
+  diagnosticoJuiz?: any;
 }
 
 const STEPS = [
