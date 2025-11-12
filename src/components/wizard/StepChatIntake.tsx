@@ -795,6 +795,90 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         }]);
       }
 
+      // ═══════════════════════════════════════════════════════════════
+      // FASE A.5: CONVERSÃO AUTOMÁTICA DE PDFs PARA IMAGENS
+      // ═══════════════════════════════════════════════════════════════
+      console.log('[PDF-CONVERT] 🔍 Verificando PDFs para conversão...');
+      const pdfsToConvert: File[] = [];
+      const nonPdfFiles: File[] = [];
+
+      // Separar PDFs de outros arquivos
+      for (const file of filesToUpload) {
+        if (isPDF(file)) {
+          console.log(`[PDF-CONVERT] 📄 PDF detectado: ${file.name}`);
+          pdfsToConvert.push(file);
+        } else {
+          nonPdfFiles.push(file);
+        }
+      }
+
+      // Converter todos os PDFs para imagens
+      let convertedImages: File[] = [];
+      
+      if (pdfsToConvert.length > 0) {
+        console.log(`[PDF-CONVERT] 🔄 Convertendo ${pdfsToConvert.length} PDF(s)...`);
+        
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `🔄 Detectados ${pdfsToConvert.length} PDF(s). Convertendo para imagens...`
+        }]);
+
+        for (const pdfFile of pdfsToConvert) {
+          try {
+            console.log(`[PDF-CONVERT] 🔄 Convertendo ${pdfFile.name}...`);
+            
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `📄 Convertendo "${pdfFile.name}"...`
+            }]);
+
+            const result = await convertPDFToImages(pdfFile, 10);
+            console.log(`[PDF-CONVERT] ✅ ${result.images.length} página(s) convertida(s) de ${pdfFile.name}`);
+            
+            convertedImages.push(...result.images);
+            
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `✅ "${pdfFile.name}": ${result.images.length} página(s) convertida(s)`
+            }]);
+          } catch (error: any) {
+            console.error(`[PDF-CONVERT] ❌ Erro ao converter ${pdfFile.name}:`, error);
+            
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `❌ Erro ao converter "${pdfFile.name}": ${error.message}\n\nPor favor, converta manualmente para PNG/JPG.`
+            }]);
+            
+            toast({
+              title: "Erro na conversão de PDF",
+              description: `Não foi possível converter "${pdfFile.name}". Tente converter manualmente.`,
+              variant: "destructive",
+            });
+          }
+        }
+
+        if (convertedImages.length > 0) {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `✅ Total: ${convertedImages.length} imagem(ns) gerada(s) de ${pdfsToConvert.length} PDF(s)`
+          }]);
+        }
+      }
+
+      // Combinar arquivos não-PDF com imagens convertidas
+      const finalFilesToUpload = [...nonPdfFiles, ...convertedImages];
+      console.log(`[PDF-CONVERT] 📊 Total de arquivos para upload: ${finalFilesToUpload.length} (${nonPdfFiles.length} originais + ${convertedImages.length} convertidos)`);
+
+      if (finalFilesToUpload.length === 0) {
+        toast({
+          title: "Nenhum arquivo válido",
+          description: "Não há arquivos para processar após a conversão",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
       /**
        * 🚀 FASE 2.3: Upload + INSERT documento (SEM análise individual)
        * Retorna IDs dos documentos para análise em batch
@@ -820,16 +904,14 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             content: `📤 [${index + 1}/${total}] Fazendo upload: ${file.name}...`
           }]);
           
-          // 🔄 CONVERTER PDF EM IMAGENS (se necessário)
-          // ✅ ENVIAR PDF DIRETO (sem conversão para PNG)
+          // PDFs já foram convertidos para imagens antes do upload
+          // Apenas processamos o arquivo como está (deve ser imagem)
           let filesToProcess: File[] = [file];
           
           if (isPDF(file)) {
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: `📄 Processando PDF "${file.name}"...`
-            }]);
-            console.log(`[PDF] ✅ Enviando PDF direto (sem conversão): "${file.name}"`);
+            // Isso não deveria acontecer - PDFs deveriam ter sido convertidos
+            console.warn(`[UPLOAD] ⚠️ PDF não convertido detectado: "${file.name}" - isso não deveria acontecer`);
+            throw new Error(`PDF "${file.name}" não foi convertido. Por favor, recarregue a página e tente novamente.`);
           }
           
           // Array para armazenar IDs de documentos inseridos
@@ -920,20 +1002,20 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
       // ═══════════════════════════════════════════════════════════════
       // FASE A: UPLOAD + INSERT (Paralelo)
       // ═══════════════════════════════════════════════════════════════
-      console.log(`[BATCH] 🚀 FASE A: Fazendo upload de ${filesToUpload.length} documento(s) em paralelo...`);
+      console.log(`[BATCH] 🚀 FASE A: Fazendo upload de ${finalFilesToUpload.length} documento(s) em paralelo...`);
       
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: `📤 Fazendo upload de ${filesToUpload.length} documento(s)...`
+        content: `📤 Fazendo upload de ${finalFilesToUpload.length} documento(s)...`
       }]);
       
       const clientFolderName = caseId;
       
-      const uploadPromises = filesToUpload.map((file, index) => 
+      const uploadPromises = finalFilesToUpload.map((file, index) => 
         uploadAndInsertDocument(
           file, 
           index, 
-          filesToUpload.length, 
+          finalFilesToUpload.length, 
           caseId, 
           clientFolderName,
           existingBaseNames
