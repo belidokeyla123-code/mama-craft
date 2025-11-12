@@ -6,6 +6,7 @@ import { Upload, Send, FileText, Loader2, CheckCircle2, AlertCircle } from "luci
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { CaseData } from "@/pages/NewCase";
+import { sanitizeFileName } from "@/lib/documentTypeMapper";
 
 interface Message {
   role: "user" | "assistant";
@@ -75,7 +76,8 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       const uploadedUrls: string[] = [];
       
       for (const file of files) {
-        const fileName = `${activeCaseId}/${Date.now()}_${file.name}`;
+        const sanitizedFileName = sanitizeFileName(file.name);
+        const fileName = `${activeCaseId}/${Date.now()}_${sanitizedFileName}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("case-documents")
           .upload(fileName, file);
