@@ -77,10 +77,14 @@ export async function convertPDFToImages(
       console.warn(`[PDF→IMG] ⚠️ PDF tem ${pdf.numPages} páginas, mas apenas ${maxPages} serão convertidas`);
     }
     
+    // ✅ OTIMIZAÇÃO: Processar páginas em paralelo (até 3 por vez)
     const images: File[] = [];
+    const BATCH_SIZE = 3; // Processar 3 páginas por vez
     
-    // Converter cada página em imagem
-    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+    console.log(`[PDF→IMG] Processando ${totalPages} páginas em lotes de ${BATCH_SIZE}...`);
+    
+    // Função para processar uma única página
+    const processPage = async (pageNum: number): Promise<File> => {
       console.log(`[PDF→IMG] Processando página ${pageNum}/${totalPages}...`);
       
       // ✅ CORREÇÃO #5: Reportar progresso para o usuário
@@ -90,8 +94,8 @@ export async function convertPDFToImages(
       
       const page = await pdf.getPage(pageNum);
       
-      // Configurar escala otimizada (1.5x balanceia qualidade OCR com tamanho do arquivo)
-      const scale = 1.5;
+      // ✅ OTIMIZAÇÃO: Reduzir escala de 1.5x para 1.0x (qualidade suficiente para OCR)
+      const scale = 1.0;
       const viewport = page.getViewport({ scale });
       console.log(`[PDF→IMG] Viewport: ${viewport.width}x${viewport.height}`);
       
@@ -114,8 +118,8 @@ export async function convertPDFToImages(
       }).promise;
       console.log(`[PDF→IMG] Página ${pageNum} renderizada com sucesso`);
       
-      // Converter canvas para Blob PNG (qualidade 0.8 para arquivos menores)
-      console.log(`[PDF→IMG] Convertendo para PNG...`);
+      // ✅ OTIMIZAÇÃO: Usar JPEG ao invés de PNG (70% menor, qualidade suficiente)
+      console.log(`[PDF→IMG] Convertendo para JPEG...`);
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
           if (!blob) {
@@ -123,19 +127,35 @@ export async function convertPDFToImages(
             return;
           }
           resolve(blob);
-        }, 'image/png', 0.8);
+        }, 'image/jpeg', 0.85); // JPEG com qualidade 85%
       });
       
       // Criar arquivo de imagem PRESERVANDO nome original do PDF
       const originalName = file.name.replace(/\.pdf$/i, '');
       const imageFile = new File(
         [blob],
-        `${originalName}_pagina_${pageNum}.png`,
-        { type: 'image/png' }
+        `${originalName}_pagina_${pageNum}.jpg`,
+        { type: 'image/jpeg' }
       );
       
-      images.push(imageFile);
       console.log(`[PDF→IMG] Página ${pageNum}/${totalPages} convertida (${(blob.size / 1024).toFixed(1)} KB)`);
+      return imageFile;
+    };
+    
+    // Processar páginas em lotes paralelos
+    for (let i = 0; i < totalPages; i += BATCH_SIZE) {
+      const batchEnd = Math.min(i + BATCH_SIZE, totalPages);
+      const batchPages = [];
+      
+      for (let pageNum = i + 1; pageNum <= batchEnd; pageNum++) {
+        batchPages.push(processPage(pageNum));
+      }
+      
+      // Aguardar todas as páginas do lote serem processadas
+      const batchImages = await Promise.all(batchPages);
+      images.push(...batchImages);
+      
+      console.log(`[PDF→IMG] Lote ${Math.floor(i / BATCH_SIZE) + 1} concluído (${batchImages.length} páginas)`);
     }
     
     console.log(`[PDF→IMG] ✅ Conversão concluída: ${images.length} imagens geradas`);
