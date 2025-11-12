@@ -70,13 +70,13 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       for (const file of files) {
         const fileName = `${data.caseId}/${Date.now()}_${file.name}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("documents")
+          .from("case-documents")
           .upload(fileName, file);
 
         if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage
-          .from("documents")
+          .from("case-documents")
           .getPublicUrl(fileName);
 
         uploadedUrls.push(urlData.publicUrl);
