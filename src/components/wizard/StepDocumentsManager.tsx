@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
 import { getDocTypeDisplayInfo } from "@/lib/documentNaming";
@@ -91,6 +91,20 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [reclassifyDoc, setReclassifyDoc] = useState<Document | null>(null);
+  
+  // Estado para conversão em massa de PDFs
+  const [isConvertingPDFs, setIsConvertingPDFs] = useState(false);
+  const [showConversionDialog, setShowConversionDialog] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState({
+    current: 0,
+    total: 0,
+    fileName: '',
+    currentPage: 0,
+    totalPages: 0,
+    successful: 0,
+    failed: 0,
+    failedFiles: [] as string[]
+  });
 
   const loadDocuments = async () => {
     if (!caseId) {
@@ -609,6 +623,173 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     }
   };
 
+  // Detectar PDFs não convertidos (sem imagens filhas)
+  const getUnconvertedPDFs = () => {
+    return documents.filter(doc => {
+      // É um PDF original (não é página de outro PDF)
+      const isPdfFile = doc.mime_type === 'application/pdf';
+      if (!isPdfFile) return false;
+      
+      // Verificar se tem imagens filhas (já foi convertido)
+      const hasChildren = documents.some(child => 
+        child.file_name.includes(doc.file_name.replace('.pdf', ''))
+      );
+      
+      return !hasChildren;
+    });
+  };
+
+  const unconvertedPDFs = getUnconvertedPDFs();
+
+  // Função de conversão em massa de PDFs antigos
+  const convertOldPDFsToImages = async () => {
+    const pdfsToConvert = unconvertedPDFs;
+    
+    if (pdfsToConvert.length === 0) {
+      toast({
+        title: "Nenhum PDF para converter",
+        description: "Todos os PDFs já foram convertidos.",
+      });
+      return;
+    }
+
+    setIsConvertingPDFs(true);
+    setShowConversionDialog(true);
+    setConversionProgress({
+      current: 0,
+      total: pdfsToConvert.length,
+      fileName: '',
+      currentPage: 0,
+      totalPages: 0,
+      successful: 0,
+      failed: 0,
+      failedFiles: []
+    });
+
+    const results = {
+      successful: 0,
+      failed: 0,
+      failedFiles: [] as string[]
+    };
+
+    for (let i = 0; i < pdfsToConvert.length; i++) {
+      const pdfDoc = pdfsToConvert[i];
+      
+      setConversionProgress(prev => ({
+        ...prev,
+        current: i + 1,
+        fileName: pdfDoc.file_name,
+        currentPage: 0,
+        totalPages: 0
+      }));
+
+      try {
+        // 1. Baixar PDF do storage
+        const { data: pdfBlob, error: downloadError } = await supabase.storage
+          .from("case-documents")
+          .download(pdfDoc.file_path);
+
+        if (downloadError) throw downloadError;
+
+        // 2. Converter Blob para File
+        const pdfFile = new File([pdfBlob], pdfDoc.file_name, { type: 'application/pdf' });
+
+        // 3. Converter PDF para imagens
+        const { images } = await convertPDFToImages(pdfFile, 10);
+        
+        setConversionProgress(prev => ({
+          ...prev,
+          totalPages: images.length
+        }));
+
+        // 4. Upload de cada imagem
+        for (let pageIdx = 0; pageIdx < images.length; pageIdx++) {
+          const imageFile = images[pageIdx];
+          
+          setConversionProgress(prev => ({
+            ...prev,
+            currentPage: pageIdx + 1
+          }));
+
+          const fileExt = imageFile.name.split('.').pop();
+          const timestamp = Date.now();
+          const randomId = Math.random().toString(36).substring(7);
+          const fileName = `${caseName || `caso_${caseId.slice(0, 8)}`}/${timestamp}_${randomId}.${fileExt}`;
+
+          // Upload para storage
+          const { error: uploadError } = await supabase.storage
+            .from("case-documents")
+            .upload(fileName, imageFile);
+
+          if (uploadError) throw uploadError;
+
+          // Salvar no banco com parent_document_id
+          const { error: docError } = await supabase
+            .from("documents")
+            .insert([{
+              case_id: caseId,
+              file_name: imageFile.name,
+              file_path: fileName,
+              file_size: imageFile.size,
+              mime_type: imageFile.type,
+              document_type: (pdfDoc.document_type || "outro") as any,
+              parent_document_id: pdfDoc.id
+            }]);
+
+          if (docError) throw docError;
+        }
+
+        results.successful++;
+        
+      } catch (error: any) {
+        console.error(`Erro ao converter ${pdfDoc.file_name}:`, error);
+        results.failed++;
+        results.failedFiles.push(pdfDoc.file_name);
+      }
+    }
+
+    // Atualizar progresso final
+    setConversionProgress(prev => ({
+      ...prev,
+      successful: results.successful,
+      failed: results.failed,
+      failedFiles: results.failedFiles
+    }));
+
+    // Recarregar documentos
+    await loadDocuments();
+
+    // Disparar pipeline completo
+    await triggerFullPipeline('PDFs convertidos em massa');
+
+    // Disparar evento global
+    window.dispatchEvent(new CustomEvent('documents-updated', {
+      detail: { 
+        caseId,
+        timestamp: Date.now(),
+        action: 'bulk-pdf-conversion'
+      }
+    }));
+
+    if (onDocumentsChange) onDocumentsChange();
+
+    // Mostrar resultado final
+    if (results.failed === 0) {
+      toast({
+        title: "✅ Conversão concluída!",
+        description: `${results.successful} PDF(s) convertido(s) com sucesso.`,
+      });
+    } else {
+      toast({
+        title: "⚠️ Conversão parcial",
+        description: `${results.successful} sucesso, ${results.failed} falha(s). Confira o relatório.`,
+        variant: "destructive"
+      });
+    }
+
+    setIsConvertingPDFs(false);
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -742,13 +923,44 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       />
       
       <Card className="p-6">
-          <div className="space-y-4">
+        <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">Documentos Enviados</h3>
-                <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
+              <div className="flex items-center gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold">Documentos Enviados</h3>
+                  <Badge variant="outline" className="mt-1">{documents.length} arquivo(s)</Badge>
+                </div>
+                
+                {/* Badge de alerta para PDFs não convertidos */}
+                {unconvertedPDFs.length > 0 && (
+                  <Badge variant="destructive" className="gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {unconvertedPDFs.length} PDF(s) precisam conversão
+                  </Badge>
+                )}
               </div>
               <div className="flex gap-2">
+                {/* Botão Converter PDFs */}
+                {unconvertedPDFs.length > 0 && (
+                  <Button
+                    onClick={() => setShowConversionDialog(true)}
+                    disabled={isConvertingPDFs}
+                    variant="outline"
+                    className="gap-2 border-amber-500 text-amber-700 hover:bg-amber-50"
+                  >
+                    {isConvertingPDFs ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Convertendo...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="h-4 w-4" />
+                        Converter PDFs
+                      </>
+                    )}
+                  </Button>
+                )}
                 <Button
                   onClick={handleReprocess}
                   disabled={isReprocessing}
@@ -817,7 +1029,9 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                       <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-muted-foreground" />
                         <span className="font-medium">{group.groupName}</span>
-                        <Badge variant="outline">Convertido de PDF</Badge>
+                        <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
+                          ✓ Convertido
+                        </Badge>
                         {(() => {
                           const firstDoc = group.docs[0];
                           const typeInfo = getDocTypeDisplayInfo(firstDoc?.document_type || 'outro');
@@ -881,15 +1095,26 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
               } else {
                 // Documento individual
                 const doc = group.docs[0];
+                const isPdfNeedsConversion = doc.mime_type === 'application/pdf' && 
+                  !documents.some(child => child.file_name.includes(doc.file_name.replace('.pdf', '')));
+                
                 return (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${isPdfNeedsConversion ? 'border-amber-300 bg-amber-50/50' : ''}`}
                   >
                     <div className="flex items-center gap-3 flex-1">
                       <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{doc.file_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{doc.file_name}</p>
+                          {isPdfNeedsConversion && (
+                            <Badge variant="destructive" className="gap-1 text-xs">
+                              <AlertTriangle className="h-3 w-3" />
+                              Requer Conversão
+                            </Badge>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>{formatFileSize(doc.file_size)}</span>
                           <span>•</span>
@@ -1052,6 +1277,117 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
           }
         }}
       />
+
+      {/* Dialog de Conversão em Massa de PDFs */}
+      <AlertDialog 
+        open={showConversionDialog && !isConvertingPDFs} 
+        onOpenChange={setShowConversionDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Converter PDFs Antigos para Imagens</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                {unconvertedPDFs.length} PDF(s) precisam ser convertidos para imagens antes de serem processados pela IA.
+              </p>
+              <div className="bg-muted p-3 rounded-md space-y-2 text-sm">
+                <p><strong>O que será feito:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li>Cada PDF será convertido em imagens (1 por página)</li>
+                  <li>Imagens serão vinculadas ao PDF original</li>
+                  <li>PDFs originais serão mantidos para backup</li>
+                  <li>Tempo estimado: ~{unconvertedPDFs.length * 10}s</li>
+                </ul>
+              </div>
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Este processo não pode ser interrompido. Certifique-se de manter a página aberta.
+                </AlertDescription>
+              </Alert>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={convertOldPDFsToImages}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Iniciar Conversão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de Progresso da Conversão */}
+      <AlertDialog open={isConvertingPDFs}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-amber-600" />
+              Convertendo PDFs...
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Progresso</span>
+                  <span className="font-medium">
+                    {conversionProgress.current}/{conversionProgress.total} PDFs
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-amber-600 h-full transition-all duration-300"
+                    style={{ 
+                      width: `${(conversionProgress.current / conversionProgress.total) * 100}%` 
+                    }}
+                  />
+                </div>
+              </div>
+
+              {conversionProgress.fileName && (
+                <div className="bg-muted p-3 rounded-md space-y-2">
+                  <p className="text-sm font-medium truncate">
+                    📄 {conversionProgress.fileName}
+                  </p>
+                  {conversionProgress.totalPages > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Página {conversionProgress.currentPage}/{conversionProgress.totalPages}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>✅ {conversionProgress.successful} sucesso</span>
+                {conversionProgress.failed > 0 && (
+                  <span className="text-destructive">❌ {conversionProgress.failed} falhas</span>
+                )}
+              </div>
+
+              {conversionProgress.failedFiles.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Falhas:</strong> {conversionProgress.failedFiles.join(', ')}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {conversionProgress.current === conversionProgress.total && (
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => {
+                setShowConversionDialog(false);
+                setIsConvertingPDFs(false);
+              }}>
+                Concluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
