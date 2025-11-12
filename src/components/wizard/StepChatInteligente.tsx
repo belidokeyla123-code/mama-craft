@@ -137,8 +137,27 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         updateData({ caseId: activeCaseId });
       }
 
-      // Upload files to Supabase Storage
+      // ✅ NOVO: Garantir que existe case_assignment
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error: assignError } = await supabase
+          .from('case_assignments')
+          .insert({ 
+            case_id: activeCaseId, 
+            user_id: user.id 
+          })
+          .select()
+          .maybeSingle();
+        
+        // Ignorar erro de duplicação (constraint unique)
+        if (assignError && !assignError.message.includes('duplicate')) {
+          console.error('[Assignment Error]:', assignError);
+        }
+      }
+
+      // Upload files to Supabase Storage + CREATE RECORDS IN DOCUMENTS TABLE
       const uploadedUrls: string[] = [];
+      const documentIds: string[] = [];
       
       for (const file of files) {
         const sanitizedFileName = sanitizeFileName(file.name);
@@ -147,6 +166,8 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         console.log(`[Upload] Original: "${file.name}" → Sanitizado: "${sanitizedFileName}"`);
         
         const fileName = `${activeCaseId}/${Date.now()}_${sanitizedFileName}`;
+        
+        // Upload to Storage
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("case-documents")
           .upload(fileName, file);
@@ -158,6 +179,28 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .getPublicUrl(fileName);
 
         uploadedUrls.push(urlData.publicUrl);
+
+        // ✅ NOVO: Criar registro na tabela documents
+        const { data: docRecord, error: docError } = await supabase
+          .from('documents')
+          .insert({
+            case_id: activeCaseId,
+            file_name: sanitizedFileName,
+            file_path: fileName,
+            document_type: 'OUTROS',
+            mime_type: file.type,
+            file_size: file.size,
+          })
+          .select()
+          .single();
+
+        if (docError) {
+          console.error('[Document Insert Error]:', docError);
+          throw docError;
+        }
+
+        documentIds.push(docRecord.id);
+        console.log(`[Document Created] ID: ${docRecord.id}, Name: ${sanitizedFileName}`);
       }
 
       // Call AI to analyze documents
