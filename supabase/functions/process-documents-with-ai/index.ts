@@ -66,6 +66,9 @@ serve(async (req) => {
     const extractedData: ExtractedData = {
       observations: []
     };
+    
+    // ✅ CORREÇÃO #6: Rastrear documentos não processados
+    const skippedDocs: string[] = [];
 
     for (const doc of documents || []) {
       try {
@@ -75,8 +78,9 @@ serve(async (req) => {
         const isImage = doc.mime_type?.startsWith('image/');
         
         if (!isImage) {
-          console.log(`[DOC] ⏭️ Pulando ${doc.file_name} - não é imagem (${doc.mime_type})`);
+          console.warn(`[DOC] ⚠️ Pulando ${doc.file_name} - não é imagem (${doc.mime_type})`);
           extractedData.observations!.push(`Documento ${doc.file_name} não processado - formato não suportado`);
+          skippedDocs.push(doc.file_name); // ✅ CORREÇÃO #6: Rastrear documento não processado
           continue;
         }
 
@@ -221,6 +225,26 @@ IMPORTANTE:
       } else {
         console.log("[SAVE] ✓ Caso atualizado com dados extraídos");
       }
+    }
+
+    // ✅ CORREÇÃO #6: Retornar aviso se houver documentos não processados
+    if (skippedDocs.length > 0) {
+      console.warn(`[WARN] ${skippedDocs.length} documento(s) não processado(s):`, skippedDocs);
+      
+      return new Response(
+        JSON.stringify({
+          success: true, // Ainda é sucesso, mas com avisos
+          caseId,
+          extractedData,
+          warnings: {
+            skippedDocs,
+            message: `${skippedDocs.length} documento(s) não puderam ser analisados (não são imagens). PDFs devem ser convertidos para PNG/JPG antes do upload.`
+          }
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Retornar sucesso

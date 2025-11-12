@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, Send, FileText, CheckCircle, AlertCircle, Loader2, Mic, X, RefreshCw } from "lucide-react";
-import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
+import { convertPDFToImages, convertPDFToImagesWithTimeout, isPDF } from "@/lib/pdfToImages";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
 import { useTabSync } from "@/hooks/useTabSync";
 import { DocumentUploadInline } from "./DocumentUploadInline";
@@ -926,7 +926,28 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               content: `📄 Convertendo "${pdfFile.name}"...`
             }]);
 
-            const result = await convertPDFToImages(pdfFile, 10);
+            // ✅ CORREÇÃO #2 e #5: Usar conversão com timeout e callback de progresso
+            const result = await convertPDFToImagesWithTimeout(
+              pdfFile, 
+              10, 
+              60000, // 60 segundos de timeout
+              (current, total) => {
+                // Atualizar mensagem de progresso em tempo real
+                setMessages(prev => {
+                  const lastMsg = prev[prev.length - 1];
+                  if (lastMsg.content.includes('Convertendo')) {
+                    return [
+                      ...prev.slice(0, -1),
+                      {
+                        role: "assistant",
+                        content: `📄 Convertendo "${pdfFile.name}": página ${current}/${total}...`
+                      }
+                    ];
+                  }
+                  return prev;
+                });
+              }
+            );
             console.log(`[PDF-CONVERT] ✅ ${result.images.length} página(s) convertida(s) de ${pdfFile.name}`);
             
             convertedImages.push(...result.images);
@@ -1222,16 +1243,27 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         console.log('[BATCH] ✅ Análise batch iniciada:', batchResult);
         
-        // ⚠️ Verificar se há avisos sobre documentos não processados
+        // ✅ CORREÇÃO #6: Processar avisos da edge function
+        if (batchResult?.warnings) {
+          const { skippedDocs, message } = batchResult.warnings;
+          console.warn('[BATCH] ⚠️ Avisos da edge function:', message);
+          
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `⚠️ **Atenção**: ${message}\n\n**Documentos não processados:**\n${skippedDocs.map((doc: string) => `• ${doc}`).join('\n')}\n\n**Solução:** O sistema converte PDFs automaticamente. Se você viu esta mensagem, pode haver um problema. Tente:\n1. Recarregar a página\n2. Fazer upload novamente\n3. Converter manualmente para PNG/JPG`
+          }]);
+        }
+        
+        // Verificar observações antigas (compatibilidade)
         if (batchResult?.extractedData?.observations?.length > 0) {
           const pdfWarnings = batchResult.extractedData.observations.filter((obs: string) => 
             obs.includes('não processado') || obs.includes('formato não suportado')
           );
           
-          if (pdfWarnings.length > 0) {
+          if (pdfWarnings.length > 0 && !batchResult?.warnings) {
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: `⚠️ **Atenção**: Alguns documentos em PDF não puderam ser analisados. Por favor, converta os PDFs em imagens (PNG/JPG) e faça upload novamente para melhor extração de dados.\n\nDocumentos afetados:\n${pdfWarnings.map(w => `• ${w}`).join('\n')}`
+              content: `⚠️ **Atenção**: Alguns documentos não puderam ser analisados.\n\nDocumentos afetados:\n${pdfWarnings.map(w => `• ${w}`).join('\n')}`
             }]);
           }
         }
