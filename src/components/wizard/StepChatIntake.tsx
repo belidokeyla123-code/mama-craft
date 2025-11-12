@@ -820,7 +820,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: `🔄 Detectados ${pdfsToConvert.length} PDF(s). Convertendo para imagens...`
+          content: `🔄 **Convertendo ${pdfsToConvert.length} PDF(s) para imagens**\n\nOs PDFs não podem ser analisados diretamente e serão convertidos automaticamente.\nIsso pode levar alguns segundos...`
         }]);
 
         for (const pdfFile of pdfsToConvert) {
@@ -839,7 +839,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: `✅ "${pdfFile.name}": ${result.images.length} página(s) convertida(s)`
+              content: `✅ **${pdfFile.name}**: ${result.images.length} página(s) → ${result.images.length} imagem(ns)`
             }]);
           } catch (error: any) {
             console.error(`[PDF-CONVERT] ❌ Erro ao converter ${pdfFile.name}:`, error);
@@ -860,7 +860,7 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         if (convertedImages.length > 0) {
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: `✅ Total: ${convertedImages.length} imagem(ns) gerada(s) de ${pdfsToConvert.length} PDF(s)`
+            content: `✅ **Conversão concluída!**\n\nTotal: ${convertedImages.length} imagem(ns) gerada(s)\nOs PDFs originais não serão salvos (apenas as imagens).`
           }]);
         }
       }
@@ -877,6 +877,51 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         });
         setIsProcessing(false);
         return;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // FASE A.6: LIMPAR PDFs ÓRFÃOS DO BANCO
+      // ═══════════════════════════════════════════════════════════════
+      console.log('[PDF-CLEANUP] 🧹 Verificando PDFs órfãos no banco...');
+
+      const { data: existingPdfs, error: pdfError } = await supabase
+        .from('documents')
+        .select('id, file_path, file_name')
+        .eq('case_id', caseId)
+        .or('mime_type.eq.application/pdf,file_name.ilike.%.pdf');
+
+      if (existingPdfs && existingPdfs.length > 0) {
+        console.log(`[PDF-CLEANUP] 🗑️ Encontrados ${existingPdfs.length} PDF(s) órfão(s). Deletando...`);
+        
+        // Deletar arquivos do storage
+        const pdfPaths = existingPdfs.map(doc => doc.file_path);
+        const { error: storageError } = await supabase.storage
+          .from('case-documents')
+          .remove(pdfPaths);
+        
+        if (storageError) {
+          console.warn('[PDF-CLEANUP] ⚠️ Erro ao deletar PDFs do storage:', storageError);
+        }
+        
+        // Deletar registros do banco
+        const pdfIds = existingPdfs.map(doc => doc.id);
+        const { error: dbError } = await supabase
+          .from('documents')
+          .delete()
+          .in('id', pdfIds);
+        
+        if (dbError) {
+          console.error('[PDF-CLEANUP] ❌ Erro ao deletar registros de PDFs:', dbError);
+        } else {
+          console.log(`[PDF-CLEANUP] ✅ ${existingPdfs.length} PDF(s) removido(s) com sucesso`);
+          
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `🧹 ${existingPdfs.length} PDF(s) antigo(s) removido(s) do sistema`
+          }]);
+        }
+      } else {
+        console.log('[PDF-CLEANUP] ✅ Nenhum PDF órfão encontrado');
       }
 
       /**
@@ -897,6 +942,12 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
         error?: any 
       }> => {
         try {
+          // ✅ VALIDAÇÃO CRÍTICA: Rejeitar PDFs
+          if (isPDF(file)) {
+            console.error(`[UPLOAD] ❌ ERRO CRÍTICO: PDF detectado em uploadAndInsertDocument: ${file.name}`);
+            throw new Error(`ERRO CRÍTICO: PDF não deveria chegar aqui! Arquivo: ${file.name}. Por favor, recarregue a página.`);
+          }
+
           console.log(`[UPLOAD] 📄 [${index + 1}/${total}] Processando: ${file.name}`);
           
           setMessages(prev => [...prev, {
@@ -904,15 +955,8 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
             content: `📤 [${index + 1}/${total}] Fazendo upload: ${file.name}...`
           }]);
           
-          // PDFs já foram convertidos para imagens antes do upload
           // Apenas processamos o arquivo como está (deve ser imagem)
           let filesToProcess: File[] = [file];
-          
-          if (isPDF(file)) {
-            // Isso não deveria acontecer - PDFs deveriam ter sido convertidos
-            console.warn(`[UPLOAD] ⚠️ PDF não convertido detectado: "${file.name}" - isso não deveria acontecer`);
-            throw new Error(`PDF "${file.name}" não foi convertido. Por favor, recarregue a página e tente novamente.`);
-          }
           
           // Array para armazenar IDs de documentos inseridos
           const insertedDocIds: string[] = [];
