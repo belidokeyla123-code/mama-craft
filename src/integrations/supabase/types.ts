@@ -767,6 +767,69 @@ export type Database = {
           },
         ]
       }
+      document_conversions: {
+        Row: {
+          case_id: string
+          completed_at: string | null
+          converted_size_bytes: number | null
+          created_at: string | null
+          document_id: string
+          error_message: string | null
+          id: string
+          images_created: number | null
+          original_size_bytes: number | null
+          pages_converted: number | null
+          processing_time_ms: number | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          case_id: string
+          completed_at?: string | null
+          converted_size_bytes?: number | null
+          created_at?: string | null
+          document_id: string
+          error_message?: string | null
+          id?: string
+          images_created?: number | null
+          original_size_bytes?: number | null
+          pages_converted?: number | null
+          processing_time_ms?: number | null
+          started_at?: string
+          status: string
+        }
+        Update: {
+          case_id?: string
+          completed_at?: string | null
+          converted_size_bytes?: number | null
+          created_at?: string | null
+          document_id?: string
+          error_message?: string | null
+          id?: string
+          images_created?: number | null
+          original_size_bytes?: number | null
+          pages_converted?: number | null
+          processing_time_ms?: number | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_conversions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_conversions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_validation: {
         Row: {
           case_id: string

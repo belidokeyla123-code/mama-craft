@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
+import { FileText, Trash2, Download, Eye, Loader2, FolderDown, Upload, Plus, RefreshCw, AlertTriangle, Pencil, ChevronDown, ChevronUp, Wand2, History, Check } from "lucide-react";
 import { convertPDFToImages, isPDF } from "@/lib/pdfToImages";
 import { reconvertImagesToPDF, groupDocumentsByOriginalName } from "@/lib/imagesToPdf";
 import { getDocTypeDisplayInfo } from "@/lib/documentNaming";
@@ -20,6 +20,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ManualReclassifyDialog } from "./ManualReclassifyDialog";
 import { useCacheInvalidation } from "@/hooks/useCacheInvalidation";
 import { useCaseOrchestration } from "@/hooks/useCaseOrchestration";
@@ -92,7 +109,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
   const { toast } = useToast();
   const [reclassifyDoc, setReclassifyDoc] = useState<Document | null>(null);
   
-  // Estado para conversão em massa de PDFs
+  // 🎯 Estados para conversão em massa de PDFs (melhorados)
   const [isConvertingPDFs, setIsConvertingPDFs] = useState(false);
   const [showConversionDialog, setShowConversionDialog] = useState(false);
   const [conversionProgress, setConversionProgress] = useState({
@@ -103,8 +120,22 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     totalPages: 0,
     successful: 0,
     failed: 0,
-    failedFiles: [] as string[]
+    failedFiles: [] as string[],
+    currentRetry: 0,
+    maxRetries: 2
   });
+  
+  // 🆕 Estados para melhorias avançadas
+  const [selectedPDFs, setSelectedPDFs] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [removeOriginalPDFs, setRemoveOriginalPDFs] = useState(false);
+  const [previewPDF, setPreviewPDF] = useState<{
+    doc: Document;
+    previewUrl: string | null;
+    isLoading: boolean;
+  } | null>(null);
+  const [conversionHistory, setConversionHistory] = useState<any[]>([]);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
   const loadDocuments = async () => {
     if (!caseId) {
@@ -623,6 +654,22 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     }
   };
 
+  // 📊 Calcular estimativa de storage
+  const calculateStorageEstimate = (pdfs: Document[]) => {
+    const totalPDFSize = pdfs.reduce((sum, pdf) => sum + (pdf.file_size || 0), 0);
+    const estimatedImageSize = totalPDFSize * 4; // Fator conservador de 4x
+    
+    return {
+      pdfSize: totalPDFSize,
+      estimatedImageSize,
+      totalEstimate: totalPDFSize + estimatedImageSize,
+      expansionFactor: 4,
+      pdfSizeMB: (totalPDFSize / (1024 * 1024)).toFixed(2),
+      estimatedImageSizeMB: (estimatedImageSize / (1024 * 1024)).toFixed(2),
+      totalEstimateMB: ((totalPDFSize + estimatedImageSize) / (1024 * 1024)).toFixed(2)
+    };
+  };
+
   // Detectar PDFs não convertidos (sem imagens filhas)
   const getUnconvertedPDFs = () => {
     return documents.filter(doc => {
@@ -638,12 +685,134 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       return !hasChildren;
     });
   };
+  
+  // 👁️ Gerar preview da primeira página do PDF
+  const generatePDFPreview = async (doc: Document) => {
+    setPreviewPDF({ doc, previewUrl: null, isLoading: true });
+    
+    try {
+      console.log(`[PREVIEW] Gerando preview de: ${doc.file_name}`);
+      
+      const { data: pdfBlob, error: downloadError } = await supabase.storage
+        .from("case-documents")
+        .download(doc.file_path);
+      
+      if (downloadError || !pdfBlob) {
+        throw new Error(`Erro ao baixar PDF: ${downloadError?.message}`);
+      }
+      
+      const pdfFile = new File([pdfBlob], doc.file_name, { type: 'application/pdf' });
+      const { images } = await convertPDFToImages(pdfFile, 1);
+      
+      if (images.length === 0) {
+        throw new Error("Nenhuma imagem gerada");
+      }
+      
+      const previewUrl = URL.createObjectURL(images[0]);
+      setPreviewPDF({ doc, previewUrl, isLoading: false });
+      
+    } catch (error: any) {
+      console.error(`[PREVIEW] Erro:`, error);
+      toast({
+        title: "Erro ao gerar preview",
+        description: error.message,
+        variant: "destructive"
+      });
+      setPreviewPDF(null);
+    }
+  };
+  
+  // 🔄 Conversão com retry automático
+  const convertPDFWithRetry = async (
+    pdfDoc: Document,
+    retryCount: number = 0
+  ): Promise<{ success: boolean; error?: string; images?: File[]; totalSize?: number }> => {
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY_MS = 1000;
+    
+    try {
+      const { data: pdfBlob, error: downloadError } = await supabase.storage
+        .from("case-documents")
+        .download(pdfDoc.file_path);
+      
+      if (downloadError || !pdfBlob) {
+        throw new Error(`Erro ao baixar: ${downloadError?.message}`);
+      }
+      
+      const pdfFile = new File([pdfBlob], pdfDoc.file_name, {
+        type: 'application/pdf'
+      });
+      
+      const { images } = await convertPDFToImages(pdfFile);
+      
+      if (images.length === 0) {
+        throw new Error("Nenhuma imagem foi gerada");
+      }
+      
+      const totalSize = images.reduce((sum, img) => sum + img.size, 0);
+      
+      return { success: true, images, totalSize };
+      
+    } catch (error: any) {
+      console.error(`[CONVERT-RETRY] Tentativa ${retryCount + 1} falhou:`, error);
+      
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[CONVERT-RETRY] Aguardando ${RETRY_DELAY_MS}ms antes de retry...`);
+        
+        setConversionProgress(prev => ({
+          ...prev,
+          currentRetry: retryCount + 1,
+          maxRetries: MAX_RETRIES
+        }));
+        
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        return convertPDFWithRetry(pdfDoc, retryCount + 1);
+      }
+      
+      return { success: false, error: error.message };
+    }
+  };
+  
+  // 📝 Carregar histórico de conversões
+  const loadConversionHistory = async () => {
+    if (!caseId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('document_conversions')
+        .select(`
+          *,
+          documents!document_conversions_document_id_fkey(file_name)
+        `)
+        .eq('case_id', caseId)
+        .order('started_at', { ascending: false })
+        .limit(50);
+      
+      if (error) throw error;
+      
+      setConversionHistory(data || []);
+    } catch (error: any) {
+      console.error('[HISTORY] Erro ao carregar:', error);
+    }
+  };
+  
+  // Carregar histórico quando montar o componente
+  useEffect(() => {
+    if (caseId) {
+      loadConversionHistory();
+    }
+  }, [caseId]);
 
   const unconvertedPDFs = getUnconvertedPDFs();
 
-  // Função de conversão em massa de PDFs antigos
+  // ✅ Função de conversão em massa de PDFs antigos - VERSÃO MELHORADA
   const convertOldPDFsToImages = async () => {
-    const pdfsToConvert = unconvertedPDFs;
+    // Filtrar PDFs: se selectedPDFs fornecido, usar só esses, senão todos
+    let pdfsToConvert = unconvertedPDFs;
+    
+    if (selectMode && selectedPDFs.size > 0) {
+      pdfsToConvert = pdfsToConvert.filter(pdf => selectedPDFs.has(pdf.id));
+    }
     
     if (pdfsToConvert.length === 0) {
       toast({
@@ -654,7 +823,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     }
 
     setIsConvertingPDFs(true);
-    setShowConversionDialog(true);
+    setShowConversionDialog(false); // Fechar dialog de confirmação
     setConversionProgress({
       current: 0,
       total: pdfsToConvert.length,
@@ -663,7 +832,9 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       totalPages: 0,
       successful: 0,
       failed: 0,
-      failedFiles: []
+      failedFiles: [],
+      currentRetry: 0,
+      maxRetries: 2
     });
 
     const results = {
@@ -680,22 +851,50 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         current: i + 1,
         fileName: pdfDoc.file_name,
         currentPage: 0,
-        totalPages: 0
+        totalPages: 0,
+        currentRetry: 0
       }));
+      
+      // 📝 Criar log inicial
+      const startTime = Date.now();
+      let logId: string | null = null;
+      
+      try {
+        const { data: logEntry, error: logError } = await supabase
+          .from('document_conversions')
+          .insert({
+            case_id: caseId,
+            document_id: pdfDoc.id,
+            status: 'processing',
+            original_size_bytes: pdfDoc.file_size || 0
+          })
+          .select()
+          .single();
+        
+        if (!logError && logEntry) {
+          logId = logEntry.id;
+        }
+      } catch (logError) {
+        console.error('[LOG] Erro ao criar log:', logError);
+      }
 
       try {
-        // 1. Baixar PDF do storage
-        const { data: pdfBlob, error: downloadError } = await supabase.storage
-          .from("case-documents")
-          .download(pdfDoc.file_path);
-
-        if (downloadError) throw downloadError;
-
-        // 2. Converter Blob para File
-        const pdfFile = new File([pdfBlob], pdfDoc.file_name, { type: 'application/pdf' });
-
-        // 3. Converter PDF para imagens
-        const { images } = await convertPDFToImages(pdfFile, 10);
+        console.log(`[CONVERT] PDF ${i + 1}/${pdfsToConvert.length}: ${pdfDoc.file_name}`);
+        
+        // 🔄 Usar conversão com retry
+        const conversionResult = await convertPDFWithRetry(pdfDoc);
+        
+        if (!conversionResult.success) {
+          throw new Error(conversionResult.error || "Falha na conversão");
+        }
+        
+        const { images, totalSize } = conversionResult;
+        
+        if (!images || images.length === 0) {
+          throw new Error("Nenhuma imagem foi gerada");
+        }
+        
+        console.log(`[CONVERT] ✅ ${images.length} página(s) convertida(s)`);
         
         setConversionProgress(prev => ({
           ...prev,
@@ -741,10 +940,69 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
         results.successful++;
         
+        // 📝 Atualizar log: SUCESSO
+        if (logId) {
+          const processingTime = Date.now() - startTime;
+          await supabase
+            .from('document_conversions')
+            .update({
+              status: 'completed',
+              completed_at: new Date().toISOString(),
+              pages_converted: images!.length,
+              images_created: images!.length,
+              processing_time_ms: processingTime,
+              converted_size_bytes: totalSize || 0
+            })
+            .eq('id', logId);
+        }
+        
+        // 🗑️ Remover PDF original se solicitado
+        if (removeOriginalPDFs) {
+          try {
+            console.log(`[DELETE] Removendo PDF original: ${pdfDoc.file_name}`);
+            
+            const { error: storageError } = await supabase.storage
+              .from("case-documents")
+              .remove([pdfDoc.file_path]);
+            
+            if (storageError) {
+              console.error('[DELETE] Erro ao remover do storage:', storageError);
+            }
+            
+            const { error: dbError } = await supabase
+              .from("documents")
+              .delete()
+              .eq("id", pdfDoc.id);
+            
+            if (dbError) {
+              console.error('[DELETE] Erro ao remover do banco:', dbError);
+            } else {
+              console.log(`[DELETE] ✅ PDF original removido`);
+            }
+            
+          } catch (deleteError) {
+            console.error('[DELETE] Erro ao remover PDF:', deleteError);
+          }
+        }
+        
       } catch (error: any) {
         console.error(`Erro ao converter ${pdfDoc.file_name}:`, error);
         results.failed++;
         results.failedFiles.push(pdfDoc.file_name);
+        
+        // 📝 Atualizar log: FALHA
+        if (logId) {
+          const processingTime = Date.now() - startTime;
+          await supabase
+            .from('document_conversions')
+            .update({
+              status: 'failed',
+              completed_at: new Date().toISOString(),
+              error_message: error.message,
+              processing_time_ms: processingTime
+            })
+            .eq('id', logId);
+        }
       }
     }
 
@@ -756,8 +1014,13 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       failedFiles: results.failedFiles
     }));
 
-    // Recarregar documentos
+    // Recarregar documentos e histórico
     await loadDocuments();
+    await loadConversionHistory();
+    
+    // Limpar seleção
+    setSelectedPDFs(new Set());
+    setSelectMode(false);
 
     // Disparar pipeline completo
     await triggerFullPipeline('PDFs convertidos em massa');
@@ -774,15 +1037,21 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     if (onDocumentsChange) onDocumentsChange();
 
     // Mostrar resultado final
-    if (results.failed === 0) {
+    if (results.successful > 0 && results.failed === 0) {
       toast({
         title: "✅ Conversão concluída!",
-        description: `${results.successful} PDF(s) convertido(s) com sucesso.`,
+        description: `${results.successful} PDF(s) convertido(s)${removeOriginalPDFs ? ' e originais removidos' : ''}`,
+      });
+    } else if (results.successful > 0 && results.failed > 0) {
+      toast({
+        title: "⚠️ Conversão parcial",
+        description: `${results.successful} sucesso, ${results.failed} falha(s): ${results.failedFiles.slice(0, 2).join(', ')}${results.failedFiles.length > 2 ? '...' : ''}`,
+        variant: "destructive"
       });
     } else {
       toast({
-        title: "⚠️ Conversão parcial",
-        description: `${results.successful} sucesso, ${results.failed} falha(s). Confira o relatório.`,
+        title: "❌ Conversão falhou",
+        description: `Todos os ${results.failed} PDF(s) falharam`,
         variant: "destructive"
       });
     }
@@ -940,6 +1209,18 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 )}
               </div>
               <div className="flex gap-2">
+                {/* Botão Ver Histórico */}
+                {conversionHistory.length > 0 && (
+                  <Button
+                    onClick={() => setShowHistoryDialog(true)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <History className="h-4 w-4" />
+                    Histórico ({conversionHistory.length})
+                  </Button>
+                )}
+                
                 {/* Botão Converter PDFs */}
                 {unconvertedPDFs.length > 0 && (
                   <Button
@@ -1278,27 +1559,64 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
         }}
       />
 
-      {/* Dialog de Conversão em Massa de PDFs */}
+      {/* Dialog de Conversão em Massa de PDFs - VERSÃO MELHORADA */}
       <AlertDialog 
         open={showConversionDialog && !isConvertingPDFs} 
         onOpenChange={setShowConversionDialog}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Converter PDFs Antigos para Imagens</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
+            <AlertDialogDescription className="space-y-4">
               <p>
-                {unconvertedPDFs.length} PDF(s) precisam ser convertidos para imagens antes de serem processados pela IA.
+                <strong>{unconvertedPDFs.length} PDF(s)</strong> precisam ser convertidos para imagens antes de serem processados pela IA.
               </p>
-              <div className="bg-muted p-3 rounded-md space-y-2 text-sm">
-                <p><strong>O que será feito:</strong></p>
+              
+              {/* 📊 Estimativa de Storage */}
+              {unconvertedPDFs.length > 0 && (() => {
+                const estimate = calculateStorageEstimate(unconvertedPDFs);
+                return (
+                  <div className="bg-blue-50 p-4 rounded-md space-y-2 text-sm">
+                    <p className="font-semibold text-blue-900">📊 Estimativa de Armazenamento:</p>
+                    <div className="space-y-1 text-blue-800">
+                      <p>• PDFs originais: <strong>{estimate.pdfSizeMB} MB</strong></p>
+                      <p>• Imagens geradas: <strong>~{estimate.estimatedImageSizeMB} MB</strong> (estimado)</p>
+                      <p>• Total após: <strong>~{estimate.totalEstimateMB} MB</strong></p>
+                      {parseFloat(estimate.totalEstimateMB) > 100 && (
+                        <p className="text-amber-600 font-medium">⚠️ Expansão de {estimate.expansionFactor}x no storage</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+              
+              <div className="bg-muted p-4 rounded-md space-y-3 text-sm">
+                <p className="font-semibold">O que será feito:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li>Cada PDF será convertido em imagens (1 por página)</li>
-                  <li>Imagens serão vinculadas ao PDF original</li>
-                  <li>PDFs originais serão mantidos para backup</li>
+                  <li>Imagens serão vinculadas ao PDF original via banco</li>
+                  <li>Até 3 tentativas automáticas em caso de falha</li>
+                  <li>Log completo de cada conversão salvo no histórico</li>
                   <li>Tempo estimado: ~{unconvertedPDFs.length * 10}s</li>
                 </ul>
               </div>
+              
+              {/* 🗑️ Opção de Remover PDFs Originais */}
+              <div className="flex items-start space-x-3 p-3 bg-amber-50 rounded border border-amber-200">
+                <Checkbox 
+                  id="remove-originals"
+                  checked={removeOriginalPDFs}
+                  onCheckedChange={(checked) => setRemoveOriginalPDFs(!!checked)}
+                  className="mt-1"
+                />
+                <label htmlFor="remove-originals" className="text-sm cursor-pointer flex-1">
+                  <span className="font-medium">Remover PDFs originais após conversão bem-sucedida</span>
+                  <span className="text-xs text-amber-700 block mt-1">
+                    ⚠️ Esta ação não pode ser desfeita. Economiza espaço de storage mantendo apenas as imagens processáveis.
+                  </span>
+                </label>
+              </div>
+              
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
@@ -1308,18 +1626,21 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setRemoveOriginalPDFs(false)}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={convertOldPDFsToImages}
               className="bg-amber-600 hover:bg-amber-700"
             >
+              <Wand2 className="h-4 w-4 mr-2" />
               Iniciar Conversão
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog de Progresso da Conversão */}
+      {/* Dialog de Progresso da Conversão - COM RETRY */}
       <AlertDialog open={isConvertingPDFs}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
@@ -1355,11 +1676,20 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                       Página {conversionProgress.currentPage}/{conversionProgress.totalPages}
                     </p>
                   )}
+                  {conversionProgress.currentRetry > 0 && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                      <RefreshCw className="h-3 w-3" />
+                      Tentativa {conversionProgress.currentRetry + 1} de {conversionProgress.maxRetries + 1}
+                    </p>
+                  )}
                 </div>
               )}
 
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>✅ {conversionProgress.successful} sucesso</span>
+                <span className="flex items-center gap-1">
+                  <Check className="h-3 w-3 text-green-600" />
+                  {conversionProgress.successful} sucesso
+                </span>
                 {conversionProgress.failed > 0 && (
                   <span className="text-destructive">❌ {conversionProgress.failed} falhas</span>
                 )}
@@ -1369,7 +1699,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription className="text-xs">
-                    <strong>Falhas:</strong> {conversionProgress.failedFiles.join(', ')}
+                    <strong>Falhas:</strong> {conversionProgress.failedFiles.slice(0, 3).join(', ')}
+                    {conversionProgress.failedFiles.length > 3 && ` e mais ${conversionProgress.failedFiles.length - 3}`}
                   </AlertDescription>
                 </Alert>
               )}
@@ -1381,6 +1712,7 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
               <AlertDialogAction onClick={() => {
                 setShowConversionDialog(false);
                 setIsConvertingPDFs(false);
+                setRemoveOriginalPDFs(false);
               }}>
                 Concluir
               </AlertDialogAction>
@@ -1388,6 +1720,158 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
           )}
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* 📊 Dialog de Histórico de Conversões */}
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Histórico de Conversões de PDFs
+            </DialogTitle>
+            <DialogDescription>
+              Registro completo de todas as conversões realizadas neste caso
+            </DialogDescription>
+          </DialogHeader>
+          
+          {conversionHistory.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>Nenhuma conversão realizada ainda</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>PDF</TableHead>
+                  <TableHead>Data/Hora</TableHead>
+                  <TableHead className="text-right">Páginas</TableHead>
+                  <TableHead className="text-right">Tempo</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {conversionHistory.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="font-medium truncate max-w-[200px]">
+                      {log.documents?.file_name || 'N/A'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(log.started_at).toLocaleString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {log.pages_converted || 0}
+                    </TableCell>
+                    <TableCell className="text-right text-xs">
+                      {log.processing_time_ms 
+                        ? `${(log.processing_time_ms / 1000).toFixed(1)}s`
+                        : '-'}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {log.status === 'completed' && (
+                        <Badge variant="default" className="bg-green-600">
+                          <Check className="h-3 w-3 mr-1" />
+                          Sucesso
+                        </Badge>
+                      )}
+                      {log.status === 'failed' && (
+                        <Badge variant="destructive">
+                          ❌ Falhou
+                        </Badge>
+                      )}
+                      {log.status === 'processing' && (
+                        <Badge variant="outline">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Processando
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowHistoryDialog(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* 👁️ Dialog de Preview do PDF */}
+      <Dialog 
+        open={!!previewPDF} 
+        onOpenChange={(open) => {
+          if (!open && previewPDF?.previewUrl) {
+            URL.revokeObjectURL(previewPDF.previewUrl);
+          }
+          setPreviewPDF(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Preview: {previewPDF?.doc.file_name}</DialogTitle>
+            <DialogDescription>
+              Primeira página do PDF
+            </DialogDescription>
+          </DialogHeader>
+          
+          {previewPDF?.isLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <span className="ml-3 text-muted-foreground">Gerando preview...</span>
+            </div>
+          ) : previewPDF?.previewUrl ? (
+            <div className="space-y-4">
+              <div className="border rounded-lg overflow-hidden bg-muted/30">
+                <img 
+                  src={previewPDF.previewUrl} 
+                  alt="Preview"
+                  className="w-full object-contain max-h-[60vh]"
+                />
+              </div>
+              
+              <DialogFooter className="gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    if (previewPDF?.previewUrl) {
+                      URL.revokeObjectURL(previewPDF.previewUrl);
+                    }
+                    setPreviewPDF(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (previewPDF?.doc) {
+                      setSelectedPDFs(new Set([previewPDF.doc.id]));
+                      setSelectMode(true);
+                    }
+                    if (previewPDF?.previewUrl) {
+                      URL.revokeObjectURL(previewPDF.previewUrl);
+                    }
+                    setPreviewPDF(null);
+                    setShowConversionDialog(true);
+                  }}
+                  className="gap-2"
+                >
+                  <Wand2 className="h-4 w-4" />
+                  Converter Este PDF
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
