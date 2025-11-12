@@ -193,7 +193,7 @@ const STEPS = [
 const NewCase = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0); // Começa no chat
-  const [caseData, setCaseData] = useState<CaseData>({
+  const [caseData, setCaseData] = useState<CaseData>(() => ({
     authorName: "",
     authorCpf: "",
     eventType: "parto",
@@ -207,13 +207,24 @@ const NewCase = () => {
     salarioMinimoHistory: [],
     documents: [],
     caseId: crypto.randomUUID(),
-  });
+  }));
 
   // ✅ FASE 2: Hook de pipeline centralizado
   const { status, isStale, checkPipelineStatus } = useCasePipeline(caseData.caseId || '');
 
   // ✅ FASE 2: Hook de sincronização em tempo real
   useChatSync(caseData.caseId || '');
+
+  // ✅ PROTEÇÃO: Verificar se caseId foi gerado corretamente
+  useEffect(() => {
+    if (!caseData.caseId) {
+      console.warn('[NewCase] ⚠️ caseId estava undefined, gerando novo ID...');
+      setCaseData(prev => ({
+        ...prev,
+        caseId: crypto.randomUUID()
+      }));
+    }
+  }, []);
 
   const progress = ((currentStep) / (STEPS.length - 1)) * 100;
 

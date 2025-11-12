@@ -64,11 +64,18 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
     setIsProcessing(true);
 
     try {
+      // ✅ PROTEÇÃO: Garantir que caseId existe
+      const activeCaseId = data.caseId || crypto.randomUUID();
+      if (!data.caseId) {
+        console.warn('[StepChatInteligente] ⚠️ caseId estava undefined, gerando e salvando...');
+        updateData({ caseId: activeCaseId });
+      }
+
       // Upload files to Supabase Storage
       const uploadedUrls: string[] = [];
       
       for (const file of files) {
-        const fileName = `${data.caseId}/${Date.now()}_${file.name}`;
+        const fileName = `${activeCaseId}/${Date.now()}_${file.name}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("case-documents")
           .upload(fileName, file);
@@ -87,7 +94,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         "analyze-documents-chat",
         {
           body: {
-            caseId: data.caseId,
+            caseId: activeCaseId,
             files: uploadedUrls.map((url, idx) => ({
               url,
               name: files[idx].name,
