@@ -122,7 +122,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
     failed: 0,
     failedFiles: [] as string[],
     currentRetry: 0,
-    maxRetries: 2
+    maxRetries: 2,
+    deletedFiles: 0
   });
   
   // 🆕 Estados para melhorias avançadas
@@ -834,7 +835,8 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
       failed: 0,
       failedFiles: [],
       currentRetry: 0,
-      maxRetries: 2
+      maxRetries: 2,
+      deletedFiles: 0
     });
 
     const results = {
@@ -940,10 +942,14 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
 
         results.successful++;
         
+        // 📝 Variável para rastrear arquivos deletados
+        let deletedFilesCount = 0;
+        
         // 📝 Atualizar log: SUCESSO
         if (logId) {
           const processingTime = Date.now() - startTime;
-          await supabase
+            
+            await supabase
             .from('document_conversions')
             .update({
               status: 'completed',
@@ -956,19 +962,43 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             .eq('id', logId);
         }
         
-        // 🗑️ Remover PDF original se solicitado
+        // 🗑️ Remover PDF original E suas imagens filhas se solicitado
         if (removeOriginalPDFs) {
           try {
-            console.log(`[DELETE] Removendo PDF original: ${pdfDoc.file_name}`);
+            console.log(`[DELETE] Removendo PDF e imagens filhas: ${pdfDoc.file_name}`);
             
+            // 1️⃣ PRIMEIRO: Buscar TODAS as imagens filhas no banco
+            const { data: childImages, error: fetchError } = await supabase
+              .from("documents")
+              .select("file_path")
+              .eq("parent_document_id", pdfDoc.id);
+            
+            if (fetchError) {
+              console.error('[DELETE] Erro ao buscar imagens filhas:', fetchError);
+              throw fetchError;
+            }
+            
+            // 2️⃣ SEGUNDO: Montar array de caminhos para deletar do storage
+            const filesToDelete = [
+              pdfDoc.file_path, // PDF original
+              ...(childImages || []).map(img => img.file_path) // Todas as imagens
+            ];
+            
+            console.log(`[DELETE] Deletando ${filesToDelete.length} arquivo(s) do storage`);
+            
+            // 3️⃣ TERCEIRO: Deletar TODOS os arquivos do storage
             const { error: storageError } = await supabase.storage
               .from("case-documents")
-              .remove([pdfDoc.file_path]);
+              .remove(filesToDelete);
             
             if (storageError) {
               console.error('[DELETE] Erro ao remover do storage:', storageError);
+              throw storageError;
             }
             
+            console.log(`[DELETE] ✅ ${filesToDelete.length} arquivo(s) removido(s) do storage`);
+            
+            // 4️⃣ POR ÚLTIMO: Deletar do banco (CASCADE cuidará dos registros)
             const { error: dbError } = await supabase
               .from("documents")
               .delete()
@@ -976,12 +1006,21 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
             
             if (dbError) {
               console.error('[DELETE] Erro ao remover do banco:', dbError);
-            } else {
-              console.log(`[DELETE] ✅ PDF original removido`);
+              throw dbError;
             }
             
+            deletedFilesCount = filesToDelete.length;
+            console.log(`[DELETE] ✅ PDF original e ${childImages?.length || 0} imagem(ns) removidos completamente`);
+            
+            // Atualizar contador global de arquivos deletados
+            setConversionProgress(prev => ({
+              ...prev,
+              deletedFiles: (prev.deletedFiles || 0) + deletedFilesCount
+            }));
+            
           } catch (deleteError) {
-            console.error('[DELETE] Erro ao remover PDF:', deleteError);
+            console.error('[DELETE] ❌ Erro ao remover PDF e imagens:', deleteError);
+            // Continuar processamento mesmo se houver erro na exclusão
           }
         }
         
@@ -1617,6 +1656,20 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                 </label>
               </div>
               
+              {removeOriginalPDFs && (
+                <Alert className="bg-destructive/10 border-destructive/50">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-sm">
+                    ⚠️ <strong>Esta ação deletará permanentemente:</strong>
+                    <ul className="list-disc pl-6 mt-2 space-y-1">
+                      <li>Os PDFs originais ({unconvertedPDFs.length} arquivo{unconvertedPDFs.length !== 1 ? 's' : ''})</li>
+                      <li>Todas as imagens convertidas (estimado: ~{unconvertedPDFs.length * 5} imagem{unconvertedPDFs.length * 5 !== 1 ? 'ns' : ''})</li>
+                      <li><strong>Total: ~{unconvertedPDFs.length * 6} arquivo(s) serão removidos do storage</strong></li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
@@ -1694,6 +1747,12 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                   <span className="text-destructive">❌ {conversionProgress.failed} falhas</span>
                 )}
               </div>
+              
+              {removeOriginalPDFs && conversionProgress.deletedFiles > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  🗑️ {conversionProgress.deletedFiles} arquivo(s) deletado(s) do storage
+                </div>
+              )}
 
               {conversionProgress.failedFiles.length > 0 && (
                 <Alert variant="destructive">
