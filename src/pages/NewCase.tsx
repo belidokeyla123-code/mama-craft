@@ -8,10 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StepValidation } from "@/components/wizard/StepValidation";
+import { StepChatInteligente } from "@/components/wizard/StepChatInteligente";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
 import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
+import { StepDiagnosticoJuiz } from "@/components/wizard/StepDiagnosticoJuiz";
 import { toast } from "sonner";
 import { useCasePipeline } from "@/hooks/useCasePipeline";
 import { useChatSync } from "@/hooks/useChatSync";
@@ -180,11 +182,12 @@ export interface CaseData {
 }
 
 const STEPS = [
-  { id: 0, name: "Validação" },
+  { id: 0, name: "Chat Inteligente" },
   { id: 1, name: "Análise" },
   { id: 2, name: "Jurisprudência" },
   { id: 3, name: "Teses" },
   { id: 4, name: "Minuta" },
+  { id: 5, name: "Diagnóstico JUIZ" },
 ];
 
 const NewCase = () => {
@@ -289,7 +292,13 @@ const NewCase = () => {
   const renderStep = () => {
     switch (currentStep) {
       case 0:
-        return <StepValidation data={caseData} updateData={updateCaseData} />;
+        return (
+          <StepChatInteligente
+            data={caseData}
+            updateData={updateCaseData}
+            onComplete={handleNext}
+          />
+        );
       case 1:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
       case 2:
@@ -298,6 +307,8 @@ const NewCase = () => {
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
       case 4:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
+      case 5:
+        return <StepDiagnosticoJuiz data={caseData} updateData={updateCaseData} />;
       default:
         return null;
     }
