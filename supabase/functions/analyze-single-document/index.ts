@@ -212,18 +212,43 @@ serve(async (req) => {
     const isPdfFile = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
     
     if (isPdfFile) {
-      console.log(`[DOC ${documentId}] ❌ PDF detectado - REJEITANDO (OpenAI Vision não aceita PDFs)`);
+      console.error(`[DOC ${documentId}] ❌ PDF NÃO pode ser analisado - requer conversão no frontend!`);
       
-      // Retornar erro pedindo conversão no frontend
+      // 🧹 DELETAR PDF AUTOMATICAMENTE do storage e banco
+      console.log(`[DOC ${documentId}] 🗑️ Deletando PDF do storage: ${filePath}`);
+      const { error: deleteStorageError } = await supabaseClient.storage
+        .from('case-documents')
+        .remove([filePath]);
+      
+      if (deleteStorageError) {
+        console.warn(`[DOC ${documentId}] ⚠️ Erro ao deletar PDF do storage:`, deleteStorageError);
+      } else {
+        console.log(`[DOC ${documentId}] ✅ PDF deletado do storage`);
+      }
+      
+      console.log(`[DOC ${documentId}] 🗃️ Deletando registro do PDF do banco`);
+      const { error: deleteDbError } = await supabaseClient
+        .from('documents')
+        .delete()
+        .eq('id', documentId);
+      
+      if (deleteDbError) {
+        console.error(`[DOC ${documentId}] ❌ Erro ao deletar PDF do banco:`, deleteDbError);
+      } else {
+        console.log(`[DOC ${documentId}] ✅ PDF deletado do banco com sucesso`);
+      }
+      
+      // Retornar resposta indicando que o PDF foi removido
       return new Response(
         JSON.stringify({ 
-          error: "PDFs devem ser convertidos para imagem no frontend antes da análise. Use a aba Documentos para converter.",
+          message: "PDF removido automaticamente. Faça upload novamente - será convertido para imagens.",
           documentId,
           caseId,
           isPDF: true,
-          shouldRetry: false
+          wasDeleted: true,
+          fileName: originalFileName
         }), {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
