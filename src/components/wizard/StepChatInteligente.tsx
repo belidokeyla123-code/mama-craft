@@ -114,7 +114,8 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         updateData({
           ...data,
           chatAnalysis: aiResponse.casePayload,
-          documents: [...(data.documents || []), ...uploadedUrls],
+          documents: [...(data.documents || []), ...files],
+          documentUrls: [...(data.documentUrls || []), ...uploadedUrls],
         });
       }
 

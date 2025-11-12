@@ -161,6 +161,7 @@ export interface CaseData {
   // Dados do Chat Inteligente
   chatAnalysis?: any;
   chatCompleted?: boolean;
+  documentUrls?: string[];  // URLs dos documentos no storage
   
   // Dados da Análise
   analysisReport?: any;
