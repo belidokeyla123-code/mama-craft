@@ -9,19 +9,23 @@ import { useToast } from "@/hooks/use-toast";
 import { useChatSync } from "@/hooks/useChatSync";
 // import { StepChatIntake } from "@/components/wizard/StepChatIntake"; // REMOVIDO
 // import { StepValidation } from "@/components/wizard/StepValidation"; // REMOVIDO
+import { StepChatInteligente } from "@/components/wizard/StepChatInteligente";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
 import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
 import { StepDraft } from "@/components/wizard/StepDraft";
+import { StepDiagnosticoJuiz } from "@/components/wizard/StepDiagnosticoJuiz";
 import { PipelineReplicateButton } from "@/components/wizard/PipelineReplicateButton";
 
 import type { CaseData } from "./NewCase";
 
 const STEPS = [
-  { id: 0, name: "Análise" },
-  { id: 1, name: "Jurisprudência" },
-  { id: 2, name: "Teses" },
-  { id: 3, name: "Minuta" },
+  { id: 0, name: "Chat Inteligente" },
+  { id: 1, name: "Análise" },
+  { id: 2, name: "Jurisprudência" },
+  { id: 3, name: "Teses" },
+  { id: 4, name: "Minuta" },
+  { id: 5, name: "Diagnóstico JUIZ" },
 ];
 
 export default function CaseDetail() {
@@ -254,13 +258,23 @@ export default function CaseDetail() {
   const renderStep = () => {
     switch (currentStep) {
       case 0:
-        return <StepAnalysis data={caseData} updateData={updateCaseData} />;
+        return (
+          <StepChatInteligente
+            data={caseData}
+            updateData={updateCaseData}
+            onComplete={handleNext}
+          />
+        );
       case 1:
-        return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
+        return <StepAnalysis data={caseData} updateData={updateCaseData} />;
       case 2:
-        return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
+        return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
       case 3:
+        return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
+      case 4:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
+      case 5:
+        return <StepDiagnosticoJuiz data={caseData} updateData={updateCaseData} />;
       default:
         return null;
     }
