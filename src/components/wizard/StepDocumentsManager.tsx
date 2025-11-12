@@ -937,6 +937,16 @@ export const StepDocumentsManager = ({ caseId, caseName, onDocumentsChange }: St
                             }
                           );
                           
+                          // ⚠️ Se for PDF, mostrar mensagem específica
+                          if (data?.isPDF || error?.message?.includes('PDFs devem ser convertidos')) {
+                            toast({
+                              title: "❌ PDF detectado",
+                              description: "Converta PDFs para imagens primeiro antes de reprocessar",
+                              variant: "destructive"
+                            });
+                            return;
+                          }
+                          
                           if (!error && data?.success) {
                             toast({
                               title: "✅ Documento reprocessado",

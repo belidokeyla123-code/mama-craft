@@ -265,13 +265,19 @@ export const StepValidation = ({ data, updateData }: StepValidationProps) => {
       sonnerToast.info(`Encontrados ${outrosDocs.length} documentos não identificados. Reprocessando como "${docType}"...`);
 
       // Reprocessar primeiro documento "outro" como o tipo desejado
-      const { error } = await supabase.functions.invoke('analyze-single-document', {
+      const { data: result, error } = await supabase.functions.invoke('analyze-single-document', {
         body: { 
           documentId: outrosDocs[0].id,
           caseId: data.caseId,
           forceDocType: docType
         }
       });
+
+      // ⚠️ Se for PDF, mostrar mensagem específica
+      if (result?.isPDF || error?.message?.includes('PDFs devem ser convertidos')) {
+        sonnerToast.error(`Documento é PDF. Converta para imagem na aba Documentos primeiro.`);
+        return;
+      }
 
       if (error) throw error;
 

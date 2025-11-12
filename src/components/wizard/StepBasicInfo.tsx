@@ -504,6 +504,13 @@ export const StepBasicInfo = ({ data, updateData }: StepBasicInfoProps) => {
         }
       });
       
+      // ⚠️ Se for PDF, mostrar mensagem específica
+      if (result?.isPDF || error?.message?.includes('PDFs devem ser convertidos')) {
+        toast.error(`Documento é PDF. Converta para imagem na aba Documentos primeiro.`, { id: 'reanalyze' });
+        setIsReanalyzing(false);
+        return;
+      }
+      
       if (error) throw error;
       
       if (result?.extracted) {

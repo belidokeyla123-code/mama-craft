@@ -1550,6 +1550,13 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
               }
             );
 
+            // ⚠️ Se for PDF, pular e adicionar na lista
+            if (result?.isPDF || error?.message?.includes('PDFs devem ser convertidos')) {
+              console.log(`[DOC ${doc.id}] ⏭️ PDF detectado, pulando análise...`);
+              skippedPdfs.push(doc.file_name);
+              return;
+            }
+
             if (error) {
               console.error(`[REPROCESS] Erro em ${doc.file_name}:`, error);
               return null;

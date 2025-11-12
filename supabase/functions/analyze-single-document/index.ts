@@ -208,30 +208,31 @@ serve(async (req) => {
       throw new Error("File not found in storage");
     }
 
-    // ✅ NOVO: PDFs serão processados via OCR da OpenAI (extração de texto)
-    const isPDF = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
+    // ⚠️ CRÍTICO: OpenAI Vision API NÃO aceita PDFs, apenas imagens
+    const isPdfFile = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
     
-    let fileBase64: string;
-    let mimeType: string;
-    
-    if (isPDF) {
-      console.log(`[DOC ${documentId}] 📄 PDF detectado - processando com OCR...`);
+    if (isPdfFile) {
+      console.log(`[DOC ${documentId}] ❌ PDF detectado - REJEITANDO (OpenAI Vision não aceita PDFs)`);
       
-      // Para PDFs, vamos usar a API da OpenAI para extrair texto diretamente
-      // A OpenAI consegue ler PDFs e extrair informações sem precisar converter para imagem
-      const arrayBuffer = await fileData.arrayBuffer();
-      fileBase64 = encodeBase64(arrayBuffer);
-      mimeType = 'application/pdf';
-      
-      console.log(`[DOC ${documentId}] ✅ PDF preparado para análise (${Math.round(arrayBuffer.byteLength / 1024)}KB)`);
-    } else {
-      // Para imagens, processo normal
-      const arrayBuffer = await fileData.arrayBuffer();
-      fileBase64 = encodeBase64(arrayBuffer);
-      mimeType = documentData.mime_type || 'image/png';
-      console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64 (${Math.round(arrayBuffer.byteLength / 1024)}KB).`);
+      // Retornar erro pedindo conversão no frontend
+      return new Response(
+        JSON.stringify({ 
+          error: "PDFs devem ser convertidos para imagem no frontend antes da análise. Use a aba Documentos para converter.",
+          documentId,
+          caseId,
+          isPDF: true,
+          shouldRetry: false
+        }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-    console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64 (${Math.round(arrayBuffer.byteLength / 1024)}KB).`);
+    
+    // Para imagens, processo normal
+    const arrayBuffer = await fileData.arrayBuffer();
+    const fileBase64 = encodeBase64(arrayBuffer);
+    const mimeType = documentData.mime_type || 'image/png';
+    console.log(`[DOC ${documentId}] Imagem baixada e convertida para Base64 (${Math.round(arrayBuffer.byteLength / 1024)}KB).`);
 
     // ==================================================================
     // 4. ETAPA 1: CLASSIFICAR PRIMEIRO (não confiar no tipo atual)

@@ -362,6 +362,12 @@ export const DocumentUploadInline = ({
               }
             });
             
+            // ⚠️ Se for PDF, pular silenciosamente (já foi convertido no upload)
+            if (result?.isPDF || analyzeError?.message?.includes('PDFs devem ser convertidos')) {
+              console.log(`[ANALYZE] PDF detectado, pulando análise (${docId})`);
+              continue;
+            }
+            
             if (analyzeError) {
               console.error('[ANALYZE] Erro ao analisar:', analyzeError);
               continue;
