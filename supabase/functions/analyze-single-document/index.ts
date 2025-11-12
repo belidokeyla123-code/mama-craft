@@ -5,6 +5,7 @@ import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 import { ESPECIALISTA_MATERNIDADE_PROMPT } from "../_shared/prompts/especialista-maternidade.ts";
 import { buildPromptForDocType } from './prompts.ts';
 import { validateRequest, documentAnalysisSchema, createValidationErrorResponse } from "../_shared/validators.ts";
+import { convertPDFToImages, isPDF } from "../_shared/pdf-utils.ts";
 
 // ============================================================
 // SISTEMA DE NOMENCLATURA INTELIGENTE
@@ -207,27 +208,29 @@ serve(async (req) => {
       throw new Error("File not found in storage");
     }
 
-    // ✅ CRÍTICO: PDFs NÃO podem ser processados como imagem - precisam conversão no frontend
+    // ✅ NOVO: PDFs serão processados via OCR da OpenAI (extração de texto)
     const isPDF = documentData.mime_type === 'application/pdf' || originalFileName.toLowerCase().endsWith('.pdf');
     
-    if (isPDF) {
-      console.error(`[DOC ${documentId}] ❌ PDF NÃO pode ser analisado - requer conversão no frontend!`);
-      
-      return new Response(
-        JSON.stringify({ 
-          error: "PDFs devem ser convertidos para imagem no frontend antes da análise. Use a aba Documentos para converter.",
-          documentId,
-          caseId,
-          isPDF: true,
-          shouldRetry: false
-        }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    let fileBase64: string;
+    let mimeType: string;
     
-    const arrayBuffer = await fileData.arrayBuffer();
-    const fileBase64 = encodeBase64(arrayBuffer);
+    if (isPDF) {
+      console.log(`[DOC ${documentId}] 📄 PDF detectado - processando com OCR...`);
+      
+      // Para PDFs, vamos usar a API da OpenAI para extrair texto diretamente
+      // A OpenAI consegue ler PDFs e extrair informações sem precisar converter para imagem
+      const arrayBuffer = await fileData.arrayBuffer();
+      fileBase64 = encodeBase64(arrayBuffer);
+      mimeType = 'application/pdf';
+      
+      console.log(`[DOC ${documentId}] ✅ PDF preparado para análise (${Math.round(arrayBuffer.byteLength / 1024)}KB)`);
+    } else {
+      // Para imagens, processo normal
+      const arrayBuffer = await fileData.arrayBuffer();
+      fileBase64 = encodeBase64(arrayBuffer);
+      mimeType = documentData.mime_type || 'image/png';
+      console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64 (${Math.round(arrayBuffer.byteLength / 1024)}KB).`);
+    }
     console.log(`[DOC ${documentId}] Arquivo baixado e convertido para Base64 (${Math.round(arrayBuffer.byteLength / 1024)}KB).`);
 
     // ==================================================================

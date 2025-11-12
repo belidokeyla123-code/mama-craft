@@ -1,7 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configurar o worker do PDF.js para Vite - usar o arquivo copiado para public
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/pdf.worker.mjs';
+// Configurar o worker do PDF.js para usar CDN (mais confiável)
+// Versão 5.4.296 do pdfjs-dist (mesma versão do package.json)
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs';
 
 export interface PDFConversionResult {
   images: File[];
