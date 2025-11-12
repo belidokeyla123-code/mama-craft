@@ -206,6 +206,7 @@ const NewCase = () => {
     urbanPeriods: [],
     salarioMinimoHistory: [],
     documents: [],
+    caseId: crypto.randomUUID(),
   });
 
   // ✅ FASE 2: Hook de pipeline centralizado
