@@ -106,17 +106,17 @@ Preencha com as informações disponíveis. Use "" ou [] para campos ainda não 
     console.log("[Chat AI] Calling Lovable AI...");
     const startTime = Date.now();
     
-    const openaiResponse = await fetch("https://api.lovable.app/ai/chat", {
+    const openaiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash", // Modelo rápido e eficiente
+        model: "google/gemini-2.5-flash",
         messages,
         temperature: 0.7,
-        max_tokens: 1500, // Reduzido para maior velocidade
+        max_tokens: 1500,
       }),
     });
 
