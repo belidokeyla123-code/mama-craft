@@ -8,6 +8,12 @@ import { supabase } from "@/integrations/supabase/client";
 import type { CaseData } from "@/pages/NewCase";
 import { sanitizeFileName } from "@/lib/documentTypeMapper";
 
+const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB em bytes
+
+const formatFileSize = (bytes: number): string => {
+  return (bytes / (1024 * 1024)).toFixed(2);
+};
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -48,9 +54,66 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
-    setUploadedFiles((prev) => [...prev, ...files]);
+    // ✅ VALIDAÇÃO: Filtrar arquivos por tamanho
+    const validFiles: File[] = [];
+    const rejectedFiles: Array<{ name: string; size: number }> = [];
+
+    files.forEach((file) => {
+      if (file.size > MAX_FILE_SIZE) {
+        rejectedFiles.push({ name: file.name, size: file.size });
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    // ❌ Se houver arquivos rejeitados, mostrar feedback
+    if (rejectedFiles.length > 0) {
+      const rejectedList = rejectedFiles
+        .map((f) => `• ${f.name} (${formatFileSize(f.size)}MB)`)
+        .join("\n");
+
+      toast({
+        title: "❌ Arquivos muito grandes",
+        description: (
+          <div className="space-y-2">
+            <p>Os seguintes arquivos excedem o limite de 200MB:</p>
+            <pre className="text-xs bg-muted p-2 rounded whitespace-pre-wrap">
+              {rejectedList}
+            </pre>
+            {validFiles.length > 0 && (
+              <p className="text-green-600 font-semibold">
+                ✅ {validFiles.length} arquivo(s) válido(s) serão enviados
+              </p>
+            )}
+          </div>
+        ),
+        variant: "destructive",
+        duration: 8000,
+      });
+
+      // Mensagem no chat
+      const rejectionMessage: Message = {
+        role: "assistant",
+        content: `⚠️ **Atenção:** ${rejectedFiles.length} arquivo(s) foram rejeitados por excederem 200MB.\n\n${rejectedList}\n\n${
+          validFiles.length > 0 
+            ? `✅ Vou processar os ${validFiles.length} arquivo(s) válidos.` 
+            : "❌ Nenhum arquivo válido para processar."
+        }`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, rejectionMessage]);
+    }
+
+    // ✅ Se não houver arquivos válidos, parar aqui
+    if (validFiles.length === 0) {
+      event.target.value = "";
+      return;
+    }
+
+    // ✅ Processar apenas arquivos válidos
+    setUploadedFiles((prev) => [...prev, ...validFiles]);
     
-    const fileNames = files.map((f) => f.name).join(", ");
+    const fileNames = validFiles.map((f) => f.name).join(", ");
     const userMessage: Message = {
       role: "user",
       content: `📎 Arquivos enviados: ${fileNames}`,
@@ -58,7 +121,9 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
     };
     
     setMessages((prev) => [...prev, userMessage]);
-    processFilesWithAI(files);
+    processFilesWithAI(validFiles);
+
+    event.target.value = "";
   };
 
   const processFilesWithAI = async (files: File[]) => {
@@ -77,6 +142,10 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       
       for (const file of files) {
         const sanitizedFileName = sanitizeFileName(file.name);
+        
+        // 🔍 DEBUG: Log para verificar sanitização
+        console.log(`[Upload] Original: "${file.name}" → Sanitizado: "${sanitizedFileName}"`);
+        
         const fileName = `${activeCaseId}/${Date.now()}_${sanitizedFileName}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("case-documents")

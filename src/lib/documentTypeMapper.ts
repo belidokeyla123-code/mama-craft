@@ -104,11 +104,30 @@ export const mapDocumentTypeToEnum = (docType: string): string => {
 
 // Sanitizar nome do arquivo (remover caracteres inválidos e acentos)
 export const sanitizeFileName = (name: string): string => {
-  return name
-    .normalize('NFD')           // Decompor caracteres acentuados
-    .replace(/[\u0300-\u036f]/g, '') // Remover diacríticos (acentos)
-    .replace(/~/g, '_')         // ~ → _
-    .replace(/[<>:"|?*]/g, '')  // Caracteres inválidos do Windows
-    .replace(/\s+/g, '_')       // Espaços → _
+  // Mapeamento explícito de caracteres especiais portugueses
+  const charMap: Record<string, string> = {
+    'Ç': 'C', 'ç': 'c',
+    'Á': 'A', 'á': 'a', 'À': 'A', 'à': 'a', 'Â': 'A', 'â': 'a', 'Ã': 'A', 'ã': 'a',
+    'É': 'E', 'é': 'e', 'È': 'E', 'è': 'e', 'Ê': 'E', 'ê': 'e',
+    'Í': 'I', 'í': 'i', 'Ì': 'I', 'ì': 'i', 'Î': 'I', 'î': 'i',
+    'Ó': 'O', 'ó': 'o', 'Ò': 'O', 'ò': 'o', 'Ô': 'O', 'ô': 'o', 'Õ': 'O', 'õ': 'o',
+    'Ú': 'U', 'ú': 'u', 'Ù': 'U', 'ù': 'u', 'Û': 'U', 'û': 'u',
+    'ª': 'a', 'º': 'o',
+  };
+
+  // Substituir caracteres especiais explicitamente
+  let sanitized = name;
+  Object.entries(charMap).forEach(([char, replacement]) => {
+    sanitized = sanitized.replace(new RegExp(char, 'g'), replacement);
+  });
+
+  // Normalização NFD para outros caracteres
+  return sanitized
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // Remover diacríticos restantes
+    .replace(/~/g, '_')               // ~ → _
+    .replace(/[<>:"|?*]/g, '')        // Caracteres inválidos Windows
+    .replace(/\s+/g, '_')             // Espaços → _
+    .replace(/-+/g, '-')              // Múltiplos hífens → único hífen
     .trim();
 };
