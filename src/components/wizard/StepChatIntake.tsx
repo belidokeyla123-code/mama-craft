@@ -95,6 +95,69 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
     migrateBenefits();
   }, [data.caseId]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🧹 LIMPEZA AUTOMÁTICA DE PDFs ÓRFÃOS
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    const cleanupOrphanPdfs = async () => {
+      if (!data.caseId) return;
+      
+      console.log('[PDF-CLEANUP] 🔍 Verificando PDFs órfãos no banco...');
+      
+      try {
+        const { data: existingPdfs, error: pdfError } = await supabase
+          .from('documents')
+          .select('id, file_path, file_name')
+          .eq('case_id', data.caseId)
+          .or('mime_type.eq.application/pdf,file_name.ilike.%.pdf');
+
+        if (pdfError) {
+          console.error('[PDF-CLEANUP] ❌ Erro ao buscar PDFs:', pdfError);
+          return;
+        }
+
+        if (existingPdfs && existingPdfs.length > 0) {
+          console.log(`[PDF-CLEANUP] 🗑️ Encontrados ${existingPdfs.length} PDF(s) órfão(s). Deletando...`);
+          
+          // Deletar arquivos do storage
+          const pdfPaths = existingPdfs.map(doc => doc.file_path);
+          const { error: storageError } = await supabase.storage
+            .from('case-documents')
+            .remove(pdfPaths);
+          
+          if (storageError) {
+            console.warn('[PDF-CLEANUP] ⚠️ Erro ao deletar PDFs do storage:', storageError);
+          }
+          
+          // Deletar registros do banco
+          const pdfIds = existingPdfs.map(doc => doc.id);
+          const { error: dbError } = await supabase
+            .from('documents')
+            .delete()
+            .in('id', pdfIds);
+          
+          if (dbError) {
+            console.error('[PDF-CLEANUP] ❌ Erro ao deletar registros de PDFs:', dbError);
+          } else {
+            console.log(`[PDF-CLEANUP] ✅ ${existingPdfs.length} PDF(s) removido(s) com sucesso`);
+            
+            toast({
+              title: "PDFs removidos",
+              description: `${existingPdfs.length} PDF(s) antigo(s) foram removidos. Por favor, faça upload novamente para conversão automática.`,
+              duration: 5000,
+            });
+          }
+        } else {
+          console.log('[PDF-CLEANUP] ✅ Nenhum PDF órfão encontrado');
+        }
+      } catch (error) {
+        console.error('[PDF-CLEANUP] Erro durante limpeza:', error);
+      }
+    };
+
+    cleanupOrphanPdfs();
+  }, [data.caseId]);
+
   // ✅ MUDANÇA 10: DELETADO - useEffect problemático que causava loop de erro
   // Este código foi removido porque causava toasts infinitos de erro
   // A conversão de PDFs agora é automática no frontend durante o upload
