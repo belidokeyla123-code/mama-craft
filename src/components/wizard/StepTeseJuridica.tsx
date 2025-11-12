@@ -303,7 +303,7 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
               <div>
                 <p className="font-semibold text-sm mb-1">Fundamentação Legal:</p>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  {tese.fundamentacao_legal.map((fund, idx) => (
+                  {(tese.fundamentacao_legal || []).map((fund, idx) => (
                     <li key={idx}>{fund}</li>
                   ))}
                 </ul>
@@ -311,7 +311,7 @@ export const StepTeseJuridica = ({ data, updateData }: StepTeseJuridicaProps) =>
               <div>
                 <p className="font-semibold text-sm mb-1">Fundamentação Jurisprudencial:</p>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  {tese.fundamentacao_jurisprudencial.map((fund, idx) => (
+                  {(tese.fundamentacao_jurisprudencial || []).map((fund, idx) => (
                     <li key={idx} className="flex items-center gap-2">
                       <span>{fund}</span>
                       {tese.links_jurisprudencias?.[idx] && (

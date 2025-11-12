@@ -7,7 +7,6 @@ import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { StepChatIntake } from "@/components/wizard/StepChatIntake";
 import { StepValidation } from "@/components/wizard/StepValidation";
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
@@ -161,12 +160,11 @@ export interface CaseData {
 }
 
 const STEPS = [
-  { id: 0, name: "Chat Inteligente" },
-  { id: 1, name: "Validação" },
-  { id: 2, name: "Análise" },
-  { id: 3, name: "Jurisprudência" },
-  { id: 4, name: "Teses" },
-  { id: 5, name: "Minuta" },
+  { id: 0, name: "Validação" },
+  { id: 1, name: "Análise" },
+  { id: 2, name: "Jurisprudência" },
+  { id: 3, name: "Teses" },
+  { id: 4, name: "Minuta" },
 ];
 
 const NewCase = () => {
@@ -271,16 +269,14 @@ const NewCase = () => {
   const renderStep = () => {
     switch (currentStep) {
       case 0:
-        return <StepChatIntake data={caseData} updateData={updateCaseData} onComplete={handleNext} />;
-      case 1:
         return <StepValidation data={caseData} updateData={updateCaseData} />;
-      case 2:
+      case 1:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
-      case 3:
+      case 2:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
-      case 4:
+      case 3:
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
-      case 5:
+      case 4:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;
