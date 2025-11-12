@@ -165,6 +165,10 @@ export default function Dashboard() {
       await supabase.from("case_analysis").delete().eq("case_id", caseToDelete);
       await supabase.from("case_jurisprudencias").delete().eq("case_id", caseToDelete);
       await supabase.from("jurisprudence_results").delete().eq("case_id", caseToDelete);
+      await supabase.from("teses_juridicas").delete().eq("case_id", caseToDelete);
+      await supabase.from("processing_queue").delete().eq("case_id", caseToDelete);
+      await supabase.from("chat_history").delete().eq("case_id", caseToDelete);
+      await supabase.from("document_conversions").delete().eq("case_id", caseToDelete);
       await supabase.from("drafts").delete().eq("case_id", caseToDelete);
       await supabase.from("case_timeline").delete().eq("case_id", caseToDelete);
       await supabase.from("case_exceptions").delete().eq("case_id", caseToDelete);
