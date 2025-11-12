@@ -137,6 +137,31 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         updateData({ caseId: activeCaseId });
       }
 
+      // 🔥 CORREÇÃO CRÍTICA: Criar registro em cases ANTES de qualquer outra operação
+      const { error: caseError } = await supabase
+        .from('cases')
+        .upsert({
+          id: activeCaseId,
+          author_name: 'Aguardando análise do chat',
+          author_cpf: '000.000.000-00',
+          event_date: new Date().toISOString().split('T')[0],
+          event_type: 'parto',
+          profile: 'especial',
+          status: 'intake',
+          started_with_chat: true,
+        }, {
+          onConflict: 'id'
+        })
+        .select()
+        .maybeSingle();
+
+      if (caseError) {
+        console.error('❌ [Erro Crítico] Não foi possível criar o caso:', caseError);
+        throw new Error(`Erro ao criar caso: ${caseError.message}`);
+      }
+
+      console.log(`✅ [Case Ready] ID: ${activeCaseId} - Caso criado/verificado com sucesso`);
+
       // ✅ Garantir que existe case_assignment
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
