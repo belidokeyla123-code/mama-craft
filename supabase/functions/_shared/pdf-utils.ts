@@ -27,11 +27,15 @@ interface CloudConvertTask {
  * Converte PDF para imagens PNG usando CloudConvert
  * 
  * @param pdfBase64 - PDF em formato base64
- * @param apiKey - Chave da API do CloudConvert
  * @returns Array de imagens em base64
  */
-export async function convertPDFToImages(pdfBase64: string, apiKey: string): Promise<string[]> {
+export async function convertPDFToImages(pdfBase64: string): Promise<string[]> {
   console.log('[PDF-UTILS] Iniciando conversão de PDF para imagens via CloudConvert...');
+  
+  const apiKey = Deno.env.get('CLOUDCONVERT_API_KEY');
+  if (!apiKey) {
+    throw new Error('CLOUDCONVERT_API_KEY não configurada nos secrets');
+  }
   
   try {
     // 1. Criar um job de conversão
