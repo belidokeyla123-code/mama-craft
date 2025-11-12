@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useChatSync } from "@/hooks/useChatSync";
 // import { StepChatIntake } from "@/components/wizard/StepChatIntake"; // REMOVIDO
-import { StepValidation } from "@/components/wizard/StepValidation";
+// import { StepValidation } from "@/components/wizard/StepValidation"; // REMOVIDO
 import { StepAnalysis } from "@/components/wizard/StepAnalysis";
 import { StepJurisprudence } from "@/components/wizard/StepJurisprudence";
 import { StepTeseJuridica } from "@/components/wizard/StepTeseJuridica";
@@ -18,11 +18,10 @@ import { PipelineReplicateButton } from "@/components/wizard/PipelineReplicateBu
 import type { CaseData } from "./NewCase";
 
 const STEPS = [
-  { id: 0, name: "Validação" },
-  { id: 1, name: "Análise" },
-  { id: 2, name: "Jurisprudência" },
-  { id: 3, name: "Teses" },
-  { id: 4, name: "Minuta" },
+  { id: 0, name: "Análise" },
+  { id: 1, name: "Jurisprudência" },
+  { id: 2, name: "Teses" },
+  { id: 3, name: "Minuta" },
 ];
 
 export default function CaseDetail() {
@@ -255,14 +254,12 @@ export default function CaseDetail() {
   const renderStep = () => {
     switch (currentStep) {
       case 0:
-        return <StepValidation data={caseData} updateData={updateCaseData} />;
-      case 1:
         return <StepAnalysis data={caseData} updateData={updateCaseData} />;
-      case 2:
+      case 1:
         return <StepJurisprudence data={caseData} updateData={updateCaseData} />;
-      case 3:
+      case 2:
         return <StepTeseJuridica data={caseData} updateData={updateCaseData} />;
-      case 4:
+      case 3:
         return <StepDraft data={caseData} updateData={updateCaseData} />;
       default:
         return null;
