@@ -102,20 +102,26 @@ Preencha com as informações disponíveis. Use "" ou [] para campos ainda não 
       });
     }
 
-    // Call OpenAI
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    // ⚡ OTIMIZAÇÃO: Usar Lovable AI (mais rápido e sem custo extra)
+    console.log("[Chat AI] Calling Lovable AI...");
+    const startTime = Date.now();
+    
+    const openaiResponse = await fetch("https://api.lovable.app/ai/chat", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4-turbo-preview",
+        model: "google/gemini-2.5-flash", // Modelo rápido e eficiente
         messages,
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 1500, // Reduzido para maior velocidade
       }),
     });
+
+    const elapsedTime = Date.now() - startTime;
+    console.log(`[Chat AI] AI responded in ${elapsedTime}ms`);
 
     if (!openaiResponse.ok) {
       const error = await openaiResponse.text();
@@ -168,7 +174,7 @@ Preencha com as informações disponíveis. Use "" ou [] para campos ainda não 
   } catch (error) {
     console.error("[Chat AI] Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

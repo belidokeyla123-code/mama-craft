@@ -137,7 +137,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         updateData({ caseId: activeCaseId });
       }
 
-      // ✅ NOVO: Garantir que existe case_assignment
+      // ✅ Garantir que existe case_assignment
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { error: assignError } = await supabase
@@ -149,38 +149,30 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .select()
           .maybeSingle();
         
-        // Ignorar erro de duplicação (constraint unique)
         if (assignError && !assignError.message.includes('duplicate')) {
           console.error('[Assignment Error]:', assignError);
         }
       }
 
-      // Upload files to Supabase Storage + CREATE RECORDS IN DOCUMENTS TABLE
-      const uploadedUrls: string[] = [];
-      const documentIds: string[] = [];
-      
-      for (const file of files) {
+      // ⚡ OTIMIZAÇÃO: Uploads e inserts PARALELOS
+      const uploadPromises = files.map(async (file, idx) => {
         const sanitizedFileName = sanitizeFileName(file.name);
+        console.log(`[Upload ${idx + 1}/${files.length}] "${file.name}" → "${sanitizedFileName}"`);
         
-        // 🔍 DEBUG: Log para verificar sanitização
-        console.log(`[Upload] Original: "${file.name}" → Sanitizado: "${sanitizedFileName}"`);
-        
-        const fileName = `${activeCaseId}/${Date.now()}_${sanitizedFileName}`;
+        const fileName = `${activeCaseId}/${Date.now()}_${idx}_${sanitizedFileName}`;
         
         // Upload to Storage
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("case-documents")
           .upload(fileName, file);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) throw new Error(`Erro upload ${file.name}: ${uploadError.message}`);
 
         const { data: urlData } = supabase.storage
           .from("case-documents")
           .getPublicUrl(fileName);
 
-        uploadedUrls.push(urlData.publicUrl);
-
-        // ✅ NOVO: Criar registro na tabela documents
+        // Criar registro na tabela documents
         const { data: docRecord, error: docError } = await supabase
           .from('documents')
           .insert({
@@ -194,14 +186,24 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .select()
           .single();
 
-        if (docError) {
-          console.error('[Document Insert Error]:', docError);
-          throw docError;
-        }
+        if (docError) throw new Error(`Erro BD ${file.name}: ${docError.message}`);
 
-        documentIds.push(docRecord.id);
-        console.log(`[Document Created] ID: ${docRecord.id}, Name: ${sanitizedFileName}`);
-      }
+        console.log(`✅ [Upload ${idx + 1}/${files.length}] Concluído: ${sanitizedFileName}`);
+        
+        return {
+          url: urlData.publicUrl,
+          documentId: docRecord.id,
+          name: file.name,
+          type: file.type,
+        };
+      });
+
+      // Aguardar todos os uploads em paralelo
+      const uploadResults = await Promise.all(uploadPromises);
+      const uploadedUrls = uploadResults.map(r => r.url);
+      const documentIds = uploadResults.map(r => r.documentId);
+
+      console.log(`🚀 [Uploads Completos] ${uploadResults.length} arquivos prontos. Chamando IA...`);
 
       // Call AI to analyze documents
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke(
