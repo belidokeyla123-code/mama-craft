@@ -197,27 +197,10 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .from("case-documents")
           .getPublicUrl(fileName);
 
-        // Criar registro na tabela documents
-        const { data: docRecord, error: docError } = await supabase
-          .from('documents')
-          .insert({
-            case_id: activeCaseId,
-            file_name: sanitizedFileName,
-            file_path: fileName,
-            document_type: 'OUTROS',
-            mime_type: file.type,
-            file_size: file.size,
-          })
-          .select()
-          .single();
-
-        if (docError) throw new Error(`Erro BD ${file.name}: ${docError.message}`);
-
         console.log(`✅ [Upload ${idx + 1}/${files.length}] Concluído: ${sanitizedFileName}`);
         
         return {
           url: urlData.publicUrl,
-          documentId: docRecord.id,
           name: file.name,
           type: file.type,
         };
@@ -226,7 +209,6 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       // Aguardar todos os uploads em paralelo
       const uploadResults = await Promise.all(uploadPromises);
       const uploadedUrls = uploadResults.map(r => r.url);
-      const documentIds = uploadResults.map(r => r.documentId);
 
       console.log(`🚀 [Uploads Completos] ${uploadResults.length} arquivos prontos. Chamando IA...`);
 
