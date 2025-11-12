@@ -96,62 +96,93 @@ export const StepChatIntake = ({ data, updateData, onComplete }: StepChatIntakeP
   }, [data.caseId]);
 
   // ═══════════════════════════════════════════════════════════════
-  // 🧹 LIMPEZA AUTOMÁTICA DE PDFs ÓRFÃOS
+  // 🧹 LIMPEZA AUTOMÁTICA DE PDFs ÓRFÃOS (BLOQUEANTE)
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     const cleanupOrphanPdfs = async () => {
-      if (!data.caseId) return;
+      if (!data.caseId) {
+        console.log('[PDF-CLEANUP] ⏭️ Sem caseId, pulando limpeza');
+        return;
+      }
       
-      console.log('[PDF-CLEANUP] 🔍 Verificando PDFs órfãos no banco...');
+      console.log('[PDF-CLEANUP] 🚀 INICIANDO limpeza automática para caso:', data.caseId);
       
       try {
-        const { data: existingPdfs, error: pdfError } = await supabase
+        // Buscar PDFs por MIME type E extensão
+        console.log('[PDF-CLEANUP] 📡 Buscando documentos no banco...');
+        const { data: allDocs, error: fetchError } = await supabase
           .from('documents')
-          .select('id, file_path, file_name')
-          .eq('case_id', data.caseId)
-          .or('mime_type.eq.application/pdf,file_name.ilike.%.pdf');
+          .select('id, file_path, file_name, mime_type')
+          .eq('case_id', data.caseId);
 
-        if (pdfError) {
-          console.error('[PDF-CLEANUP] ❌ Erro ao buscar PDFs:', pdfError);
+        if (fetchError) {
+          console.error('[PDF-CLEANUP] ❌ Erro ao buscar documentos:', fetchError);
           return;
         }
 
-        if (existingPdfs && existingPdfs.length > 0) {
-          console.log(`[PDF-CLEANUP] 🗑️ Encontrados ${existingPdfs.length} PDF(s) órfão(s). Deletando...`);
+        console.log(`[PDF-CLEANUP] 📊 Total de documentos encontrados: ${allDocs?.length || 0}`);
+        
+        // Filtrar apenas PDFs (por MIME ou extensão)
+        const pdfDocs = allDocs?.filter(doc => 
+          doc.mime_type === 'application/pdf' || 
+          doc.file_name?.toLowerCase().endsWith('.pdf')
+        ) || [];
+
+        console.log(`[PDF-CLEANUP] 📄 PDFs identificados: ${pdfDocs.length}`);
+        
+        if (pdfDocs.length > 0) {
+          console.log('[PDF-CLEANUP] 🗑️ Lista de PDFs a deletar:', pdfDocs.map(d => d.file_name));
           
           // Deletar arquivos do storage
-          const pdfPaths = existingPdfs.map(doc => doc.file_path);
+          const pdfPaths = pdfDocs.map(doc => doc.file_path);
+          console.log('[PDF-CLEANUP] 🔥 Deletando do storage:', pdfPaths);
+          
           const { error: storageError } = await supabase.storage
             .from('case-documents')
             .remove(pdfPaths);
           
           if (storageError) {
-            console.warn('[PDF-CLEANUP] ⚠️ Erro ao deletar PDFs do storage:', storageError);
+            console.error('[PDF-CLEANUP] ⚠️ Erro ao deletar do storage:', storageError);
+          } else {
+            console.log('[PDF-CLEANUP] ✅ Storage limpo com sucesso');
           }
           
           // Deletar registros do banco
-          const pdfIds = existingPdfs.map(doc => doc.id);
+          const pdfIds = pdfDocs.map(doc => doc.id);
+          console.log('[PDF-CLEANUP] 🗃️ Deletando registros do banco:', pdfIds);
+          
           const { error: dbError } = await supabase
             .from('documents')
             .delete()
             .in('id', pdfIds);
           
           if (dbError) {
-            console.error('[PDF-CLEANUP] ❌ Erro ao deletar registros de PDFs:', dbError);
+            console.error('[PDF-CLEANUP] ❌ Erro ao deletar do banco:', dbError);
+            toast({
+              title: "Erro ao remover PDFs",
+              description: `Não foi possível remover ${pdfDocs.length} PDF(s). Erro: ${dbError.message}`,
+              variant: "destructive",
+            });
           } else {
-            console.log(`[PDF-CLEANUP] ✅ ${existingPdfs.length} PDF(s) removido(s) com sucesso`);
+            console.log(`[PDF-CLEANUP] ✅ ${pdfDocs.length} PDF(s) removido(s) com SUCESSO!`);
+            
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `🧹 **${pdfDocs.length} PDF(s) antigo(s) removido(s)**\n\nOs PDFs não podem ser processados diretamente. Por favor, faça upload novamente - eles serão convertidos automaticamente para imagens.`
+            }]);
             
             toast({
               title: "PDFs removidos",
-              description: `${existingPdfs.length} PDF(s) antigo(s) foram removidos. Por favor, faça upload novamente para conversão automática.`,
-              duration: 5000,
+              description: `${pdfDocs.length} PDF(s) foram removidos. Faça upload novamente para conversão automática.`,
+              duration: 7000,
             });
           }
         } else {
-          console.log('[PDF-CLEANUP] ✅ Nenhum PDF órfão encontrado');
+          console.log('[PDF-CLEANUP] ✅ Nenhum PDF encontrado - sistema limpo!');
         }
-      } catch (error) {
-        console.error('[PDF-CLEANUP] Erro durante limpeza:', error);
+      } catch (error: any) {
+        console.error('[PDF-CLEANUP] 💥 ERRO CRÍTICO durante limpeza:', error);
+        console.error('[PDF-CLEANUP] Stack:', error.stack);
       }
     };
 
