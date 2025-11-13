@@ -17,6 +17,7 @@ import { StepDiagnosticoJuiz } from "@/components/wizard/StepDiagnosticoJuiz";
 import { toast } from "sonner";
 import { useCasePipeline } from "@/hooks/useCasePipeline";
 import { useChatSync } from "@/hooks/useChatSync";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface RuralPeriod {
   startDate: string;
@@ -268,8 +269,109 @@ const NewCase = () => {
     };
   }, [checkPipelineStatus]);
 
-  const updateCaseData = (data: Partial<CaseData>) => {
+  const updateCaseData = async (data: Partial<CaseData>) => {
+    // Atualizar estado local primeiro
     setCaseData(prev => ({ ...prev, ...data }));
+    
+    // Salvar no Supabase automaticamente
+    if (caseData.caseId) {
+      try {
+        // Preparar dados para salvar (converter camelCase para snake_case)
+        const dbData: any = {};
+        
+        if (data.authorName) dbData.author_name = data.authorName;
+        if (data.authorCpf) dbData.author_cpf = data.authorCpf;
+        if (data.authorBirthDate) dbData.author_birth_date = data.authorBirthDate;
+        if (data.authorAddress) dbData.author_address = data.authorAddress;
+        if (data.eventType) dbData.event_type = data.eventType;
+        if (data.eventDate) dbData.event_date = data.eventDate;
+        if (data.profile) dbData.profile = data.profile;
+        if (data.hasRa !== undefined) dbData.has_ra = data.hasRa;
+        if (data.raProtocol) dbData.ra_protocol = data.raProtocol;
+        if (data.raRequestDate) dbData.ra_request_date = data.raRequestDate;
+        if (data.raDenialDate) dbData.ra_denial_date = data.raDenialDate;
+        if (data.raDenialReason) dbData.ra_denial_reason = data.raDenialReason;
+        if (data.salarioMinimoRef) dbData.salario_minimo_ref = data.salarioMinimoRef;
+        if (data.valorCausa) dbData.valor_causa = data.valorCausa;
+        
+        // Salvar dados JSON (chatAnalysis, documentUrls, etc)
+        if (data.chatAnalysis) {
+          // Criar ou atualizar registro na tabela chat_history
+          const { error: chatError } = await supabase
+            .from('chat_history')
+            .upsert({
+              case_id: caseData.caseId,
+              messages: data.chatAnalysis,
+              updated_at: new Date().toISOString()
+            });
+          
+          if (chatError) {
+            console.error('[updateCaseData] Erro ao salvar chat:', chatError);
+          }
+        }
+        
+        // Salvar documentos se houver URLs
+        if (data.documentUrls && data.documentUrls.length > 0 && data.documents) {
+          // Salvar cada documento na tabela documents
+          for (let i = 0; i < data.documentUrls.length; i++) {
+            const url = data.documentUrls[i];
+            const file = data.documents[i];
+            
+            if (file && url) {
+              // Verificar se documento já existe
+              const { data: existing } = await supabase
+                .from('documents')
+                .select('id')
+                .eq('case_id', caseData.caseId)
+                .eq('file_name', file.name)
+                .single();
+              
+              if (!existing) {
+                // Inserir apenas se não existir
+                const { error: docError } = await supabase
+                  .from('documents')
+                  .insert({
+                    case_id: caseData.caseId,
+                    file_name: file.name,
+                    file_path: url,
+                    file_size: file.size,
+                    mime_type: file.type,
+                    document_type: 'outros', // tipo padrão
+                    uploaded_at: new Date().toISOString()
+                  });
+                
+                if (docError) {
+                  console.error('[updateCaseData] Erro ao salvar documento:', docError);
+                } else {
+                  console.log(`[updateCaseData] ✅ Documento salvo: ${file.name}`);
+                }
+              } else {
+                console.log(`[updateCaseData] ℹ️ Documento já existe: ${file.name}`);
+              }
+            }
+          }
+        }
+        
+        // Atualizar caso principal se houver dados
+        if (Object.keys(dbData).length > 0) {
+          const { error: caseError } = await supabase
+            .from('cases')
+            .upsert({
+              id: caseData.caseId,
+              ...dbData,
+              updated_at: new Date().toISOString()
+            });
+          
+          if (caseError) {
+            console.error('[updateCaseData] Erro ao salvar caso:', caseError);
+          } else {
+            console.log('[updateCaseData] ✅ Caso salvo com sucesso!');
+          }
+        }
+      } catch (error) {
+        console.error('[updateCaseData] Erro ao salvar dados:', error);
+      }
+    }
   };
 
   const canGoNext = () => {

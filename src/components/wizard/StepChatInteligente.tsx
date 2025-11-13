@@ -241,8 +241,19 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       // Update case payload if provided
       if (aiResponse.casePayload) {
         setCasePayload(aiResponse.casePayload);
+        
+        // Extrair dados da autora do payload
+        const authorName = aiResponse.casePayload.identificacao?.nome || data.authorName || "";
+        const authorCpf = aiResponse.casePayload.identificacao?.cpf || data.authorCpf || "";
+        const eventDate = aiResponse.casePayload.evento_gerador?.data || data.eventDate || "";
+        const eventType = aiResponse.casePayload.evento_gerador?.tipo || data.eventType || "parto";
+        
         updateData({
           ...data,
+          authorName,
+          authorCpf,
+          eventDate,
+          eventType,
           chatAnalysis: aiResponse.casePayload,
           documents: [...(data.documents || []), ...files],
           documentUrls: [...(data.documentUrls || []), ...uploadedUrls],
