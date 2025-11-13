@@ -5,33 +5,24 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const SYSTEM_PROMPT = `Você é uma Advogada Previdenciária sênior com mais de 20 anos de experiência, especialista em **salário-maternidade rural (segurada especial)**.
+const SYSTEM_PROMPT = `Você é uma Advogada Previdenciária especialista em salário-maternidade rural.
 
-## SUA MISSÃO:
-Auditar documentos e conduzir o caso até a **minuta da ação de concessão no Judiciário**, integrando-se às abas: **Análise → Jurisprudência → Tese → Minuta → Diagnóstico JUIZ**.
+## MISSÃO:
+Analisar documentos e gerar JSON estruturado.
 
-## REGRAS OPERACIONAIS:
-1. **Recepção:** Liste todos os documentos recebidos
-2. **Linha do tempo:** Compute a janela relevante (10 meses anteriores ao evento)
-3. **Qualidade de segurada:** Classifique e explique
-4. **Início de prova material:** Identifique itens válidos (inclusive em nome de cônjuge/companheiro)
-5. **Red flags:** Emprego urbano relevante, MEI urbano ativo, ausência de certidão, documentos fora da janela
-6. **Conclusão prévia:** Apto | Apto com ressalvas | Inapto
+## CHECKLIST RÁPIDO:
+1. Listar documentos
+2. Janela 10 meses: ✅/❌
+3. Qualidade segurada
+4. Início prova material
+5. Red flags
+6. Conclusão: Apto/Ressalvas/Inapto
 
-## OUTPUTS:
-- Lista de entradas lidas (com datas e titularidade)
-- Quadro "Cobertura da Janela" (10-12 meses) ✅/❌
-- Lista de pendências priorizadas (P1, P2, P3)
+## OUTPUT OBRIGATÓRIO:
+- Texto resumido
 - JSON estruturado (case_payload)
 
-## ESTILO:
-Tópicos curtos, tabelas limpas, linguagem acessível, objetividade. Tom profissional, firme e humano.
-
-## IMPORTANTE:
-- NUNCA presuma fatos sem base documental
-- Sempre justifique com base em provas concretas
-- Registre lacunas e proponha diligências
-- Não prometa resultados, trabalhe com probabilidades`;
+## IMPORTANTE: Seja objetiva e rápida.`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,7 +66,7 @@ serve(async (req) => {
       const fileList = files.map((f: any) => f.name).join(", ");
       messages.push({
         role: "user",
-        content: `Analise os seguintes documentos que acabei de enviar: ${fileList}\n\nPor favor, identifique:\n1. Tipo de documento\n2. Data e titular\n3. Relevância para o caso\n4. Se cobre a janela de 10 meses\n5. Pendências ou complementações necessárias`,
+        content: `Analise os documentos: ${fileList}\n\n1. Tipo e titular\n2. Cobre janela 10 meses?\n3. Red flags\n4. Conclusão`,
       });
     }
 
@@ -116,7 +107,7 @@ Preencha com as informações disponíveis. Use "" ou [] para campos ainda não 
         model: "google/gemini-2.5-flash",
         messages,
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 800, // ⚡ OTIMIZADO: Reduzido para máxima velocidade
       }),
     });
 
@@ -134,16 +125,36 @@ Preencha com as informações disponíveis. Use "" ou [] para campos ainda não 
 
     console.log("[Chat AI] AI Response length:", aiResponse.length);
 
-    // Try to extract JSON from response
+    // Try to extract JSON from response (múltiplos padrões)
     let extractedPayload = currentPayload;
-    const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/);
-    if (jsonMatch) {
+    
+    // Padrão 1: ```json ... ```
+    let jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
+    
+    // Padrão 2: ``` ... ``` (sem "json")
+    if (!jsonMatch) {
+      jsonMatch = aiResponse.match(/```\s*([\s\S]*?)\s*```/);
+    }
+    
+    // Padrão 3: Procurar por { ... } diretamente
+    if (!jsonMatch) {
+      const jsonStart = aiResponse.indexOf('{');
+      const jsonEnd = aiResponse.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonMatch = [null, aiResponse.substring(jsonStart, jsonEnd + 1)];
+      }
+    }
+    
+    if (jsonMatch && jsonMatch[1]) {
       try {
         extractedPayload = JSON.parse(jsonMatch[1]);
-        console.log("[Chat AI] Extracted case_payload");
+        console.log("[Chat AI] ✅ Extracted case_payload");
       } catch (e) {
-        console.error("[Chat AI] Failed to parse JSON:", e);
+        console.error("[Chat AI] ❌ Failed to parse JSON:", e);
+        console.error("[Chat AI] JSON string:", jsonMatch[1].substring(0, 200));
       }
+    } else {
+      console.warn("[Chat AI] ⚠️ No JSON found in response");
     }
 
     // Save to database
