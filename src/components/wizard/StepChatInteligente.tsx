@@ -62,7 +62,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .from('cases')
           .select('*')
           .eq('id', data.caseId)
-          .single();
+          .maybeSingle(); // ✅ Trocar .single() por .maybeSingle()
 
         if (caseData && caseData.author_name !== 'Aguardando análise do chat') {
           const payload = {
@@ -251,7 +251,9 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .from("case-documents")
           .getPublicUrl(fileName);
 
-        // ✅ CORREÇÃO CRÍTICA: Salvar documento no banco
+        // ✅ CORREÇÃO CRÍTICA: Salvar documento no banco com tratamento robusto
+        console.log(`[DB Save ${idx + 1}/${files.length}] Tentando salvar ${sanitizedFileName}...`);
+
         const { data: docData, error: docError } = await supabase
           .from('documents')
           .insert({
@@ -263,11 +265,23 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
             document_type: 'outro', // Será reclassificado depois
           })
           .select()
-          .single();
+          .maybeSingle(); // ✅ Trocar .single() por .maybeSingle()
 
         if (docError) {
-          console.error(`❌ Erro ao salvar documento ${file.name}:`, docError);
-          throw new Error(`Erro ao salvar ${file.name}: ${docError.message}`);
+          console.error(`❌ [DB ERROR] Erro ao salvar documento ${file.name}:`, docError);
+          console.error(`❌ [DB ERROR] Detalhes:`, JSON.stringify(docError, null, 2));
+          
+          // Se for erro de RLS, mostrar mensagem específica
+          if (docError.code === 'PGRST301' || docError.message.includes('RLS')) {
+            throw new Error(`Erro de permissão RLS ao salvar ${file.name}. Verifique as políticas.`);
+          }
+          
+          throw new Error(`Erro ao salvar ${file.name} no banco: ${docError.message}`);
+        }
+
+        if (!docData) {
+          console.error(`❌ [DB ERROR] Documento ${file.name} não retornou dados após INSERT`);
+          throw new Error(`Falha ao salvar ${file.name}: nenhum dado retornado`);
         }
 
         console.log(`✅ [DB Save ${idx + 1}/${files.length}] ${sanitizedFileName} salvo com ID: ${docData.id}`);
@@ -357,6 +371,27 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         };
 
         setCasePayload(payload);
+        
+        // ✅ CORREÇÃO CRÍTICA: Salvar dados extraídos NO BANCO imediatamente
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update({
+            author_name: aiResponse.extractedData.motherName || 'Não identificado',
+            author_cpf: aiResponse.extractedData.motherCpf || null,
+            child_name: aiResponse.extractedData.childName || null,
+            child_birth_date: aiResponse.extractedData.childBirthDate || null,
+            event_date: aiResponse.extractedData.childBirthDate || data.eventDate,
+            special_notes: JSON.stringify(payload), // Salvar chatAnalysis
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', activeCaseId);
+
+        if (updateError) {
+          console.error('❌ Erro ao atualizar caso:', updateError);
+          // Não bloquear o fluxo, apenas logar
+        } else {
+          console.log(`✅ [Case Updated] Dados extraídos salvos no banco para caso ${activeCaseId}`);
+        }
         
         updateData({
           ...data,
@@ -454,7 +489,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!casePayload) {
       toast({
         title: "Análise incompleta",
@@ -464,19 +499,71 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       return;
     }
 
-    // Save final state
-    updateData({
-      ...data,
-      chatAnalysis: casePayload,
-      chatCompleted: true,
-    });
+    setIsProcessing(true);
 
-    toast({
-      title: "Chat concluído!",
-      description: "Avançando para a próxima etapa...",
-    });
+    try {
+      // ✅ 1. Salvar estado final no state
+      updateData({
+        ...data,
+        chatAnalysis: casePayload,
+        chatCompleted: true,
+      });
 
-    onComplete();
+      // ✅ 2. Garantir que dados estão no banco
+      const { error: finalUpdateError } = await supabase
+        .from('cases')
+        .update({
+          special_notes: JSON.stringify(casePayload),
+          status: 'validating', // Avançar status
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.caseId);
+
+      if (finalUpdateError) {
+        console.error('❌ Erro ao salvar estado final:', finalUpdateError);
+        throw finalUpdateError;
+      }
+
+      console.log('✅ [Final State] Dados salvos no banco');
+
+      // ✅ 3. Disparar pipeline completo (análise → jurisprudência → teses → minuta)
+      console.log('🚀 [Pipeline] Iniciando pipeline completo...');
+      
+      const { error: pipelineError } = await supabase.functions.invoke(
+        'replicate-case-structure',
+        {
+          body: {
+            caseId: data.caseId,
+            forceReprocess: false,
+          }
+        }
+      );
+
+      if (pipelineError) {
+        console.error('❌ Erro ao disparar pipeline:', pipelineError);
+        // Não bloquear, continuar mesmo assim
+      } else {
+        console.log('✅ [Pipeline] Pipeline iniciado com sucesso');
+      }
+
+      toast({
+        title: "✅ Chat concluído!",
+        description: "Pipeline iniciado. Avançando para a próxima etapa...",
+      });
+
+      // ✅ 4. Avançar para próxima aba
+      onComplete();
+
+    } catch (error) {
+      console.error('[handleComplete] Erro:', error);
+      toast({
+        title: "Erro ao concluir",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -503,6 +590,21 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
             {currentDocument && (
               <p className="text-xs text-blue-600">Processando: {currentDocument}</p>
             )}
+          </div>
+        </Card>
+      )}
+
+      {/* Pipeline Status */}
+      {data.chatCompleted && (
+        <Card className="p-4 bg-green-50 border-green-200">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <div>
+              <p className="font-semibold text-green-900">✅ Chat Concluído!</p>
+              <p className="text-sm text-green-700">
+                Pipeline iniciado. Você pode avançar para as próximas etapas.
+              </p>
+            </div>
           </div>
         </Card>
       )}
