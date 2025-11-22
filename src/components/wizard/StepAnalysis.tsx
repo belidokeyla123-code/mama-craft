@@ -143,76 +143,146 @@ export const StepAnalysis = ({ data, updateData }: StepAnalysisProps) => {
   const loadExtractionData = async () => {
     if (!data.caseId) return;
     
-    const { data: extraction, error } = await supabase
-      .from('extractions')
-      .select('entities')
-      .eq('case_id', data.caseId)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    // Buscar períodos estruturados de cases
+    const { data: caseData, error: caseError } = await supabase
+      .from('cases')
+      .select('rural_periods, school_history, rural_activity_since')
+      .eq('id', data.caseId)
       .single();
     
-    if (!error && extraction?.entities) {
-      setExtractedData(extraction.entities as any);
+    if (!caseError && caseData) {
+      console.log('[Timeline] 📅 Dados estruturados carregados:', caseData);
+      setExtractedData(caseData);
     }
   };
   
   // Processar dados para timeline visual
   const processTimelineEvents = () => {
-    if (!analysis) return [];
-    
     const events: any[] = [];
     
-    // Períodos rurais
-    if (analysis.cnis_analysis?.periodos_rurais) {
-      analysis.cnis_analysis.periodos_rurais.forEach((periodo: any) => {
-        if (periodo.data_inicio && periodo.data_fim) {
+    // ✅ PRIORIDADE 1: Buscar de extractedData (dados estruturados do chat)
+    if (extractedData) {
+      console.log('[Timeline] Processando extractedData:', extractedData);
+      
+      // Períodos rurais extraídos
+      if (extractedData.rural_periods && Array.isArray(extractedData.rural_periods)) {
+        extractedData.rural_periods.forEach((periodo: any) => {
+          if (periodo.inicio) {
+            events.push({
+              type: 'rural_period',
+              title: 'Período Rural',
+              description: `${periodo.atividade || 'Atividade rural'} (${periodo.fonte_documento || 'Documento'})`,
+              duration: periodo.fim ? {
+                start: periodo.inicio,
+                end: periodo.fim
+              } : undefined,
+              date: periodo.fim ? undefined : periodo.inicio,
+              status: 'confirmed'
+            });
+          }
+        });
+      }
+      
+      // Histórico escolar extraído
+      if (extractedData.school_history && Array.isArray(extractedData.school_history)) {
+        extractedData.school_history.forEach((escola: any) => {
+          if (escola.inicio) {
+            events.push({
+              type: 'school',
+              title: 'Histórico Escolar',
+              description: `${escola.escola || 'Escola'} - ${escola.localizacao || ''} (${escola.fonte_documento || 'Documento'})`,
+              duration: escola.fim ? {
+                start: escola.inicio,
+                end: escola.fim
+              } : undefined,
+              date: escola.fim ? undefined : escola.inicio,
+              status: 'confirmed'
+            });
+          }
+        });
+      }
+      
+      // Início de atividade rural
+      if (extractedData.rural_activity_since) {
+        const hasRuralPeriod = events.some(e => e.type === 'rural_period');
+        if (!hasRuralPeriod) {
           events.push({
-            type: 'rural_period',
-            title: 'Período Rural',
-            description: periodo.atividade || 'Atividade rural',
-            duration: {
-              start: periodo.data_inicio,
-              end: periodo.data_fim
-            },
+            date: extractedData.rural_activity_since,
+            type: 'rural_start',
+            title: 'Início Atividade Rural',
+            description: 'Comprovado por documentos',
             status: 'confirmed'
           });
         }
+      }
+    }
+    
+    // ✅ PRIORIDADE 2: Buscar de analysis.cnis_analysis (se houver)
+    if (analysis?.cnis_analysis) {
+      // Períodos rurais do CNIS
+      if (analysis.cnis_analysis.periodos_rurais) {
+        analysis.cnis_analysis.periodos_rurais.forEach((periodo: any) => {
+          if (periodo.data_inicio && periodo.data_fim) {
+            events.push({
+              type: 'rural_period',
+              title: 'Período Rural (CNIS)',
+              description: periodo.atividade || 'Atividade rural',
+              duration: {
+                start: periodo.data_inicio,
+                end: periodo.data_fim
+              },
+              status: 'confirmed'
+            });
+          }
+        });
+      }
+      
+      // Períodos urbanos
+      if (analysis.cnis_analysis.periodos_urbanos) {
+        analysis.cnis_analysis.periodos_urbanos.forEach((periodo: any) => {
+          if (periodo.data_inicio && periodo.data_fim) {
+            events.push({
+              type: 'urban_period',
+              title: 'Período Urbano',
+              description: periodo.empresa || periodo.atividade || 'Atividade urbana',
+              duration: {
+                start: periodo.data_inicio,
+                end: periodo.data_fim
+              },
+              status: 'confirmed'
+            });
+          }
+        });
+      }
+      
+      // Benefícios anteriores
+      if (analysis.cnis_analysis.beneficios_anteriores) {
+        analysis.cnis_analysis.beneficios_anteriores.forEach((beneficio: any) => {
+          if (beneficio.data_inicio) {
+            events.push({
+              date: beneficio.data_inicio,
+              type: 'benefit',
+              title: beneficio.tipo || 'Benefício',
+              description: `NB: ${beneficio.nb || 'N/A'}`,
+              status: 'confirmed'
+            });
+          }
+        });
+      }
+    }
+    
+    // ✅ ADICIONAR data de nascimento do filho
+    if (data.childBirthDate || data.eventDate) {
+      events.push({
+        date: data.childBirthDate || data.eventDate,
+        type: 'birth',
+        title: 'Nascimento',
+        description: data.childName ? `Nascimento de ${data.childName}` : 'Nascimento do filho(a)',
+        status: 'confirmed'
       });
     }
     
-    // Períodos urbanos
-    if (analysis.cnis_analysis?.periodos_urbanos) {
-      analysis.cnis_analysis.periodos_urbanos.forEach((periodo: any) => {
-        if (periodo.data_inicio && periodo.data_fim) {
-          events.push({
-            type: 'urban_period',
-            title: 'Período Urbano',
-            description: periodo.empresa || periodo.atividade || 'Atividade urbana',
-            duration: {
-              start: periodo.data_inicio,
-              end: periodo.data_fim
-            },
-            status: 'confirmed'
-          });
-        }
-      });
-    }
-    
-    // Benefícios anteriores
-    if (analysis.cnis_analysis?.beneficios_anteriores) {
-      analysis.cnis_analysis.beneficios_anteriores.forEach((beneficio: any) => {
-        if (beneficio.data_inicio) {
-          events.push({
-            date: beneficio.data_inicio,
-            type: 'benefit',
-            title: beneficio.tipo || 'Benefício',
-            description: `NB: ${beneficio.nb || 'N/A'}`,
-            status: 'confirmed'
-          });
-        }
-      });
-    }
-    
+    console.log('[Timeline] 📊 Eventos processados:', events.length);
     return events;
   };
 
