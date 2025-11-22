@@ -2,11 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { Upload, Send, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { CaseData } from "@/pages/NewCase";
 import { sanitizeFileName } from "@/lib/documentTypeMapper";
+import { useChatProcessing } from "@/hooks/useChatProcessing";
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB em bytes
 
@@ -41,6 +43,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { status: processingStatus, progress, currentDocument } = useChatProcessing(data.caseId);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,6 +52,57 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // ✅ Monitorar conclusão do processamento em background
+  useEffect(() => {
+    if (processingStatus === 'completed' && !casePayload && data.caseId) {
+      // Buscar dados extraídos quando processamento concluir
+      const fetchExtractedData = async () => {
+        const { data: caseData } = await supabase
+          .from('cases')
+          .select('*')
+          .eq('id', data.caseId)
+          .single();
+
+        if (caseData && caseData.author_name !== 'Aguardando análise do chat') {
+          const payload = {
+            identificacao: {
+              nome: caseData.author_name,
+              cpf: caseData.author_cpf,
+            },
+            evento_gerador: {
+              tipo: caseData.event_type,
+              data: caseData.event_date,
+            },
+            crianca: {
+              nome: caseData.child_name,
+              data_nascimento: caseData.child_birth_date,
+            },
+            conclusao_previa: caseData.author_name ? 'Apto' : 'Inapto',
+          };
+
+          setCasePayload(payload);
+          updateData({
+            ...data,
+            authorName: caseData.author_name,
+            authorCpf: caseData.author_cpf,
+            eventDate: caseData.event_date,
+            chatAnalysis: payload,
+          });
+
+          const completedMessage: Message = {
+            role: "assistant",
+            content: `🎉 **Processamento em background concluído!**\n\n✅ Todos os documentos foram analisados.\n📊 Dados extraídos e salvos com sucesso.`,
+            timestamp: new Date(),
+          };
+
+          setMessages((prev) => [...prev, completedMessage]);
+        }
+      };
+
+      fetchExtractedData();
+    }
+  }, [processingStatus, casePayload, data.caseId]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -179,7 +233,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         }
       }
 
-      // ⚡ OTIMIZAÇÃO: Uploads e inserts PARALELOS
+      // ⚡ OTIMIZAÇÃO: Uploads e inserts PARALELOS no banco + storage
       const uploadPromises = files.map(async (file, idx) => {
         const sanitizedFileName = sanitizeFileName(file.name);
         console.log(`[Upload ${idx + 1}/${files.length}] "${file.name}" → "${sanitizedFileName}"`);
@@ -197,66 +251,120 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .from("case-documents")
           .getPublicUrl(fileName);
 
-        console.log(`✅ [Upload ${idx + 1}/${files.length}] Concluído: ${sanitizedFileName}`);
-        
+        // ✅ CORREÇÃO CRÍTICA: Salvar documento no banco
+        const { data: docData, error: docError } = await supabase
+          .from('documents')
+          .insert({
+            case_id: activeCaseId,
+            file_name: sanitizedFileName,
+            file_path: fileName,
+            file_size: file.size,
+            mime_type: file.type,
+            document_type: 'outro', // Será reclassificado depois
+          })
+          .select()
+          .single();
+
+        if (docError) {
+          console.error(`❌ Erro ao salvar documento ${file.name}:`, docError);
+          throw new Error(`Erro ao salvar ${file.name}: ${docError.message}`);
+        }
+
+        console.log(`✅ [DB Save ${idx + 1}/${files.length}] ${sanitizedFileName} salvo com ID: ${docData.id}`);
+
         return {
           url: urlData.publicUrl,
           name: file.name,
           type: file.type,
+          documentId: docData.id, // ✅ Guardar ID do documento
         };
       });
 
       // Aguardar todos os uploads em paralelo
       const uploadResults = await Promise.all(uploadPromises);
-      const uploadedUrls = uploadResults.map(r => r.url);
+      const documentIds = uploadResults.map(r => r.documentId);
 
-      console.log(`🚀 [Uploads Completos] ${uploadResults.length} arquivos prontos. Chamando IA...`);
+      console.log(`🚀 [Uploads Completos] ${uploadResults.length} documentos salvos. IDs: ${documentIds.join(', ')}`);
 
-      // Call AI to analyze documents
+      // ✅ Adicionar à fila de processamento
+      const { error: queueError } = await supabase
+        .from('processing_queue')
+        .insert({
+          case_id: activeCaseId,
+          status: 'processing',
+          job_type: 'chat_analysis',
+          document_ids: documentIds,
+          total_documents: documentIds.length,
+          processed_documents: 0,
+        });
+
+      if (queueError) {
+        console.error('[Queue Error]:', queueError);
+      }
+
+      // ✅ Mostrar feedback imediato
+      const processingMessage: Message = {
+        role: "assistant",
+        content: `✅ **${files.length} documentos recebidos e salvos!**\n\n🤖 Estou analisando agora:\n${files.map(f => `• ${f.name}`).join('\n')}\n\n⏱️ Isso pode levar alguns segundos. Você pode sair e voltar depois, a análise continuará em background!`,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, processingMessage]);
+
+      // ✅ USAR EDGE FUNCTION CORRETO QUE FAZ ANÁLISE REAL
+      console.log(`🤖 [IA] Chamando process-documents-with-ai com ${documentIds.length} documentos...`);
+
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke(
-        "analyze-documents-chat",
+        "process-documents-with-ai", // ✅ Edge function correto
         {
           body: {
             caseId: activeCaseId,
-            files: uploadedUrls.map((url, idx) => ({
-              url,
-              name: files[idx].name,
-              type: files[idx].type,
-            })),
-            conversationHistory: messages.slice(-5), // Last 5 messages for context
+            documentIds: documentIds, // ✅ Passar IDs dos documentos
           },
         }
       );
 
-      if (aiError) throw aiError;
+      if (aiError) {
+        console.error('[AI Error]:', aiError);
+        throw aiError;
+      }
 
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: aiResponse.analysis || "✅ Documentos recebidos e analisados!",
-        timestamp: new Date(),
-      };
+      // ✅ Processar resposta da IA
+      if (aiResponse?.extractedData) {
+        const finalMessage: Message = {
+          role: "assistant",
+          content: `✅ **Análise completa!**\n\n📊 Dados extraídos dos documentos:\n• Nome: ${aiResponse.extractedData.motherName || 'não identificado'}\n• CPF: ${aiResponse.extractedData.motherCpf || 'não identificado'}\n• Criança: ${aiResponse.extractedData.childName || 'não identificado'}\n\n${aiResponse.observations?.length > 0 ? `\n⚠️ **Observações:**\n${aiResponse.observations.join('\n')}` : ''}`,
+          timestamp: new Date(),
+        };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, finalMessage]);
 
-      // Update case payload if provided
-      if (aiResponse.casePayload) {
-        setCasePayload(aiResponse.casePayload);
-        
-        // Extrair dados da autora do payload
-        const authorName = aiResponse.casePayload.identificacao?.nome || data.authorName || "";
-        const authorCpf = aiResponse.casePayload.identificacao?.cpf || data.authorCpf || "";
-        const eventDate = aiResponse.casePayload.evento_gerador?.data || data.eventDate || "";
-        const eventType = aiResponse.casePayload.evento_gerador?.tipo || data.eventType || "parto";
+        // Criar payload estruturado
+        const payload = {
+          identificacao: {
+            nome: aiResponse.extractedData.motherName,
+            cpf: aiResponse.extractedData.motherCpf,
+          },
+          evento_gerador: {
+            tipo: data.eventType || 'parto',
+            data: aiResponse.extractedData.childBirthDate || data.eventDate,
+          },
+          crianca: {
+            nome: aiResponse.extractedData.childName,
+            data_nascimento: aiResponse.extractedData.childBirthDate,
+          },
+          conclusao_previa: aiResponse.extractedData.motherName ? 'Apto' : 'Inapto',
+        };
+
+        setCasePayload(payload);
         
         updateData({
           ...data,
-          authorName,
-          authorCpf,
-          eventDate,
-          eventType,
-          chatAnalysis: aiResponse.casePayload,
+          authorName: aiResponse.extractedData.motherName || data.authorName || "",
+          authorCpf: aiResponse.extractedData.motherCpf || data.authorCpf || "",
+          eventDate: aiResponse.extractedData.childBirthDate || data.eventDate || "",
+          chatAnalysis: payload,
           documents: [...(data.documents || []), ...files],
-          documentUrls: [...(data.documentUrls || []), ...uploadedUrls],
         });
       }
 
@@ -380,13 +488,32 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         </p>
       </div>
 
+      {/* Processing Status */}
+      {processingStatus === 'processing' && (
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                <p className="font-semibold text-blue-900">🤖 Análise em andamento...</p>
+              </div>
+              <p className="text-sm text-blue-700 font-medium">{Math.round(progress)}%</p>
+            </div>
+            <Progress value={progress} className="h-2" />
+            {currentDocument && (
+              <p className="text-xs text-blue-600">Processando: {currentDocument}</p>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Status Card */}
       {casePayload && (
         <Card className="p-4 bg-green-50 border-green-200">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
             <div>
-              <p className="font-semibold text-green-900">Análise em andamento</p>
+              <p className="font-semibold text-green-900">Análise concluída</p>
               <p className="text-sm text-green-700">
                 {casePayload.conclusao_previa === "Apto" && "✅ Caso apto para prosseguir"}
                 {casePayload.conclusao_previa === "Apto_com_ressalvas" && "⚠️ Caso apto com ressalvas"}
