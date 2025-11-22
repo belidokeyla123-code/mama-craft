@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Send, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, Send, FileText, Loader2, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { CaseData } from "@/pages/NewCase";
 import { sanitizeFileName } from "@/lib/documentTypeMapper";
 import { useChatProcessing } from "@/hooks/useChatProcessing";
+import { useFullPipelineOrchestration } from "@/hooks/useFullPipelineOrchestration";
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB em bytes
 
@@ -44,6 +45,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { status: processingStatus, progress, currentDocument } = useChatProcessing(data.caseId);
+  const { runFullPipeline, isRunning: isPipelineRunning, currentStep: pipelineStep, progress: pipelineProgress } = useFullPipelineOrchestration();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -870,14 +872,62 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         </div>
       </div>
 
+      {/* Pipeline Progress */}
+      {isPipelineRunning && (
+        <Card className="p-6 border-primary">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div>
+                <h3 className="font-semibold">Processando Pipeline Completo</h3>
+                <p className="text-sm text-muted-foreground">{pipelineStep}</p>
+              </div>
+            </div>
+            <Progress value={pipelineProgress} className="h-2" />
+          </div>
+        </Card>
+      )}
+
       {/* Action Buttons */}
       <div className="flex justify-end gap-3">
+        {casePayload && !isPipelineRunning && (
+          <Button
+            onClick={async () => {
+              if (!data.caseId) {
+                toast({
+                  title: "Erro",
+                  description: "ID do caso não encontrado",
+                  variant: "destructive",
+                });
+                return;
+              }
+
+              const result = await runFullPipeline(data.caseId, false, false);
+              
+              if (result?.success) {
+                toast({
+                  title: "✅ Pipeline Concluído!",
+                  description: "Jurisprudência, tese jurídica, minuta e diagnóstico foram gerados com sucesso.",
+                });
+              }
+            }}
+            disabled={!casePayload || isProcessing}
+            size="lg"
+            variant="default"
+            className="gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            Processar Pipeline Completo
+          </Button>
+        )}
+        
         <Button
           onClick={handleComplete}
           disabled={!casePayload || isProcessing}
           size="lg"
+          variant="outline"
         >
-          Concluir e Avançar
+          Avançar para Próxima Etapa
         </Button>
       </div>
     </div>
