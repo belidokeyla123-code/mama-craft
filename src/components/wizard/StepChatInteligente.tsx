@@ -181,139 +181,202 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
   };
 
   const processFilesWithAI = async (files: File[]) => {
+    console.log('🔴 [1] processFilesWithAI INICIADO', { filesCount: files.length });
     setIsProcessing(true);
 
     try {
+      console.log('🔴 [2] Dentro do try block');
+      
       // ✅ PROTEÇÃO: Garantir que caseId existe
       const activeCaseId = data.caseId || crypto.randomUUID();
+      console.log('🔴 [3] activeCaseId:', activeCaseId);
+      
       if (!data.caseId) {
         console.warn('[StepChatInteligente] ⚠️ caseId estava undefined, gerando e salvando...');
         updateData({ caseId: activeCaseId });
       }
 
       // 🔥 CORREÇÃO CRÍTICA: Criar registro em cases ANTES de qualquer outra operação
-      const { error: caseError } = await supabase
-        .from('cases')
-        .upsert({
-          id: activeCaseId,
-          author_name: 'Aguardando análise do chat',
-          author_cpf: '000.000.000-00',
-          event_date: new Date().toISOString().split('T')[0],
-          event_type: 'parto',
-          profile: 'especial',
-          status: 'intake',
-          started_with_chat: true,
-        }, {
-          onConflict: 'id'
-        })
-        .select()
-        .maybeSingle();
-
-      if (caseError) {
-        console.error('❌ [Erro Crítico] Não foi possível criar o caso:', caseError);
-        throw new Error(`Erro ao criar caso: ${caseError.message}`);
-      }
-
-      console.log(`✅ [Case Ready] ID: ${activeCaseId} - Caso criado/verificado com sucesso`);
-
-      // ✅ Garantir que existe case_assignment
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error: assignError } = await supabase
-          .from('case_assignments')
-          .insert({ 
-            case_id: activeCaseId, 
-            user_id: user.id 
+      console.log('🔴 [4] Tentando UPSERT em cases...');
+      
+      try {
+        const { error: caseError } = await supabase
+          .from('cases')
+          .upsert({
+            id: activeCaseId,
+            author_name: 'Aguardando análise do chat',
+            author_cpf: '000.000.000-00',
+            event_date: new Date().toISOString().split('T')[0],
+            event_type: 'parto',
+            profile: 'especial',
+            status: 'intake',
+            started_with_chat: true,
+          }, {
+            onConflict: 'id'
           })
           .select()
           .maybeSingle();
-        
-        if (assignError && !assignError.message.includes('duplicate')) {
-          console.error('[Assignment Error]:', assignError);
+
+        console.log('🔴 [5] UPSERT completo. Erro?', caseError);
+
+        if (caseError) {
+          console.error('❌ [Erro Crítico] Não foi possível criar o caso:', caseError);
+          throw new Error(`Erro ao criar caso: ${caseError.message}`);
+        }
+
+        console.log(`✅ [Case Ready] ID: ${activeCaseId} - Caso criado/verificado com sucesso`);
+      } catch (e) {
+        console.error('🔴🔴🔴 [EXCEPTION em UPSERT cases]:', e);
+        throw e;
+      }
+
+      // ✅ Garantir que existe case_assignment
+      console.log('🔴 [6] Criando case_assignment...');
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('🔴 [7] User:', user?.id);
+      
+      if (user) {
+        try {
+          const { error: assignError } = await supabase
+            .from('case_assignments')
+            .insert({ 
+              case_id: activeCaseId, 
+              user_id: user.id 
+            })
+            .select()
+            .maybeSingle();
+          
+          if (assignError && !assignError.message.includes('duplicate')) {
+            console.error('[Assignment Error]:', assignError);
+          }
+        } catch (e) {
+          console.error('🔴🔴🔴 [EXCEPTION em case_assignment]:', e);
         }
       }
 
       // ⚡ OTIMIZAÇÃO: Uploads e inserts PARALELOS no banco + storage
+      console.log('🔴 [8] Iniciando upload de arquivos...');
+      
       const uploadPromises = files.map(async (file, idx) => {
+        console.log(`🔴 [9.${idx}] Processando ${file.name}...`);
+        
         const sanitizedFileName = sanitizeFileName(file.name);
-        console.log(`[Upload ${idx + 1}/${files.length}] "${file.name}" → "${sanitizedFileName}"`);
+        console.log(`🔴 [9.${idx}.1] Arquivo sanitizado: "${sanitizedFileName}"`);
         
         const fileName = `${activeCaseId}/${Date.now()}_${idx}_${sanitizedFileName}`;
         
-        // Upload to Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("case-documents")
-          .upload(fileName, file);
+        let urlData: any;
+        let docData: any;
+        
+        // Upload to Storage com proteção individual
+        try {
+          console.log(`🔴 [9.${idx}.2] Upload para storage iniciado...`);
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("case-documents")
+            .upload(fileName, file);
 
-        if (uploadError) throw new Error(`Erro upload ${file.name}: ${uploadError.message}`);
+          console.log(`🔴 [9.${idx}.3] Upload concluído. Erro?`, uploadError);
 
-        const { data: urlData } = supabase.storage
-          .from("case-documents")
-          .getPublicUrl(fileName);
+          if (uploadError) throw new Error(`Erro upload ${file.name}: ${uploadError.message}`);
+
+          const result = supabase.storage
+            .from("case-documents")
+            .getPublicUrl(fileName);
+          
+          urlData = result.data;
+          
+          console.log(`🔴 [9.${idx}.4] URL pública obtida`);
+        } catch (e) {
+          console.error(`🔴🔴🔴 [EXCEPTION upload ${file.name}]:`, e);
+          throw e;
+        }
 
         // ✅ CORREÇÃO CRÍTICA: Salvar documento no banco com tratamento robusto
-        console.log(`[DB Save ${idx + 1}/${files.length}] Tentando salvar ${sanitizedFileName}...`);
+        try {
+          console.log(`🔴 [9.${idx}.5] [DB Save] Tentando salvar ${sanitizedFileName}...`);
 
-        const { data: docData, error: docError } = await supabase
-          .from('documents')
-          .insert({
-            case_id: activeCaseId,
-            file_name: sanitizedFileName,
-            file_path: fileName,
-            file_size: file.size,
-            mime_type: file.type,
-            document_type: 'outro', // Será reclassificado depois
-          })
-          .select()
-          .maybeSingle(); // ✅ Trocar .single() por .maybeSingle()
+          const { data: insertData, error: docError } = await supabase
+            .from('documents')
+            .insert({
+              case_id: activeCaseId,
+              file_name: sanitizedFileName,
+              file_path: fileName,
+              file_size: file.size,
+              mime_type: file.type,
+              document_type: 'outro', // Será reclassificado depois
+            })
+            .select()
+            .maybeSingle();
 
-        if (docError) {
-          console.error(`❌ [DB ERROR] Erro ao salvar documento ${file.name}:`, docError);
-          console.error(`❌ [DB ERROR] Detalhes:`, JSON.stringify(docError, null, 2));
-          
-          // Se for erro de RLS, mostrar mensagem específica
-          if (docError.code === 'PGRST301' || docError.message.includes('RLS')) {
-            throw new Error(`Erro de permissão RLS ao salvar ${file.name}. Verifique as políticas.`);
+          docData = insertData;
+
+          console.log(`🔴 [9.${idx}.6] [DB Save] Insert concluído. Erro?`, docError);
+          console.log(`🔴 [9.${idx}.7] [DB Save] Dados retornados?`, !!docData);
+
+          if (docError) {
+            console.error(`❌ [DB ERROR] Erro ao salvar documento ${file.name}:`, docError);
+            console.error(`❌ [DB ERROR] Detalhes:`, JSON.stringify(docError, null, 2));
+            
+            // Se for erro de RLS, mostrar mensagem específica
+            if (docError.code === 'PGRST301' || docError.message.includes('RLS')) {
+              throw new Error(`Erro de permissão RLS ao salvar ${file.name}. Verifique as políticas.`);
+            }
+            
+            throw new Error(`Erro ao salvar ${file.name} no banco: ${docError.message}`);
           }
-          
-          throw new Error(`Erro ao salvar ${file.name} no banco: ${docError.message}`);
-        }
 
-        if (!docData) {
-          console.error(`❌ [DB ERROR] Documento ${file.name} não retornou dados após INSERT`);
-          throw new Error(`Falha ao salvar ${file.name}: nenhum dado retornado`);
-        }
+          if (!docData) {
+            console.error(`❌ [DB ERROR] Documento ${file.name} não retornou dados após INSERT`);
+            throw new Error(`Falha ao salvar ${file.name}: nenhum dado retornado`);
+          }
 
-        console.log(`✅ [DB Save ${idx + 1}/${files.length}] ${sanitizedFileName} salvo com ID: ${docData.id}`);
+          console.log(`✅ [DB Save ${idx + 1}/${files.length}] ${sanitizedFileName} salvo com ID: ${docData.id}`);
+        } catch (e) {
+          console.error(`🔴🔴🔴 [EXCEPTION DB insert ${file.name}]:`, e);
+          throw e;
+        }
 
         return {
           url: urlData.publicUrl,
           name: file.name,
           type: file.type,
-          documentId: docData.id, // ✅ Guardar ID do documento
+          documentId: docData.id,
         };
       });
 
       // Aguardar todos os uploads em paralelo
+      console.log('🔴 [10] Aguardando Promise.all dos uploads...');
       const uploadResults = await Promise.all(uploadPromises);
+      console.log('🔴 [10.1] Promise.all completo!', { count: uploadResults.length });
+      
       const documentIds = uploadResults.map(r => r.documentId);
+      console.log('🔴 [10.2] Document IDs extraídos:', documentIds);
 
       console.log(`🚀 [Uploads Completos] ${uploadResults.length} documentos salvos. IDs: ${documentIds.join(', ')}`);
 
       // ✅ Adicionar à fila de processamento
-      const { error: queueError } = await supabase
-        .from('processing_queue')
-        .insert({
-          case_id: activeCaseId,
-          status: 'processing',
-          job_type: 'chat_analysis',
-          document_ids: documentIds,
-          total_documents: documentIds.length,
-          processed_documents: 0,
-        });
+      console.log('🔴 [11] Criando processing_queue...');
+      
+      try {
+        const { error: queueError } = await supabase
+          .from('processing_queue')
+          .insert({
+            case_id: activeCaseId,
+            status: 'processing',
+            job_type: 'chat_analysis',
+            document_ids: documentIds,
+            total_documents: documentIds.length,
+            processed_documents: 0,
+          });
 
-      if (queueError) {
-        console.error('[Queue Error]:', queueError);
+        console.log('🔴 [12] Queue criado. Erro?', queueError);
+
+        if (queueError) {
+          console.error('[Queue Error]:', queueError);
+        }
+      } catch (e) {
+        console.error('🔴🔴🔴 [EXCEPTION em processing_queue]:', e);
       }
 
       // ✅ Mostrar feedback imediato
@@ -326,21 +389,34 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       setMessages((prev) => [...prev, processingMessage]);
 
       // ✅ USAR EDGE FUNCTION CORRETO QUE FAZ ANÁLISE REAL
+      console.log('🔴 [13] Chamando process-documents-with-ai...');
       console.log(`🤖 [IA] Chamando process-documents-with-ai com ${documentIds.length} documentos...`);
 
-      const { data: aiResponse, error: aiError } = await supabase.functions.invoke(
-        "process-documents-with-ai", // ✅ Edge function correto
-        {
-          body: {
-            caseId: activeCaseId,
-            documentIds: documentIds, // ✅ Passar IDs dos documentos
-          },
-        }
-      );
+      let aiResponse: any;
+      
+      try {
+        const { data: responseData, error: aiError } = await supabase.functions.invoke(
+          "process-documents-with-ai", // ✅ Edge function correto
+          {
+            body: {
+              caseId: activeCaseId,
+              documentIds: documentIds, // ✅ Passar IDs dos documentos
+            },
+          }
+        );
 
-      if (aiError) {
-        console.error('[AI Error]:', aiError);
-        throw aiError;
+        aiResponse = responseData;
+
+        console.log('🔴 [14] Edge function respondeu. Erro?', aiError);
+        console.log('🔴 [15] Response:', aiResponse);
+
+        if (aiError) {
+          console.error('[AI Error]:', aiError);
+          throw aiError;
+        }
+      } catch (e) {
+        console.error('🔴🔴🔴 [EXCEPTION em edge function invoke]:', e);
+        throw e;
       }
 
       // ✅ Processar resposta da IA
@@ -408,7 +484,10 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         description: "A IA analisou seus documentos com sucesso.",
       });
     } catch (error) {
-      console.error("Error processing files:", error);
+      console.error('🔴🔴🔴 [ERRO CAPTURADO NO CATCH PRINCIPAL]:', error);
+      console.error('🔴🔴🔴 [STACK]:', error instanceof Error ? error.stack : 'N/A');
+      console.error('🔴🔴🔴 [TIPO]:', typeof error, error?.constructor?.name);
+      
       toast({
         title: "Erro ao processar documentos",
         description: error instanceof Error ? error.message : "Erro desconhecido",
