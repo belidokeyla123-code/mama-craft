@@ -181,15 +181,27 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
   };
 
   const processFilesWithAI = async (files: File[]) => {
-    console.log('🔴 [1] processFilesWithAI INICIADO', { filesCount: files.length });
+    // ⚡ ALERTA VISUAL IMEDIATO NA TELA
+    const alertDiv = document.createElement('div');
+    alertDiv.id = 'debug-alert';
+    alertDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:red;color:white;padding:40px;z-index:99999;font-size:24px;font-weight:bold;border:5px solid yellow;box-shadow:0 0 50px rgba(255,0,0,0.8);text-align:center;min-width:400px;';
+    alertDiv.textContent = '🔴 INICIANDO PROCESSAMENTO';
+    document.body.appendChild(alertDiv);
+    
+    console.log('🔴🔴🔴 [1] === INICIO ABSOLUTO ===', new Date().toISOString());
+    console.log('🔴🔴🔴 [1.1] Files recebidos:', files.length, files);
+    
     setIsProcessing(true);
+    console.log('🔴🔴🔴 [2] setIsProcessing(true) executado');
 
     try {
-      console.log('🔴 [2] Dentro do try block');
+      console.log('🔴🔴🔴 [3] === DENTRO DO TRY BLOCK ===');
+      alertDiv.textContent = '🔴 DENTRO DO TRY';
+      await new Promise(r => setTimeout(r, 500)); // Pausa para ver o alerta
       
-      // ✅ PROTEÇÃO: Garantir que caseId existe
       const activeCaseId = data.caseId || crypto.randomUUID();
-      console.log('🔴 [3] activeCaseId:', activeCaseId);
+      console.log('🔴🔴🔴 [4] activeCaseId:', activeCaseId);
+      alertDiv.textContent = `🔴 CASE ID: ${activeCaseId.slice(0,8)}...`;
       
       if (!data.caseId) {
         console.warn('[StepChatInteligente] ⚠️ caseId estava undefined, gerando e salvando...');
@@ -197,7 +209,9 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       }
 
       // 🔥 CORREÇÃO CRÍTICA: Criar registro em cases ANTES de qualquer outra operação
-      console.log('🔴 [4] Tentando UPSERT em cases...');
+      console.log('🔴🔴🔴 [5] === TENTANDO UPSERT EM CASES ===');
+      alertDiv.textContent = '🔴 SALVANDO CASO NA BASE...';
+      await new Promise(r => setTimeout(r, 300));
       
       try {
         const { error: caseError } = await supabase
@@ -217,23 +231,31 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           .select()
           .maybeSingle();
 
-        console.log('🔴 [5] UPSERT completo. Erro?', caseError);
+        console.log('🔴🔴🔴 [6] UPSERT COMPLETO');
+        console.log('🔴🔴🔴 [6.1] caseError:', caseError);
 
         if (caseError) {
-          console.error('❌ [Erro Crítico] Não foi possível criar o caso:', caseError);
+          console.error('🔴🔴🔴 [ERRO CRÍTICO NO UPSERT]:', caseError);
+          alertDiv.textContent = '❌ ERRO AO SALVAR CASO: ' + caseError.message;
+          alertDiv.style.background = 'darkred';
           throw new Error(`Erro ao criar caso: ${caseError.message}`);
         }
 
-        console.log(`✅ [Case Ready] ID: ${activeCaseId} - Caso criado/verificado com sucesso`);
+        console.log('🔴🔴🔴 [7] ✅ CASO SALVO COM SUCESSO');
+        alertDiv.textContent = '✅ CASO SALVO';
+        alertDiv.style.background = 'green';
+        await new Promise(r => setTimeout(r, 300));
       } catch (e) {
         console.error('🔴🔴🔴 [EXCEPTION em UPSERT cases]:', e);
         throw e;
       }
 
       // ✅ Garantir que existe case_assignment
-      console.log('🔴 [6] Criando case_assignment...');
+      console.log('🔴🔴🔴 [8] === BUSCANDO USUÁRIO ===');
+      alertDiv.textContent = '🔴 VERIFICANDO USUÁRIO...';
+      alertDiv.style.background = 'red';
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('🔴 [7] User:', user?.id);
+      console.log('🔴🔴🔴 [9] User ID:', user?.id);
       
       if (user) {
         try {
@@ -255,10 +277,12 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       }
 
       // ⚡ OTIMIZAÇÃO: Uploads e inserts PARALELOS no banco + storage
-      console.log('🔴 [8] Iniciando upload de arquivos...');
+      console.log('🔴🔴🔴 [10] === INICIANDO UPLOADS ===');
+      alertDiv.textContent = `🔴 FAZENDO UPLOAD DE ${files.length} ARQUIVOS...`;
+      await new Promise(r => setTimeout(r, 300));
       
       const uploadPromises = files.map(async (file, idx) => {
-        console.log(`🔴 [9.${idx}] Processando ${file.name}...`);
+        console.log(`🔴🔴🔴 [11.${idx}] === ARQUIVO ${idx + 1}/${files.length}: ${file.name} ===`);
         
         const sanitizedFileName = sanitizeFileName(file.name);
         console.log(`🔴 [9.${idx}.1] Arquivo sanitizado: "${sanitizedFileName}"`);
@@ -270,15 +294,18 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         
         // Upload to Storage com proteção individual
         try {
-          console.log(`🔴 [9.${idx}.2] Upload para storage iniciado...`);
+          console.log(`🔴🔴🔴 [12.${idx}] UPLOAD STORAGE: ${fileName}`);
           
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from("case-documents")
             .upload(fileName, file);
 
-          console.log(`🔴 [9.${idx}.3] Upload concluído. Erro?`, uploadError);
+          console.log(`🔴🔴🔴 [13.${idx}] Upload storage completo. Erro?`, uploadError);
 
-          if (uploadError) throw new Error(`Erro upload ${file.name}: ${uploadError.message}`);
+          if (uploadError) {
+            console.error(`🔴🔴🔴 [ERRO UPLOAD STORAGE ${idx}]:`, uploadError);
+            throw new Error(`Erro upload ${file.name}: ${uploadError.message}`);
+          }
 
           const result = supabase.storage
             .from("case-documents")
@@ -286,15 +313,17 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
           
           urlData = result.data;
           
-          console.log(`🔴 [9.${idx}.4] URL pública obtida`);
+          console.log(`🔴🔴🔴 [14.${idx}] URL pública obtida para ${file.name}`);
         } catch (e) {
-          console.error(`🔴🔴🔴 [EXCEPTION upload ${file.name}]:`, e);
+          console.error(`🔴🔴🔴 [EXCEPTION UPLOAD STORAGE ${idx}]:`, e);
+          alertDiv.textContent = `❌ ERRO UPLOAD ${file.name}`;
+          alertDiv.style.background = 'darkred';
           throw e;
         }
 
         // ✅ CORREÇÃO CRÍTICA: Salvar documento no banco com tratamento robusto
         try {
-          console.log(`🔴 [9.${idx}.5] [DB Save] Tentando salvar ${sanitizedFileName}...`);
+          console.log(`🔴🔴🔴 [15.${idx}] === INSERT DB: ${sanitizedFileName} ===`);
 
           const { data: insertData, error: docError } = await supabase
             .from('documents')
@@ -311,12 +340,12 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
 
           docData = insertData;
 
-          console.log(`🔴 [9.${idx}.6] [DB Save] Insert concluído. Erro?`, docError);
-          console.log(`🔴 [9.${idx}.7] [DB Save] Dados retornados?`, !!docData);
+          console.log(`🔴🔴🔴 [16.${idx}] Insert DB completo. Erro?`, docError);
+          console.log(`🔴🔴🔴 [16.${idx}.1] Dados retornados?`, !!docData);
 
           if (docError) {
-            console.error(`❌ [DB ERROR] Erro ao salvar documento ${file.name}:`, docError);
-            console.error(`❌ [DB ERROR] Detalhes:`, JSON.stringify(docError, null, 2));
+            console.error(`🔴🔴🔴 [ERRO DB ${idx}] Erro ao salvar documento:`, docError);
+            console.error(`🔴🔴🔴 [ERRO DB ${idx}] JSON:`, JSON.stringify(docError, null, 2));
             
             // Se for erro de RLS, mostrar mensagem específica
             if (docError.code === 'PGRST301' || docError.message.includes('RLS')) {
@@ -331,9 +360,11 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
             throw new Error(`Falha ao salvar ${file.name}: nenhum dado retornado`);
           }
 
-          console.log(`✅ [DB Save ${idx + 1}/${files.length}] ${sanitizedFileName} salvo com ID: ${docData.id}`);
+          console.log(`🔴🔴🔴 [17.${idx}] ✅ DOCUMENTO SALVO: ${sanitizedFileName} (ID: ${docData.id})`);
         } catch (e) {
-          console.error(`🔴🔴🔴 [EXCEPTION DB insert ${file.name}]:`, e);
+          console.error(`🔴🔴🔴 [EXCEPTION DB INSERT ${idx}]:`, e);
+          alertDiv.textContent = `❌ ERRO SALVAR DB ${file.name}`;
+          alertDiv.style.background = 'darkred';
           throw e;
         }
 
@@ -346,17 +377,23 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       });
 
       // Aguardar todos os uploads em paralelo
-      console.log('🔴 [10] Aguardando Promise.all dos uploads...');
+      console.log('🔴🔴🔴 [18] === AGUARDANDO PROMISE.ALL ===');
+      alertDiv.textContent = '🔴 AGUARDANDO UPLOADS...';
       const uploadResults = await Promise.all(uploadPromises);
-      console.log('🔴 [10.1] Promise.all completo!', { count: uploadResults.length });
+      console.log('🔴🔴🔴 [19] ✅ PROMISE.ALL COMPLETO!', { count: uploadResults.length });
+      alertDiv.textContent = `✅ ${uploadResults.length} ARQUIVOS SALVOS!`;
+      alertDiv.style.background = 'green';
+      await new Promise(r => setTimeout(r, 500));
       
       const documentIds = uploadResults.map(r => r.documentId);
-      console.log('🔴 [10.2] Document IDs extraídos:', documentIds);
+      console.log('🔴🔴🔴 [20] Document IDs:', documentIds);
 
       console.log(`🚀 [Uploads Completos] ${uploadResults.length} documentos salvos. IDs: ${documentIds.join(', ')}`);
 
       // ✅ Adicionar à fila de processamento
-      console.log('🔴 [11] Criando processing_queue...');
+      console.log('🔴🔴🔴 [21] === CRIANDO PROCESSING_QUEUE ===');
+      alertDiv.textContent = '🔴 CRIANDO FILA DE PROCESSAMENTO...';
+      alertDiv.style.background = 'red';
       
       try {
         const { error: queueError } = await supabase
@@ -370,7 +407,7 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
             processed_documents: 0,
           });
 
-        console.log('🔴 [12] Queue criado. Erro?', queueError);
+        console.log('🔴🔴🔴 [22] Queue criado. Erro?', queueError);
 
         if (queueError) {
           console.error('[Queue Error]:', queueError);
@@ -389,33 +426,45 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       setMessages((prev) => [...prev, processingMessage]);
 
       // ✅ USAR EDGE FUNCTION CORRETO QUE FAZ ANÁLISE REAL
-      console.log('🔴 [13] Chamando process-documents-with-ai...');
-      console.log(`🤖 [IA] Chamando process-documents-with-ai com ${documentIds.length} documentos...`);
+      console.log('🔴🔴🔴 [23] === CHAMANDO EDGE FUNCTION ===');
+      alertDiv.textContent = '🔴 PROCESSANDO COM IA...';
+      await new Promise(r => setTimeout(r, 300));
 
       let aiResponse: any;
       
       try {
+        console.log('🔴🔴🔴 [24] Invocando process-documents-with-ai...');
         const { data: responseData, error: aiError } = await supabase.functions.invoke(
-          "process-documents-with-ai", // ✅ Edge function correto
+          "process-documents-with-ai",
           {
             body: {
               caseId: activeCaseId,
-              documentIds: documentIds, // ✅ Passar IDs dos documentos
+              documentIds: documentIds,
             },
           }
         );
 
         aiResponse = responseData;
 
-        console.log('🔴 [14] Edge function respondeu. Erro?', aiError);
-        console.log('🔴 [15] Response:', aiResponse);
+        console.log('🔴🔴🔴 [25] Edge function RETORNOU');
+        console.log('🔴🔴🔴 [25.1] aiError:', aiError);
+        console.log('🔴🔴🔴 [25.2] aiResponse:', aiResponse);
 
         if (aiError) {
-          console.error('[AI Error]:', aiError);
+          console.error('🔴🔴🔴 [ERRO EDGE FUNCTION]:', aiError);
+          alertDiv.textContent = '❌ ERRO IA: ' + aiError.message;
+          alertDiv.style.background = 'darkred';
           throw aiError;
         }
+        
+        console.log('🔴🔴🔴 [26] ✅ EDGE FUNCTION SUCESSO');
+        alertDiv.textContent = '✅ IA PROCESSADA!';
+        alertDiv.style.background = 'green';
+        await new Promise(r => setTimeout(r, 500));
       } catch (e) {
-        console.error('🔴🔴🔴 [EXCEPTION em edge function invoke]:', e);
+        console.error('🔴🔴🔴 [EXCEPTION EDGE FUNCTION]:', e);
+        alertDiv.textContent = '❌ EXCEÇÃO IA';
+        alertDiv.style.background = 'darkred';
         throw e;
       }
 
@@ -483,10 +532,25 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         title: "Documentos analisados!",
         description: "A IA analisou seus documentos com sucesso.",
       });
+      
+      console.log('🔴🔴🔴 [27] === PROCESSO FINALIZADO COM SUCESSO ===');
+      alertDiv.textContent = '✅✅✅ SUCESSO TOTAL!';
+      alertDiv.style.background = 'darkgreen';
+      setTimeout(() => alertDiv.remove(), 3000);
+      
     } catch (error) {
-      console.error('🔴🔴🔴 [ERRO CAPTURADO NO CATCH PRINCIPAL]:', error);
+      console.error('🔴🔴🔴🔴🔴 [=== ERRO NO CATCH PRINCIPAL ===]');
+      console.error('🔴🔴🔴 [ERROR OBJECT]:', error);
+      console.error('🔴🔴🔴 [ERROR MESSAGE]:', error instanceof Error ? error.message : 'N/A');
       console.error('🔴🔴🔴 [STACK]:', error instanceof Error ? error.stack : 'N/A');
       console.error('🔴🔴🔴 [TIPO]:', typeof error, error?.constructor?.name);
+      
+      const alertDiv2 = document.getElementById('debug-alert');
+      if (alertDiv2) {
+        alertDiv2.textContent = '❌❌❌ ERRO: ' + ((error as Error)?.message || 'Desconhecido');
+        alertDiv2.style.background = 'darkred';
+        setTimeout(() => alertDiv2.remove(), 5000);
+      }
       
       toast({
         title: "Erro ao processar documentos",
