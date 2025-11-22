@@ -296,18 +296,8 @@ const NewCase = () => {
         
         // Salvar dados JSON (chatAnalysis, documentUrls, etc)
         if (data.chatAnalysis) {
-          // Criar ou atualizar registro na tabela chat_history
-          const { error: chatError } = await supabase
-            .from('chat_history')
-            .upsert({
-              case_id: caseData.caseId,
-              messages: data.chatAnalysis,
-              updated_at: new Date().toISOString()
-            });
-          
-          if (chatError) {
-            console.error('[updateCaseData] Erro ao salvar chat:', chatError);
-          }
+          // Salvar análise do chat no caso
+          dbData.special_notes = JSON.stringify(data.chatAnalysis);
         }
         
         // Salvar documentos se houver URLs
@@ -324,7 +314,7 @@ const NewCase = () => {
                 .select('id')
                 .eq('case_id', caseData.caseId)
                 .eq('file_name', file.name)
-                .single();
+                .maybeSingle();
               
               if (!existing) {
                 // Inserir apenas se não existir
@@ -336,8 +326,7 @@ const NewCase = () => {
                     file_path: url,
                     file_size: file.size,
                     mime_type: file.type,
-                    document_type: 'outros', // tipo padrão
-                    uploaded_at: new Date().toISOString()
+                    document_type: 'outro' as const,
                   });
                 
                 if (docError) {
