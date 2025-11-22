@@ -8,7 +8,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SYSTEM_PROMPT = `Você é uma Advogada Previdenciária especialista em salário-maternidade rural.
 
 ## MISSÃO:
-Analisar documentos e gerar JSON estruturado.
+Analisar documentos e gerar JSON estruturado COM EXTRAÇÃO DE DATAS.
 
 ## CHECKLIST RÁPIDO:
 1. Listar documentos
@@ -18,11 +18,19 @@ Analisar documentos e gerar JSON estruturado.
 5. Red flags
 6. Conclusão: Apto/Ressalvas/Inapto
 
+## EXTRAÇÃO DE DATAS (CRÍTICO):
+**Você DEVE extrair as seguintes datas dos documentos:**
+- Data de início da atividade rural (da autodeclaração)
+- Períodos de histórico escolar (ano início e fim)
+- Datas em documentos da terra (ano do ITR, data da escritura, etc)
+- Datas em declarações (sindicato, UBS)
+- Períodos de moradia rural mencionados
+
 ## OUTPUT OBRIGATÓRIO:
 - Texto resumido
-- JSON estruturado (case_payload)
+- JSON estruturado (case_payload) COM periodos_estruturados
 
-## IMPORTANTE: Seja objetiva e rápida.`;
+## IMPORTANTE: Seja objetiva, rápida e SEMPRE extraia as datas.`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,8 +94,51 @@ serve(async (req) => {
   "pendencias": [],
   "rmi_resumo": { "regra": "especial_minimo", "observacoes": "" },
   "conclusao_previa": "Apto|Apto_com_ressalvas|Inapto",
-  "auditoria": { "versao": "v1", "responsavel_ia": "Chat Inteligente SMR", "timestamp": "${new Date().toISOString()}" }
+  "periodos_estruturados": {
+    "periodos_rurais": [
+      {
+        "inicio": "AAAA-MM-DD",
+        "fim": "AAAA-MM-DD", 
+        "atividade": "Descrição da atividade",
+        "fonte_documento": "Nome do documento (ex: AUT_1.PDF)"
+      }
+    ],
+    "historico_escolar": [
+      {
+        "inicio": "AAAA-MM-DD",
+        "fim": "AAAA-MM-DD",
+        "escola": "Nome da escola",
+        "localizacao": "Rural/Urbano",
+        "fonte_documento": "HIS_1.PDF"
+      }
+    ],
+    "documentos_terra": [
+      {
+        "data": "AAAA-MM-DD",
+        "tipo": "ITR|Escritura|CCIR|Contrato",
+        "observacao": "Descrição",
+        "fonte_documento": "Nome do arquivo"
+      }
+    ],
+    "declaracoes": [
+      {
+        "data": "AAAA-MM-DD",
+        "tipo": "Sindicato|UBS|Outro",
+        "conteudo": "Resumo da declaração",
+        "fonte_documento": "Nome do arquivo"
+      }
+    ]
+  },
+  "auditoria": { "versao": "v2", "responsavel_ia": "Chat Inteligente SMR", "timestamp": "${new Date().toISOString()}" }
 }
+
+⚠️ REGRAS CRÍTICAS PARA EXTRAÇÃO DE DATAS:
+1. SEMPRE busque datas explícitas nos documentos (ano, mês, dia)
+2. Se documento menciona "desde 2018" → use "2018-01-01" como início
+3. Para histórico escolar: extraia ano de início e fim (ex: "2015" → "2015-02-01" a "2015-12-15")
+4. Para documentos da terra: use ano mencionado (ex: ITR 2020 → "2020-01-01")
+5. Se não houver data exata, use 01 de janeiro do ano mencionado
+6. SEMPRE preencha "fonte_documento" com o nome do arquivo PDF analisado
 
 Preencha com as informações disponíveis. Use "" ou [] para campos ainda não identificados.`,
       });
@@ -159,16 +210,33 @@ Preencha com as informações disponíveis. Use "" ou [] para campos ainda não 
 
     // Save to database
     if (extractedPayload) {
+      // Extrair períodos estruturados
+      const periodos = extractedPayload.periodos_estruturados || {};
+      const ruralPeriods = periodos.periodos_rurais || [];
+      const schoolHistory = periodos.historico_escolar || [];
+      const ruralActivitySince = ruralPeriods.length > 0 ? ruralPeriods[0].inicio : null;
+
+      console.log("[Chat AI] 📅 Períodos extraídos:", {
+        rural: ruralPeriods.length,
+        escola: schoolHistory.length,
+        inicio_atividade: ruralActivitySince
+      });
+
       const { error: updateError } = await supabase
         .from("cases")
         .update({
           chat_analysis: extractedPayload,
+          rural_periods: ruralPeriods,
+          school_history: schoolHistory,
+          rural_activity_since: ruralActivitySince,
           updated_at: new Date().toISOString(),
         })
         .eq("id", caseId);
 
       if (updateError) {
         console.error("[Chat AI] Error updating case:", updateError);
+      } else {
+        console.log("[Chat AI] ✅ Períodos salvos em cases table");
       }
     }
 

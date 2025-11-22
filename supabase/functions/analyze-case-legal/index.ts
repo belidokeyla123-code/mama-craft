@@ -23,11 +23,17 @@ serve(async (req) => {
     // Buscar dados completos do caso
     const { data: caseData, error: caseError } = await supabase
       .from('cases')
-      .select('*')
+      .select('*, rural_periods, school_history, rural_activity_since')
       .eq('id', caseId)
       .single();
 
     if (caseError) throw caseError;
+
+    console.log('[ANALYZE] 📅 Períodos estruturados encontrados:', {
+      rural: caseData.rural_periods?.length || 0,
+      escola: caseData.school_history?.length || 0,
+      inicio: caseData.rural_activity_since
+    });
 
     // 🆕 BUSCAR BENEFÍCIOS MANUAIS
     const manualBenefits = caseData?.manual_benefits || [];
@@ -122,7 +128,17 @@ TAREFA: Faça uma análise jurídica completa e retorne JSON com:
   },
   "cnis_analysis": {
     "periodos_urbanos": [{"inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "empregador": "Nome"}],
-    "periodos_rurais": [{"inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD", "detalhes": "Descrição"}],
+    "periodos_rurais": [
+      ${caseData.rural_periods && caseData.rural_periods.length > 0 ? 
+        JSON.stringify(caseData.rural_periods.map((p: any) => ({
+          inicio: p.inicio || p.data_inicio,
+          fim: p.fim || p.data_fim || new Date().toISOString().split('T')[0],
+          atividade: p.atividade || 'Atividade rural comprovada por documentos',
+          fonte: p.fonte_documento || 'Documentos anexados'
+        }))) : 
+        '[]'
+      }
+    ],
     "beneficios_anteriores": [{"tipo": "salário-maternidade", "nb": "123.456.789-0", "inicio": "YYYY-MM-DD", "fim": "YYYY-MM-DD"}],
     "tempo_reconhecido_inss": {"anos": 0, "meses": 0},
     "interpretacao": "CNIS sem vínculos urbanos - FAVORÁVEL ao perfil rural",
