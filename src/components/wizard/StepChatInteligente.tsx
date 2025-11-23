@@ -435,13 +435,22 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
       let aiResponse: any;
       
       try {
-        console.log('🔴🔴🔴 [24] Invocando process-documents-with-ai...');
+        console.log('🔴🔴🔴 [24] Invocando analyze-documents-chat...');
         const { data: responseData, error: aiError } = await supabase.functions.invoke(
-          "process-documents-with-ai",
+          "analyze-documents-chat",
           {
             body: {
               caseId: activeCaseId,
-              documentIds: documentIds,
+              files: uploadResults.map(r => ({
+                name: r.name,
+                type: r.type,
+                url: r.url,
+              })),
+              message: "Analisar documentos enviados e extrair todas as informações estruturadas",
+              conversationHistory: messages.map(m => ({
+                role: m.role,
+                content: m.content
+              })),
             },
           }
         );
@@ -470,61 +479,28 @@ export const StepChatInteligente = ({ data, updateData, onComplete }: StepChatIn
         throw e;
       }
 
-      // ✅ Processar resposta da IA
-      if (aiResponse?.extractedData) {
+      // ✅ Processar resposta da IA com dados estruturados
+      if (aiResponse?.casePayload) {
+        const analysisText = aiResponse.analysis || aiResponse.response || 'Análise completa realizada.';
+        const payload = aiResponse.casePayload;
+        
         const finalMessage: Message = {
           role: "assistant",
-          content: `✅ **Análise completa!**\n\n📊 Dados extraídos dos documentos:\n• Nome: ${aiResponse.extractedData.motherName || 'não identificado'}\n• CPF: ${aiResponse.extractedData.motherCpf || 'não identificado'}\n• Criança: ${aiResponse.extractedData.childName || 'não identificado'}\n\n${aiResponse.observations?.length > 0 ? `\n⚠️ **Observações:**\n${aiResponse.observations.join('\n')}` : ''}`,
+          content: `📊 **Relatório de Análise Completa**\n\n${analysisText}\n\n---\n\n✅ **Dados Extraídos:**\n• **Nome:** ${payload.identificacao?.nome || 'não identificado'}\n• **CPF:** ${payload.identificacao?.cpf || 'não identificado'}\n• **Criança:** ${payload.crianca?.nome || 'não identificada'}\n• **Data Nascimento:** ${payload.crianca?.data_nascimento || 'não identificada'}\n\n📅 **Períodos Documentados:**\n• **Períodos Rurais:** ${payload.periodos_estruturados?.periodos_rurais?.length || 0}\n• **Histórico Escolar:** ${payload.periodos_estruturados?.historico_escolar?.length || 0}\n• **Atividade Rural Desde:** ${payload.periodos_estruturados?.rural_activity_since || 'não identificado'}\n\n${payload.periodos_estruturados?.analise_suficiencia ? `\n📋 **Análise de Suficiência:**\n${payload.periodos_estruturados.analise_suficiencia}` : ''}`,
           timestamp: new Date(),
         };
 
         setMessages((prev) => [...prev, finalMessage]);
 
-        // Criar payload estruturado
-        const payload = {
-          identificacao: {
-            nome: aiResponse.extractedData.motherName,
-            cpf: aiResponse.extractedData.motherCpf,
-          },
-          evento_gerador: {
-            tipo: data.eventType || 'parto',
-            data: aiResponse.extractedData.childBirthDate || data.eventDate,
-          },
-          crianca: {
-            nome: aiResponse.extractedData.childName,
-            data_nascimento: aiResponse.extractedData.childBirthDate,
-          },
-          conclusao_previa: aiResponse.extractedData.motherName ? 'Apto' : 'Inapto',
-        };
-
         setCasePayload(payload);
-        
-        // ✅ CORREÇÃO CRÍTICA: Salvar dados extraídos NO BANCO imediatamente
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update({
-            author_name: aiResponse.extractedData.motherName || 'Não identificado',
-            author_cpf: aiResponse.extractedData.motherCpf || null,
-            child_name: aiResponse.extractedData.childName || null,
-            child_birth_date: aiResponse.extractedData.childBirthDate || null,
-            event_date: aiResponse.extractedData.childBirthDate || data.eventDate,
-            special_notes: JSON.stringify(payload), // Salvar chatAnalysis
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', activeCaseId);
-
-        if (updateError) {
-          console.error('❌ Erro ao atualizar caso:', updateError);
-          // Não bloquear o fluxo, apenas logar
-        } else {
-          console.log(`✅ [Case Updated] Dados extraídos salvos no banco para caso ${activeCaseId}`);
-        }
         
         updateData({
           ...data,
-          authorName: aiResponse.extractedData.motherName || data.authorName || "",
-          authorCpf: aiResponse.extractedData.motherCpf || data.authorCpf || "",
-          eventDate: aiResponse.extractedData.childBirthDate || data.eventDate || "",
+          authorName: payload.identificacao?.nome || data.authorName || "",
+          authorCpf: payload.identificacao?.cpf || data.authorCpf || "",
+          childName: payload.crianca?.nome || data.childName || "",
+          childBirthDate: payload.crianca?.data_nascimento || data.childBirthDate || "",
+          eventDate: payload.crianca?.data_nascimento || data.eventDate || "",
           chatAnalysis: payload,
           documents: [...(data.documents || []), ...files],
         });

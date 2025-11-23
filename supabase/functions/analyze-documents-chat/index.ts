@@ -232,15 +232,32 @@ Preencha com as informações disponíveis. Use "" ou [] para campos ainda não 
         inicio_atividade: ruralActivitySince
       });
 
+      // Preparar dados para atualizar
+      const updatePayload: any = {
+        chat_analysis: extractedPayload,
+        rural_periods: ruralPeriods,
+        school_history: schoolHistory,
+        rural_activity_since: ruralActivitySince,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Adicionar dados de identificação se disponíveis
+      if (extractedPayload.identificacao?.nome) {
+        updatePayload.author_name = extractedPayload.identificacao.nome;
+      }
+      if (extractedPayload.identificacao?.cpf) {
+        updatePayload.author_cpf = extractedPayload.identificacao.cpf;
+      }
+      if (extractedPayload.crianca?.nome) {
+        updatePayload.child_name = extractedPayload.crianca.nome;
+      }
+      if (extractedPayload.crianca?.data_nascimento) {
+        updatePayload.child_birth_date = extractedPayload.crianca.data_nascimento;
+      }
+
       const { error: updateError } = await supabase
         .from("cases")
-        .update({
-          chat_analysis: extractedPayload,
-          rural_periods: ruralPeriods,
-          school_history: schoolHistory,
-          rural_activity_since: ruralActivitySince,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", caseId);
 
       if (updateError) {
